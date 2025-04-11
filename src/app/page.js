@@ -1,6 +1,6 @@
 // src/app/page.js
-import { formatDistanceToNow } from 'date-fns';
-import { Server, Globe, FileCheck, User } from 'lucide-react';
+import {formatDistanceToNow} from 'date-fns';
+import {FileCheck, Globe, Server} from 'lucide-react';
 import Link from 'next/link';
 import StatusCard from '@/components/ui/StatusCard';
 import QuickActionButton from '@/components/ui/QuickActionButton';
@@ -11,8 +11,7 @@ async function getAgentsData() {
   await connectDB();
 
   try {
-    const agents = await Agent.find({}).sort({ lastHeartbeat: -1 });
-    return agents;
+    return await Agent.find({}).sort({lastHeartbeat: -1});
   } catch (error) {
     console.error('Error fetching agents:', error);
     return [];
