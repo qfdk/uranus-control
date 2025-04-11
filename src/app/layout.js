@@ -1,9 +1,10 @@
 // src/app/layout.js
 import { Inter } from 'next/font/google';
 import './globals.css';
-import { User, LayoutDashboard, Globe, Shield, Settings } from 'lucide-react';
+import { LayoutDashboard, Globe, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { AppProvider } from './contexts/AppContext';
+import UserMenu from '@/components/ui/UserMenu';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -42,11 +43,7 @@ export default function RootLayout({ children }) {
                                 </nav>
                             </div>
                             <div className="flex items-center">
-                                <div className="flex-shrink-0">
-                                        <span className="rounded-full bg-gray-200 p-1">
-                                          <User className="h-6 w-6 text-gray-600" />
-                                        </span>
-                                </div>
+                                <UserMenu />
                             </div>
                         </div>
                     </div>
