@@ -2,20 +2,21 @@
 import mongoose from 'mongoose';
 
 const AgentSchema = new mongoose.Schema({
-    hostname: { type: String, required: true },
-    uuid: { type: String, required: true, unique: true },
-    ip: { type: String, required: true },
+    hostname: {type: String, required: true},
+    uuid: {type: String, required: true, unique: true},
+    ip: {type: String, required: true},
     version: String,
     buildTime: String,
     commitId: String,
-    online: { type: Boolean, default: false },
-    lastHeartbeat: { type: Date, default: Date.now },
+    online: {type: Boolean, default: false},
+    lastHeartbeat: {type: Date, default: Date.now},
     token: String,
-    config: { type: Object, default: {} },
+    os: String,
+    memory: String,
     stats: {
-        websites: { type: Number, default: 0 },
-        certificates: { type: Number, default: 0 }
+        websites: {type: Number, default: 0},
+        certificates: {type: Number, default: 0}
     }
-}, { timestamps: true });
+}, {timestamps: true});
 
 export default mongoose.models.Agent || mongoose.model('Agent', AgentSchema);
