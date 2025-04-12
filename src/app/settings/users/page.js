@@ -1,15 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { AlertCircle, CheckCircle2, Edit, Loader2, Plus, Search, Shield, Trash2, User } from 'lucide-react';
+import {useEffect, useState} from 'react';
+import {AlertCircle, CheckCircle2, Edit, Loader2, Plus, Search, Shield, Trash2, User} from 'lucide-react';
 import Button from '@/components/ui/Button';
 import FormInput from '@/components/ui/FormInput';
 import FormSelect from '@/components/ui/FormSelect';
-import { useAuth } from '@/app/contexts/AuthContext';
+import {useAuth} from '@/app/contexts/AuthContext';
 import AppShell from '@/app/AppShell';
 
 export default function UserManagementPage() {
-    const { user: currentUser } = useAuth();
+    const {user: currentUser} = useAuth();
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
@@ -28,15 +28,15 @@ export default function UserManagementPage() {
 
     // 角色选项
     const roleOptions = [
-        { value: 'admin', label: '管理员' },
-        { value: 'manager', label: '管理人员' },
-        { value: 'user', label: '普通用户' }
+        {value: 'admin', label: '管理员'},
+        {value: 'manager', label: '管理人员'},
+        {value: 'user', label: '普通用户'}
     ];
 
     // 状态选项
     const statusOptions = [
-        { value: true, label: '激活' },
-        { value: false, label: '禁用' }
+        {value: true, label: '激活'},
+        {value: false, label: '禁用'}
     ];
 
     // 获取用户列表
@@ -65,7 +65,7 @@ export default function UserManagementPage() {
 
     // 处理表单输入变化
     const handleInputChange = (e) => {
-        const { name, value, type, checked } = e.target;
+        const {name, value, type, checked} = e.target;
         setFormData({
             ...formData,
             [name]: type === 'checkbox' ? checked : value
@@ -91,7 +91,7 @@ export default function UserManagementPage() {
         }
 
         // 构建提交数据
-        const submitData = { ...formData };
+        const submitData = {...formData};
         delete submitData.confirmPassword;
 
         // 如果是编辑模式，并且密码为空，则不提交密码
@@ -107,14 +107,14 @@ export default function UserManagementPage() {
                 // 更新用户
                 response = await fetch(`/api/users/${editingUser._id}`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(submitData)
                 });
             } else {
                 // 创建用户
                 response = await fetch('/api/users', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(submitData)
                 });
             }
@@ -226,7 +226,7 @@ export default function UserManagementPage() {
                     >
                         {showForm ? '关闭表单' : (
                             <>
-                                <Plus className="w-4 h-4 mr-1" />
+                                <Plus className="w-4 h-4 mr-1"/>
                                 添加用户
                             </>
                         )}
@@ -241,15 +241,17 @@ export default function UserManagementPage() {
                         </h2>
 
                         {formError && (
-                            <div className="mb-4 flex items-center p-4 bg-red-50 border-l-4 border-red-500 text-red-700">
-                                <AlertCircle className="w-5 h-5 mr-2" />
+                            <div
+                                className="mb-4 flex items-center p-4 bg-red-50 border-l-4 border-red-500 text-red-700">
+                                <AlertCircle className="w-5 h-5 mr-2"/>
                                 <span>{formError}</span>
                             </div>
                         )}
 
                         {formSuccess && (
-                            <div className="mb-4 flex items-center p-4 bg-green-50 border-l-4 border-green-500 text-green-700">
-                                <CheckCircle2 className="w-5 h-5 mr-2" />
+                            <div
+                                className="mb-4 flex items-center p-4 bg-green-50 border-l-4 border-green-500 text-green-700">
+                                <CheckCircle2 className="w-5 h-5 mr-2"/>
                                 <span>{formSuccess}</span>
                             </div>
                         )}
@@ -276,7 +278,7 @@ export default function UserManagementPage() {
                                 />
 
                                 <FormInput
-                                    label={editingUser ? "新密码 (留空保持不变)" : "密码"}
+                                    label={editingUser ? '新密码 (留空保持不变)' : '密码'}
                                     id="password"
                                     name="password"
                                     type="password"
@@ -286,7 +288,7 @@ export default function UserManagementPage() {
                                 />
 
                                 <FormInput
-                                    label={editingUser ? "确认新密码" : "确认密码"}
+                                    label={editingUser ? '确认新密码' : '确认密码'}
                                     id="confirmPassword"
                                     name="confirmPassword"
                                     type="password"
@@ -337,7 +339,7 @@ export default function UserManagementPage() {
                                 >
                                     {loading ? (
                                         <>
-                                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                            <Loader2 className="w-4 h-4 mr-2 animate-spin"/>
                                             处理中...
                                         </>
                                     ) : (
@@ -353,7 +355,7 @@ export default function UserManagementPage() {
                 <div className="mb-4">
                     <div className="relative">
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <Search className="h-5 w-5 text-gray-400" />
+                            <Search className="h-5 w-5 text-gray-400"/>
                         </div>
                         <input
                             type="text"
@@ -382,7 +384,7 @@ export default function UserManagementPage() {
                             {loading && users.length === 0 ? (
                                 <tr>
                                     <td colSpan="5" className="px-6 py-4 text-center text-gray-500">
-                                        <Loader2 className="h-6 w-6 animate-spin mx-auto" />
+                                        <Loader2 className="h-6 w-6 animate-spin mx-auto"/>
                                         <span className="mt-2 block">加载用户数据...</span>
                                     </td>
                                 </tr>
@@ -391,7 +393,7 @@ export default function UserManagementPage() {
                                     <td colSpan="5" className="px-6 py-4 text-center text-gray-500">
                                         {searchTerm ? (
                                             <>
-                                                <p>没有找到匹配"{searchTerm}"的用户</p>
+                                                <p>没有找到匹配 {searchTerm} 的用户</p>
                                                 <Button
                                                     variant="secondary"
                                                     size="sm"
@@ -413,7 +415,7 @@ export default function UserManagementPage() {
                                                         setShowForm(true);
                                                     }}
                                                 >
-                                                    <Plus className="w-4 h-4 mr-1" />
+                                                    <Plus className="w-4 h-4 mr-1"/>
                                                     添加第一个用户
                                                 </Button>
                                             </>
@@ -425,8 +427,9 @@ export default function UserManagementPage() {
                                     <tr key={user._id} className="hover:bg-gray-50">
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="flex items-center">
-                                                <div className="flex-shrink-0 h-8 w-8 bg-gray-100 rounded-full flex items-center justify-center">
-                                                    <User className="h-4 w-4 text-gray-500" />
+                                                <div
+                                                    className="flex-shrink-0 h-8 w-8 bg-gray-100 rounded-full flex items-center justify-center">
+                                                    <User className="h-4 w-4 text-gray-500"/>
                                                 </div>
                                                 <div className="ml-4">
                                                     <div className="text-sm font-medium text-gray-900">
@@ -441,7 +444,7 @@ export default function UserManagementPage() {
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="flex items-center text-sm text-gray-500">
                                                 {user.role === 'admin' && (
-                                                    <Shield className="h-4 w-4 mr-1 text-blue-500" />
+                                                    <Shield className="h-4 w-4 mr-1 text-blue-500"/>
                                                 )}
                                                 {user.role === 'admin'
                                                     ? '管理员'
@@ -452,11 +455,12 @@ export default function UserManagementPage() {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                                    user.active
-                                                        ? 'bg-green-100 text-green-800'
-                                                        : 'bg-red-100 text-red-800'
-                                                }`}>
+                                                <span
+                                                    className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                                        user.active
+                                                            ? 'bg-green-100 text-green-800'
+                                                            : 'bg-red-100 text-red-800'
+                                                    }`}>
                                                     {user.active ? '激活' : '禁用'}
                                                 </span>
                                         </td>
@@ -465,7 +469,7 @@ export default function UserManagementPage() {
                                                 className="text-blue-600 hover:text-blue-900 mr-3"
                                                 onClick={() => handleEditUser(user)}
                                             >
-                                                <Edit className="h-4 w-4 inline mr-1" />
+                                                <Edit className="h-4 w-4 inline mr-1"/>
                                                 编辑
                                             </button>
                                             {/* 禁止删除当前登录用户，且不允许删除最后一个管理员 */}
@@ -474,7 +478,7 @@ export default function UserManagementPage() {
                                                     className="text-red-600 hover:text-red-900"
                                                     onClick={() => handleDeleteUser(user._id)}
                                                 >
-                                                    <Trash2 className="h-4 w-4 inline mr-1" />
+                                                    <Trash2 className="h-4 w-4 inline mr-1"/>
                                                     删除
                                                 </button>
                                             )}

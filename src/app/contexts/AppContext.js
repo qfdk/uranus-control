@@ -1,7 +1,7 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect } from 'react';
-import { useAuth } from './AuthContext';
+import {createContext, useCallback, useContext, useEffect, useState} from 'react';
+import {useAuth} from './AuthContext';
 
 const REFRESH_INTERVAL = 10000; // 10秒
 
@@ -9,31 +9,15 @@ const REFRESH_INTERVAL = 10000; // 10秒
 const AppContext = createContext();
 
 // Context provider component
-export function AppProvider({ children }) {
+export function AppProvider({children}) {
     const [agents, setAgents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [autoRefresh, setAutoRefresh] = useState(true);
-    const { logout } = useAuth();
-
-    // Fetch agents on mount
-    useEffect(() => {
-        fetchAgents();
-
-        // 设置自动刷新
-        let intervalId;
-        if (autoRefresh) {
-            intervalId = setInterval(fetchAgents, REFRESH_INTERVAL);
-        }
-
-        // 清除定时器
-        return () => {
-            if (intervalId) clearInterval(intervalId);
-        };
-    }, [autoRefresh]);
+    const {logout} = useAuth();
 
     // Function to fetch agents
-    const fetchAgents = async () => {
+    const fetchAgents = useCallback(async () => {
         try {
             setLoading(true);
             const response = await fetch('/api/agents');
@@ -59,7 +43,23 @@ export function AppProvider({ children }) {
         } finally {
             setLoading(false);
         }
-    };
+    }, [logout]);
+
+    // Fetch agents on mount
+    useEffect(() => {
+        fetchAgents();
+
+        // 设置自动刷新
+        let intervalId;
+        if (autoRefresh) {
+            intervalId = setInterval(fetchAgents, REFRESH_INTERVAL);
+        }
+
+        // 清除定时器
+        return () => {
+            if (intervalId) clearInterval(intervalId);
+        };
+    }, [autoRefresh, fetchAgents]);
 
     // Update an agent
     const updateAgent = async (agentId, updateData) => {
@@ -67,9 +67,9 @@ export function AppProvider({ children }) {
             const response = await fetch(`/api/agents/${agentId}`, {
                 method: 'PUT',
                 headers: {
-                    'Content-Type': 'application/json',
+                    'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(updateData),
+                body: JSON.stringify(updateData)
             });
 
             // 处理认证错误
@@ -101,7 +101,7 @@ export function AppProvider({ children }) {
     const deleteAgent = async (agentId) => {
         try {
             const response = await fetch(`/api/agents/${agentId}`, {
-                method: 'DELETE',
+                method: 'DELETE'
             });
 
             // 处理认证错误
@@ -128,9 +128,9 @@ export function AppProvider({ children }) {
             const response = await fetch('/api/agents', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
+                    'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(agentData),
+                body: JSON.stringify(agentData)
             });
 
             // 处理认证错误
@@ -158,9 +158,9 @@ export function AppProvider({ children }) {
             const response = await fetch(`/api/agents/${agentId}/command`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
+                    'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ command }),
+                body: JSON.stringify({command})
             });
 
             // 处理认证错误
@@ -196,7 +196,7 @@ export function AppProvider({ children }) {
                 updateAgent,
                 deleteAgent,
                 addAgent,
-                sendCommand,
+                sendCommand
             }}
         >
             {children}
