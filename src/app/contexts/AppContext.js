@@ -1,6 +1,6 @@
 'use client';
 
-import {createContext, useCallback, useContext, useEffect, useState} from 'react';
+import {createContext, useContext, useEffect, useState, useCallback} from 'react';
 import {useAuth} from './AuthContext';
 
 const REFRESH_INTERVAL = 10000; // 10秒
@@ -16,7 +16,7 @@ export function AppProvider({children}) {
     const [autoRefresh, setAutoRefresh] = useState(true);
     const {logout} = useAuth();
 
-    // Function to fetch agents
+    // Function to fetch agents - 使用useCallback包装
     const fetchAgents = useCallback(async () => {
         try {
             setLoading(true);
@@ -59,7 +59,7 @@ export function AppProvider({children}) {
         return () => {
             if (intervalId) clearInterval(intervalId);
         };
-    }, [autoRefresh, fetchAgents]);
+    }, [autoRefresh, fetchAgents]); // 添加fetchAgents作为依赖
 
     // Update an agent
     const updateAgent = async (agentId, updateData) => {
@@ -179,6 +179,7 @@ export function AppProvider({children}) {
             throw err;
         }
     };
+
     // 切换自动刷新功能
     const toggleAutoRefresh = () => {
         setAutoRefresh(prev => !prev);

@@ -1,7 +1,7 @@
 'use client';
 
 // src/app/agents/client-page.js
-import {useCallback, useEffect, useState} from 'react';
+import {useEffect, useState, useCallback} from 'react';
 import {formatDistanceToNow} from 'date-fns';
 import Link from 'next/link';
 import Button from '@/components/ui/Button';
@@ -15,10 +15,10 @@ export default function AgentsClientPage({initialAgents}) {
     const [statusFilter, setStatusFilter] = useState('all');
     const [isLoading, setIsLoading] = useState(false);
     const [deleteLoading, setDeleteLoading] = useState(null);
-    const {deleteAgent, autoRefresh, toggleAutoRefresh, fetchAgents} = useApp();
+    const {deleteAgent, autoRefresh, toggleAutoRefresh} = useApp();
     const {logout} = useAuth();
 
-    // 刷新代理数据
+    // 刷新代理数据 - 使用useCallback包装
     const refreshAgents = useCallback(async () => {
         try {
             setIsLoading(true);
@@ -46,7 +46,7 @@ export default function AgentsClientPage({initialAgents}) {
         } finally {
             setIsLoading(false);
         }
-    },[autoRefresh, logout]);
+    }, [logout, autoRefresh, setAgents]);
 
     // 添加自动刷新功能的副作用
     useEffect(() => {
@@ -61,7 +61,7 @@ export default function AgentsClientPage({initialAgents}) {
             console.log('清除自动刷新定时器');
             clearInterval(intervalId);
         };
-    }, [autoRefresh, refreshAgents]); // 只在 autoRefresh 变化时重新设置
+    }, [autoRefresh, refreshAgents]); // 包含refreshAgents作为依赖
 
     // 用于客户端过滤的逻辑
     const filteredAgents = agents.filter(agent => {
