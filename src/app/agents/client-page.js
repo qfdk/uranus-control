@@ -7,6 +7,7 @@ import Link from 'next/link';
 import Button from '@/components/ui/Button';
 import {Eye, Plus, RefreshCw, Trash2} from 'lucide-react';
 import {useApp} from '@/app/contexts/AppContext';
+import { useAuth } from '@/app/contexts/AuthContext';
 
 export default function AgentsClientPage({initialAgents}) {
     const [agents, setAgents] = useState(initialAgents || []);
@@ -15,6 +16,7 @@ export default function AgentsClientPage({initialAgents}) {
     const [isLoading, setIsLoading] = useState(false);
     const [deleteLoading, setDeleteLoading] = useState(null);
     const {deleteAgent, autoRefresh, toggleAutoRefresh, fetchAgents} = useApp();
+    const { isAuthenticated, logout } = useAuth();
 
     // 添加自动刷新功能的副作用
     useEffect(() => {
@@ -51,14 +53,27 @@ export default function AgentsClientPage({initialAgents}) {
     const refreshAgents = async () => {
         try {
             setIsLoading(true);
-            console.log('手动刷新代理数据');
+            console.log('刷新代理数据');
             const response = await fetch('/api/agents');
-            if (response.ok) {
-                const data = await response.json();
-                setAgents(data);
+
+            if (response.status === 401) {
+                // 如果返回401未授权，说明会话过期，需要重新登录
+                alert('会话已过期，请重新登录');
+                logout();
+                return;
             }
+
+            if (!response.ok) {
+                throw new Error(`服务器返回错误: ${response.status}`);
+            }
+
+            const data = await response.json();
+            setAgents(data);
         } catch (error) {
             console.error('Failed to refresh agents:', error);
+            if (!autoRefresh) { // 只在手动刷新时显示错误通知
+                alert(`刷新代理列表失败: ${error.message}`);
+            }
         } finally {
             setIsLoading(false);
         }
@@ -77,6 +92,14 @@ export default function AgentsClientPage({initialAgents}) {
             setAgents(prevAgents => prevAgents.filter(agent => agent._id !== agentId));
         } catch (error) {
             console.error('删除代理失败:', error);
+
+            // 检查是否是认证失败
+            if (error.message && error.message.includes('401')) {
+                alert('会话已过期，请重新登录');
+                logout();
+                return;
+            }
+
             alert('删除代理失败，请重试');
         } finally {
             setDeleteLoading(null);
@@ -153,10 +176,22 @@ export default function AgentsClientPage({initialAgents}) {
                         <button
                             onClick={refreshAgents}
                             disabled={isLoading}
-                            className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-gray-50 rounded border border-gray-300 hover:bg-gray-100 disabled:opacity-50"
+                            className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-gray-50 rounded border border-gray-300 hover:bg-gray-100 disabled:opacity-50 transition-colors duration-200 min-w-[90px] justify-center"
                         >
-                            <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`}/>
-                            {isLoading ? '加载中...' : '刷新'}
+                            {isLoading ? (
+                                <>
+                                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    加载中
+                                </>
+                            ) : (
+                                <>
+                                    <RefreshCw className="w-4 h-4 mr-2" />
+                                    刷新
+                                </>
+                            )}
                         </button>
                     </div>
                 </div>
@@ -213,9 +248,20 @@ export default function AgentsClientPage({initialAgents}) {
                                             disabled={deleteLoading === agent._id}
                                             className="text-red-600 hover:text-red-900 inline-flex items-center"
                                         >
-                                            <Trash2
-                                                className={`w-4 h-4 mr-2 ${deleteLoading === agent._id ? 'animate-spin' : ''}`}/>
-                                            {deleteLoading === agent._id ? '删除中...' : '删除'}
+                                            {deleteLoading === agent._id ? (
+                                                <>
+                                                    <svg className="animate-spin h-4 w-4 mr-2 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                    </svg>
+                                                    删除中...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Trash2 className="w-4 h-4 mr-2" />
+                                                    删除
+                                                </>
+                                            )}
                                         </button>
                                     </div>
                                 </td>

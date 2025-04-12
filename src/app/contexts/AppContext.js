@@ -1,8 +1,9 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect } from 'react';
+import { useAuth } from './AuthContext';
 
-const REFRESH_INTERVAL = 10000; // 15秒
+const REFRESH_INTERVAL = 10000; // 10秒
 
 // Create context
 const AppContext = createContext();
@@ -13,6 +14,7 @@ export function AppProvider({ children }) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [autoRefresh, setAutoRefresh] = useState(true);
+    const { logout } = useAuth();
 
     // Fetch agents on mount
     useEffect(() => {
@@ -35,9 +37,19 @@ export function AppProvider({ children }) {
         try {
             setLoading(true);
             const response = await fetch('/api/agents');
-            if (!response.ok) {
-                throw new Error('Failed to fetch agents');
+
+            // 处理认证错误
+            if (response.status === 401) {
+                // 静默失败，不显示错误消息，只在控制台记录
+                console.log('认证过期，需要重新登录');
+                logout();
+                return;
             }
+
+            if (!response.ok) {
+                throw new Error(`服务器返回错误: ${response.status}`);
+            }
+
             const data = await response.json();
             setAgents(data);
             setError(null);
@@ -60,8 +72,14 @@ export function AppProvider({ children }) {
                 body: JSON.stringify(updateData),
             });
 
+            // 处理认证错误
+            if (response.status === 401) {
+                logout();
+                throw new Error('会话已过期，请重新登录');
+            }
+
             if (!response.ok) {
-                throw new Error('Failed to update agent');
+                throw new Error(`服务器返回错误: ${response.status}`);
             }
 
             const updatedAgent = await response.json();
@@ -86,8 +104,14 @@ export function AppProvider({ children }) {
                 method: 'DELETE',
             });
 
+            // 处理认证错误
+            if (response.status === 401) {
+                logout();
+                throw new Error('会话已过期，请重新登录');
+            }
+
             if (!response.ok) {
-                throw new Error('Failed to delete agent');
+                throw new Error(`服务器返回错误: ${response.status}`);
             }
 
             setAgents(prev => prev.filter(agent => agent._id !== agentId));
@@ -109,8 +133,14 @@ export function AppProvider({ children }) {
                 body: JSON.stringify(agentData),
             });
 
+            // 处理认证错误
+            if (response.status === 401) {
+                logout();
+                throw new Error('会话已过期，请重新登录');
+            }
+
             if (!response.ok) {
-                throw new Error('Failed to add agent');
+                throw new Error(`服务器返回错误: ${response.status}`);
             }
 
             const newAgent = await response.json();
@@ -133,8 +163,14 @@ export function AppProvider({ children }) {
                 body: JSON.stringify({ command }),
             });
 
+            // 处理认证错误
+            if (response.status === 401) {
+                logout();
+                throw new Error('会话已过期，请重新登录');
+            }
+
             if (!response.ok) {
-                throw new Error('Failed to send command to agent');
+                throw new Error(`服务器返回错误: ${response.status}`);
             }
 
             return await response.json();

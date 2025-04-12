@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import Agent from '@/models/agent';
 import {notFound} from 'next/navigation';
 import AgentDetailWrapper from './client-page';
+import AppShell from '@/app/AppShell';
 
 async function getAgentData(id) {
     await connectDB();
@@ -25,5 +26,9 @@ export default async function AgentDetailPage({params}) {
         notFound();
     }
 
-    return <AgentDetailWrapper agent={agent}/>;
+    return (
+        <AppShell>
+            <AgentDetailWrapper agent={agent}/>
+        </AppShell>
+    );
 }
