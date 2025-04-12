@@ -1,11 +1,12 @@
 // src/app/layout.js
 import { Inter } from 'next/font/google';
 import './globals.css';
-import Link from 'next/link';
 import { AppProvider } from './contexts/AppContext';
 import { AuthProvider } from './contexts/AuthContext';
-import UserMenu from '@/components/ui/UserMenu';
-import MainNavigation from '@/components/ui/MainNavigation';
+import { seedDefaultUsers } from '@/lib/seed-users';
+
+// 确保在应用启动时创建默认用户
+seedDefaultUsers().catch(console.error);
 
 const inter = Inter({ subsets: ['latin'] });
 
