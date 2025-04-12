@@ -2,6 +2,8 @@
 
 import { createContext, useContext, useState, useEffect } from 'react';
 
+const REFRESH_INTERVAL = 15000; // 15秒
+
 // Create context
 const AppContext = createContext();
 
@@ -10,11 +12,23 @@ export function AppProvider({ children }) {
     const [agents, setAgents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [autoRefresh, setAutoRefresh] = useState(true);
 
     // Fetch agents on mount
     useEffect(() => {
         fetchAgents();
-    }, []);
+
+        // 设置自动刷新
+        let intervalId;
+        if (autoRefresh) {
+            intervalId = setInterval(fetchAgents, REFRESH_INTERVAL);
+        }
+
+        // 清除定时器
+        return () => {
+            if (intervalId) clearInterval(intervalId);
+        };
+    }, [autoRefresh]);
 
     // Function to fetch agents
     const fetchAgents = async () => {
@@ -129,6 +143,10 @@ export function AppProvider({ children }) {
             throw err;
         }
     };
+    // 切换自动刷新功能
+    const toggleAutoRefresh = () => {
+        setAutoRefresh(prev => !prev);
+    };
 
     return (
         <AppContext.Provider
@@ -136,6 +154,8 @@ export function AppProvider({ children }) {
                 agents,
                 loading,
                 error,
+                autoRefresh,
+                toggleAutoRefresh,
                 fetchAgents,
                 updateAgent,
                 deleteAgent,

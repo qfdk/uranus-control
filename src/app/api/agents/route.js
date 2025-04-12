@@ -2,11 +2,16 @@
 import {NextResponse} from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Agent from '@/models/agent';
+import {checkAgentsStatus} from '@/lib/heartbeat-checker';
 
 export async function GET() {
     await connectDB();
 
     try {
+        // 先检查并更新代理状态
+        await checkAgentsStatus();
+
+        // 然后获取最新的代理列表
         const agents = await Agent.find({}).sort({lastHeartbeat: -1});
         return NextResponse.json(agents);
     } catch (error) {

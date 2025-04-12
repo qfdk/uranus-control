@@ -5,13 +5,16 @@ import {useState} from 'react';
 import {formatDistanceToNow} from 'date-fns';
 import Link from 'next/link';
 import Button from '@/components/ui/Button';
-import {Edit, Eye, Plus, RefreshCw, Trash2} from 'lucide-react';
+import {Eye, Plus, RefreshCw, Trash2} from 'lucide-react';
+import {useApp} from '@/app/contexts/AppContext';
 
 export default function AgentsClientPage({initialAgents}) {
     const [agents, setAgents] = useState(initialAgents || []);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [isLoading, setIsLoading] = useState(false);
+    const [deleteLoading, setDeleteLoading] = useState(null);
+    const {deleteAgent, autoRefresh, toggleAutoRefresh, fetchAgents} = useApp();
 
     // 用于客户端过滤的逻辑
     const filteredAgents = agents.filter(agent => {
@@ -22,7 +25,7 @@ export default function AgentsClientPage({initialAgents}) {
         // 搜索过滤
         if (searchTerm) {
             const search = searchTerm.toLowerCase();
-            return (agent.name && agent.name.toLowerCase().includes(search)) ||
+            return (agent.hostname && agent.hostname.toLowerCase().includes(search)) ||
                 (agent.ip && agent.ip.toLowerCase().includes(search));
         }
 
@@ -42,6 +45,25 @@ export default function AgentsClientPage({initialAgents}) {
             console.error('Failed to refresh agents:', error);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    // 删除代理
+    const handleDeleteAgent = async (agentId) => {
+        if (!confirm('确定要删除此代理吗？此操作不可撤销。')) {
+            return;
+        }
+
+        try {
+            setDeleteLoading(agentId);
+            await deleteAgent(agentId);
+            // 更新本地状态，移除已删除的代理
+            setAgents(prevAgents => prevAgents.filter(agent => agent._id !== agentId));
+        } catch (error) {
+            console.error('删除代理失败:', error);
+            alert('删除代理失败，请重试');
+        } finally {
+            setDeleteLoading(null);
         }
     };
 
@@ -100,6 +122,14 @@ export default function AgentsClientPage({initialAgents}) {
                     </div>
                     <div className="md:col-span-2 flex justify-end">
                         <Button
+                            onClick={toggleAutoRefresh}
+                            className="text-xs text-gray-600 hover:text-gray-800 flex items-center gap-1"
+                        >
+                            <span
+                                className={`inline-block w-2 h-2 rounded-full ${autoRefresh ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></span>
+                            自动刷新
+                        </Button>
+                        <Button
                             variant="secondary"
                             onClick={refreshAgents}
                             disabled={isLoading}
@@ -139,7 +169,7 @@ export default function AgentsClientPage({initialAgents}) {
                                                 ? 'bg-green-100 text-green-800'
                                                 : 'bg-red-100 text-red-800'
                                         }`}>
-                                        {agent.online ? '在线' : '离线'}
+                                        {agent.online ? '在线' : `离线`}
                                     </span>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.version || '未知'}</td>
@@ -158,13 +188,14 @@ export default function AgentsClientPage({initialAgents}) {
                                             <Eye className="w-4 h-4 mr-1"/>
                                             详情
                                         </Link>
-                                        <button className="text-gray-600 hover:text-gray-900 inline-flex items-center">
-                                            <Edit className="w-4 h-4 mr-1"/>
-                                            编辑
-                                        </button>
-                                        <button className="text-red-600 hover:text-red-900 inline-flex items-center">
-                                            <Trash2 className="w-4 h-4 mr-1"/>
-                                            删除
+                                        <button
+                                            onClick={() => handleDeleteAgent(agent._id)}
+                                            disabled={deleteLoading === agent._id}
+                                            className="text-red-600 hover:text-red-900 inline-flex items-center"
+                                        >
+                                            <Trash2
+                                                className={`w-4 h-4 mr-1 ${deleteLoading === agent._id ? 'animate-spin' : ''}`}/>
+                                            {deleteLoading === agent._id ? '删除中...' : '删除'}
                                         </button>
                                     </div>
                                 </td>

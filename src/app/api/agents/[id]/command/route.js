@@ -7,11 +7,11 @@ export async function POST(request, { params }) {
     await connectDB();
 
     try {
-        const agentId = params.id;
+        const {id} = params;
         const { command } = await request.json();
 
         // Find the agent
-        const agent = await Agent.findById(agentId);
+        const agent = await Agent.findById(id);
 
         if (!agent) {
             return NextResponse.json({ error: 'Agent not found' }, { status: 404 });

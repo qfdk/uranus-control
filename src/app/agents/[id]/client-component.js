@@ -7,7 +7,6 @@ import {
     ArrowLeft,
     Cpu,
     Database,
-    Edit,
     FileCheck,
     Globe,
     MemoryStick,
@@ -17,11 +16,39 @@ import {
     Zap
 } from 'lucide-react';
 import Button from '@/components/ui/Button';
+import {useApp} from '@/app/contexts/AppContext';
+import {useRouter} from 'next/navigation';
 
-export default function AgentDetail({agent}) {
+export default function AgentDetail({agent: initialAgent}) {
+    const router = useRouter();
+    const {sendCommand, deleteAgent} = useApp();
     // 添加更强大的初始化逻辑和状态日志
     const [activeTab, setActiveTab] = useState('info');
     const [renderKey, setRenderKey] = useState(0); // 强制重新渲染的辅助状态
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [isRestarting, setIsRestarting] = useState(false);
+    const [isReloading, setIsReloading] = useState(false);
+    const [isStopping, setIsStopping] = useState(false);
+    const [agent, setAgent] = useState(initialAgent);
+    const { autoRefresh} = useApp();
+    // 添加自动刷新效果
+    useEffect(() => {
+        if (!autoRefresh) return;
+
+        const intervalId = setInterval(async () => {
+            try {
+                const response = await fetch(`/api/agents/${agent._id}`);
+                if (response.ok) {
+                    const updatedAgent = await response.json();
+                    setAgent(updatedAgent);
+                }
+            } catch (error) {
+                console.error('刷新代理状态失败:', error);
+            }
+        }, 15000); // 15秒刷新一次
+
+        return () => clearInterval(intervalId);
+    }, [agent._id, autoRefresh]);
 
     // 切换标签时添加调试和强制重新渲染
     const handleTabChange = (tab) => {
@@ -29,6 +56,70 @@ export default function AgentDetail({agent}) {
         setActiveTab(tab);
         // 强制重新渲染以确保状态变化后UI正确更新
         setRenderKey(prev => prev + 1);
+    };
+
+    // 删除代理处理函数
+    const handleDeleteAgent = async () => {
+        if (!confirm('确定要删除此代理吗？此操作不可撤销。')) {
+            return;
+        }
+
+        try {
+            setIsDeleting(true);
+            await deleteAgent(agent._id);
+            // 删除成功后返回代理列表页
+            router.push('/agents');
+        } catch (error) {
+            console.error('删除代理失败:', error);
+            alert('删除代理失败，请重试');
+            setIsDeleting(false);
+        }
+    };
+
+    // 重启服务处理函数
+    const handleRestartService = async () => {
+        try {
+            setIsRestarting(true);
+            const result = await sendCommand(agent._id, 'restart');
+            alert(result.message || '操作已发送');
+        } catch (error) {
+            console.error('发送重启命令失败:', error);
+            alert('发送重启命令失败，请重试');
+        } finally {
+            setIsRestarting(false);
+        }
+    };
+
+    // 重载配置处理函数
+    const handleReloadConfig = async () => {
+        try {
+            setIsReloading(true);
+            const result = await sendCommand(agent._id, 'reload');
+            alert(result.message || '配置重载命令已发送');
+        } catch (error) {
+            console.error('发送重载命令失败:', error);
+            alert('发送重载命令失败，请重试');
+        } finally {
+            setIsReloading(false);
+        }
+    };
+
+    // 停止服务处理函数
+    const handleStopService = async () => {
+        if (!confirm('确定要停止Nginx服务吗？这可能会导致托管的网站无法访问。')) {
+            return;
+        }
+
+        try {
+            setIsStopping(true);
+            const result = await sendCommand(agent._id, 'stop');
+            alert(result.message || '停止服务命令已发送');
+        } catch (error) {
+            console.error('发送停止命令失败:', error);
+            alert('发送停止命令失败，请重试');
+        } finally {
+            setIsStopping(false);
+        }
     };
 
     // 检查组件挂载和状态变化
@@ -69,13 +160,21 @@ export default function AgentDetail({agent}) {
                     <p className="text-gray-500">UUID: {agent.uuid}</p>
                 </div>
                 <div className="flex gap-2">
-                    <Button variant="primary">
-                        <RefreshCw className="w-4 h-4 mr-1"/>
-                        重启服务
+                    <Button
+                        variant="primary"
+                        onClick={handleRestartService}
+                        disabled={isRestarting || !agent.online}
+                    >
+                        <RefreshCw className={`w-4 h-4 mr-1 ${isRestarting ? 'animate-spin' : ''}`}/>
+                        {isRestarting ? '执行中...' : '重启服务'}
                     </Button>
-                    <Button variant="secondary">
-                        <Edit className="w-4 h-4 mr-1"/>
-                        编辑配置
+                    <Button
+                        variant="danger"
+                        onClick={handleDeleteAgent}
+                        disabled={isDeleting}
+                    >
+                        <XCircle className={`w-4 h-4 mr-1 ${isDeleting ? 'animate-spin' : ''}`}/>
+                        {isDeleting ? '删除中...' : '删除代理'}
                     </Button>
                 </div>
             </header>
@@ -264,17 +363,23 @@ export default function AgentDetail({agent}) {
 
                             <div className="pt-2 border-t border-gray-100">
                                 <div className="flex justify-end space-x-2 mt-2">
-                                    <Button size="sm" variant="primary">
-                                        <RefreshCw className="w-3.5 h-3.5 mr-1"/>
-                                        重载配置
+                                    <Button
+                                        size="sm"
+                                        variant="primary"
+                                        disabled={!agent.online || isReloading}
+                                        onClick={handleReloadConfig}
+                                    >
+                                        <RefreshCw className={`w-3.5 h-3.5 mr-1 ${isReloading ? 'animate-spin' : ''}`}/>
+                                        {isReloading ? '重载中...' : '重载配置'}
                                     </Button>
-                                    <Button size="sm" variant="success">
-                                        <Edit className="w-3.5 h-3.5 mr-1"/>
-                                        编辑配置
-                                    </Button>
-                                    <Button size="sm" variant="danger">
-                                        <XCircle className="w-3.5 h-3.5 mr-1"/>
-                                        停止服务
+                                    <Button
+                                        size="sm"
+                                        variant="danger"
+                                        disabled={!agent.online || isStopping}
+                                        onClick={handleStopService}
+                                    >
+                                        <XCircle className={`w-3.5 h-3.5 mr-1 ${isStopping ? 'animate-spin' : ''}`}/>
+                                        {isStopping ? '停止中...' : '停止服务'}
                                     </Button>
                                 </div>
                             </div>
@@ -315,9 +420,13 @@ export default function AgentDetail({agent}) {
                                                 {site.ssl && site.expiryDate ? site.expiryDate : '-'}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-right space-x-2">
-                                                <button className="text-blue-600 hover:text-blue-900">编辑</button>
-                                                <button className="text-gray-600 hover:text-gray-900">配置</button>
-                                                <button className="text-red-600 hover:text-red-900">删除</button>
+                                                <button className="text-gray-600 hover:text-gray-900" disabled={!agent.online}>配置</button>
+                                                <button
+                                                    className="text-red-600 hover:text-red-900"
+                                                    disabled={!agent.online}
+                                                >
+                                                    删除
+                                                </button>
                                             </td>
                                         </tr>
                                     ))
@@ -332,7 +441,10 @@ export default function AgentDetail({agent}) {
                             </table>
                         </div>
                         <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex justify-end">
-                            <Button variant="primary">
+                            <Button
+                                variant="primary"
+                                disabled={!agent.online}
+                            >
                                 添加新站点
                             </Button>
                         </div>
