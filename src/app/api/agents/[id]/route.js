@@ -7,8 +7,8 @@ export async function GET(request, {params}) {
     await connectDB();
 
     try {
-        const agentId = params.id;
-        const agent = await Agent.findById(agentId);
+        const {id} = await params;
+        const agent = await Agent.findById(id);
 
         if (!agent) {
             return NextResponse.json({error: 'Agent not found'}, {status: 404});

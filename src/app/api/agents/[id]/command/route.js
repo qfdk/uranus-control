@@ -7,7 +7,7 @@ export async function POST(request, { params }) {
     await connectDB();
 
     try {
-        const {id} = params;
+        const {id} = await params;
         const { command } = await request.json();
 
         // Find the agent
