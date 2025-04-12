@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect } from 'react';
 
-const REFRESH_INTERVAL = 15000; // 15秒
+const REFRESH_INTERVAL = 10000; // 15秒
 
 // Create context
 const AppContext = createContext();

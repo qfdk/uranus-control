@@ -1,7 +1,7 @@
 'use client';
 
 // src/app/agents/client-page.js
-import {useState} from 'react';
+import {useState, useEffect} from 'react';
 import {formatDistanceToNow} from 'date-fns';
 import Link from 'next/link';
 import Button from '@/components/ui/Button';
@@ -15,6 +15,21 @@ export default function AgentsClientPage({initialAgents}) {
     const [isLoading, setIsLoading] = useState(false);
     const [deleteLoading, setDeleteLoading] = useState(null);
     const {deleteAgent, autoRefresh, toggleAutoRefresh, fetchAgents} = useApp();
+
+    // 添加自动刷新功能的副作用
+    useEffect(() => {
+        if (!autoRefresh) return;
+
+        console.log('设置自动刷新定时器');
+        // 设置定时刷新
+        const intervalId = setInterval(refreshAgents, 15000); // 每15秒刷新一次
+
+        // 清理函数
+        return () => {
+            console.log('清除自动刷新定时器');
+            clearInterval(intervalId);
+        };
+    }, [autoRefresh]); // 只在 autoRefresh 变化时重新设置
 
     // 用于客户端过滤的逻辑
     const filteredAgents = agents.filter(agent => {
@@ -36,6 +51,7 @@ export default function AgentsClientPage({initialAgents}) {
     const refreshAgents = async () => {
         try {
             setIsLoading(true);
+            console.log('手动刷新代理数据');
             const response = await fetch('/api/agents');
             if (response.ok) {
                 const data = await response.json();
@@ -88,7 +104,7 @@ export default function AgentsClientPage({initialAgents}) {
             {/* 代理过滤和搜索 */}
             <div className="mb-6 bg-white p-5 rounded-lg shadow-sm">
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-                    <div className="md:col-span-6">
+                    <div className="md:col-span-5">
                         <div className="mb-4 md:mb-0">
                             <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">
                                 搜索
@@ -103,7 +119,7 @@ export default function AgentsClientPage({initialAgents}) {
                             />
                         </div>
                     </div>
-                    <div className="md:col-span-4">
+                    <div className="md:col-span-3">
                         <div className="mb-4 md:mb-0">
                             <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
                                 状态
@@ -112,7 +128,7 @@ export default function AgentsClientPage({initialAgents}) {
                                 id="status"
                                 value={statusFilter}
                                 onChange={handleStatusChange}
-                                className="w-full rounded-md border border-gray-300 shadow-sm px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+                                className="w-full rounded-md border border-gray-300 shadow-sm px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white disabled:bg-gray-100 disabled:text-gray-500"
                             >
                                 <option value="all">全部</option>
                                 <option value="online">在线</option>
@@ -120,24 +136,28 @@ export default function AgentsClientPage({initialAgents}) {
                             </select>
                         </div>
                     </div>
-                    <div className="md:col-span-2 flex justify-end">
-                        <Button
+                    <div className="md:col-span-4 flex flex-row justify-end items-center gap-3">
+                        <button
                             onClick={toggleAutoRefresh}
-                            className="text-xs text-gray-600 hover:text-gray-800 flex items-center gap-1"
+                            className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded ${
+                                autoRefresh
+                                    ? 'bg-green-50 text-green-700 border border-green-300'
+                                    : 'bg-gray-50 text-gray-700 border border-gray-300'
+                            }`}
                         >
                             <span
-                                className={`inline-block w-2 h-2 rounded-full ${autoRefresh ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></span>
+                                className={`inline-block w-2 h-2 rounded-full mr-2 ${autoRefresh ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}>
+                            </span>
                             自动刷新
-                        </Button>
-                        <Button
-                            variant="secondary"
+                        </button>
+                        <button
                             onClick={refreshAgents}
                             disabled={isLoading}
-                            className="w-full md:w-auto"
+                            className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-gray-50 rounded border border-gray-300 hover:bg-gray-100 disabled:opacity-50"
                         >
-                            <RefreshCw className="w-4 h-4 mr-1"/>
+                            <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`}/>
                             {isLoading ? '加载中...' : '刷新'}
-                        </Button>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -180,12 +200,12 @@ export default function AgentsClientPage({initialAgents}) {
                                         : '未知'}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                                    <div className="flex justify-end space-x-2">
+                                    <div className="flex justify-end space-x-4">
                                         <Link
                                             href={`/agents/${agent._id}`}
                                             className="text-blue-600 hover:text-blue-900 inline-flex items-center"
                                         >
-                                            <Eye className="w-4 h-4 mr-1"/>
+                                            <Eye className="w-4 h-4 mr-2"/>
                                             详情
                                         </Link>
                                         <button
@@ -194,7 +214,7 @@ export default function AgentsClientPage({initialAgents}) {
                                             className="text-red-600 hover:text-red-900 inline-flex items-center"
                                         >
                                             <Trash2
-                                                className={`w-4 h-4 mr-1 ${deleteLoading === agent._id ? 'animate-spin' : ''}`}/>
+                                                className={`w-4 h-4 mr-2 ${deleteLoading === agent._id ? 'animate-spin' : ''}`}/>
                                             {deleteLoading === agent._id ? '删除中...' : '删除'}
                                         </button>
                                     </div>

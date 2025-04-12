@@ -78,7 +78,7 @@ export default async function DashboardPage() {
               <tbody className="bg-white divide-y divide-gray-200">
               {recentAgents.map(agent => (
                   <tr key={agent._id.toString()}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{agent.name}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{agent.hostname}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.ip}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${agent.online ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>

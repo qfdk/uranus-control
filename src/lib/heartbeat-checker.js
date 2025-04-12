@@ -3,7 +3,7 @@ import connectDB from './mongodb';
 import Agent from '@/models/agent';
 
 // 定义心跳超时时间（毫秒）
-const HEARTBEAT_TIMEOUT = 30000; // 30秒
+const HEARTBEAT_TIMEOUT = 10000; // 30秒
 
 /**
  * 检查并更新代理状态
@@ -19,14 +19,13 @@ export async function checkAgentsStatus() {
         const result = await Agent.updateMany(
             {
                 online: true,
-                lastHeartbeat: { $lt: timeoutThreshold }
+                lastHeartbeat: {$lt: timeoutThreshold}
             },
             {
-                $set: { online: false }
+                $set: {online: false}
             }
         );
 
-        console.log(`${result.modifiedCount} 个代理标记为离线`);
         return result.modifiedCount;
     } catch (error) {
         console.error('检查代理状态时出错:', error);
