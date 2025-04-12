@@ -65,7 +65,7 @@ export default function AgentDetail({agent}) {
 
             <header className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-800">{agent.name || agent.uuid}</h1>
+                    <h1 className="text-2xl font-bold text-gray-800">{agent.hostname || agent.uuid}</h1>
                     <p className="text-gray-500">UUID: {agent.uuid}</p>
                 </div>
                 <div className="flex gap-2">

@@ -130,7 +130,7 @@ export default function AgentsClientPage({initialAgents}) {
                         <tbody className="bg-white divide-y divide-gray-200">
                         {filteredAgents.map(agent => (
                             <tr key={agent._id} className="hover:bg-gray-50">
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{agent.name || '未命名代理'}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{agent.hostname || '未命名代理'}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.ip}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                                     <span

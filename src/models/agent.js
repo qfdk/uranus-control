@@ -2,7 +2,7 @@
 import mongoose from 'mongoose';
 
 const AgentSchema = new mongoose.Schema({
-    name: { type: String, required: true },
+    hostname: { type: String, required: true },
     uuid: { type: String, required: true, unique: true },
     ip: { type: String, required: true },
     version: String,
