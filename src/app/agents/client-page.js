@@ -8,6 +8,7 @@ import Button from '@/components/ui/Button';
 import {Eye, Plus, RefreshCw, Trash2} from 'lucide-react';
 import {useApp} from '@/app/contexts/AppContext';
 import {useAuth} from '@/app/contexts/AuthContext';
+import {usePathname} from 'next/navigation';
 
 export default function AgentsClientPage({initialAgents}) {
     const [agents, setAgents] = useState(initialAgents || []);
@@ -15,8 +16,9 @@ export default function AgentsClientPage({initialAgents}) {
     const [statusFilter, setStatusFilter] = useState('all');
     const [isLoading, setIsLoading] = useState(false);
     const [deleteLoading, setDeleteLoading] = useState(null);
-    const {deleteAgent, autoRefresh, toggleAutoRefresh} = useApp();
+    const {deleteAgent, autoRefresh, toggleAutoRefresh, agents: contextAgents} = useApp();
     const {logout} = useAuth();
+    const pathname = usePathname();
 
     // 刷新代理数据 - 使用useCallback包装
     const refreshAgents = useCallback(async () => {
@@ -37,6 +39,7 @@ export default function AgentsClientPage({initialAgents}) {
             }
 
             const data = await response.json();
+            console.log('获取到新数据:', data.length);
             setAgents(data);
         } catch (error) {
             console.error('Failed to refresh agents:', error);
@@ -46,7 +49,29 @@ export default function AgentsClientPage({initialAgents}) {
         } finally {
             setIsLoading(false);
         }
-    }, [logout, autoRefresh, setAgents]);
+    }, [logout, autoRefresh]);
+
+    // 组件挂载时刷新数据
+    useEffect(() => {
+        console.log('组件挂载，立即获取最新数据');
+        refreshAgents();
+    }, [refreshAgents]);
+
+    // 路径变化时刷新数据
+    useEffect(() => {
+        console.log('路径变化，刷新数据:', pathname);
+        if (pathname === '/agents') {
+            refreshAgents();
+        }
+    }, [pathname, refreshAgents]);
+
+    // 当上下文中的agents变化时，更新本地状态
+    useEffect(() => {
+        console.log('上下文agents变化，更新本地状态', contextAgents?.length);
+        if (contextAgents && contextAgents.length > 0) {
+            setAgents(contextAgents);
+        }
+    }, [contextAgents]);
 
     // 添加自动刷新功能的副作用
     useEffect(() => {
@@ -54,7 +79,10 @@ export default function AgentsClientPage({initialAgents}) {
 
         console.log('设置自动刷新定时器');
         // 设置定时刷新
-        const intervalId = setInterval(refreshAgents, 15000); // 每15秒刷新一次
+        const intervalId = setInterval(() => {
+            console.log('自动刷新触发');
+            refreshAgents();
+        }, 15000); // 每15秒刷新一次
 
         // 清理函数
         return () => {
