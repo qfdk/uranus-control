@@ -1,7 +1,7 @@
 // src/app/agents/[id]/page.js
 import connectDB from '@/lib/mongodb';
 import Agent from '@/models/agent';
-import { notFound } from 'next/navigation';
+import {notFound} from 'next/navigation';
 import AgentDetailWrapper from './client-page';
 
 async function getAgentData(id) {
@@ -17,12 +17,13 @@ async function getAgentData(id) {
     }
 }
 
-export default async function AgentDetailPage({ params }) {
-    const agent = await getAgentData(params.id);
+export default async function AgentDetailPage({params}) {
+    const {id} = await params;
+    const agent = await getAgentData(id);
 
     if (!agent) {
         notFound();
     }
 
-    return <AgentDetailWrapper agent={agent} />;
+    return <AgentDetailWrapper agent={agent}/>;
 }
