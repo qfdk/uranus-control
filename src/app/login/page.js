@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, Lock, User } from 'lucide-react';
-import { useAuth } from '@/app/contexts/AuthContext';
+import {useEffect, useState} from 'react';
+import {useRouter} from 'next/navigation';
+import {Eye, EyeOff, Lock, User} from 'lucide-react';
+import {useAuth} from '@/app/contexts/AuthContext';
 
 export default function LoginPage() {
     const router = useRouter();
-    const { login } = useAuth();
+    const {login} = useAuth();
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -25,7 +25,7 @@ export default function LoginPage() {
     }, []);
 
     const handleChange = (e) => {
-        const { name, value, type, checked } = e.target;
+        const {name, value, type, checked} = e.target;
         setFormData({
             ...formData,
             [name]: type === 'checkbox' ? checked : value
@@ -41,7 +41,7 @@ export default function LoginPage() {
             // 调用登录API
             const response = await fetch('/api/auth/login', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(formData)
             });
 
@@ -77,21 +77,19 @@ export default function LoginPage() {
 
     return (
         <div className="min-h-screen bg-gray-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-            <div className="sm:mx-auto sm:w-full sm:max-w-md">
-                <div className="text-center">
-                    <h1 className="text-3xl font-bold text-gray-900">Οὐρανός</h1>
-                    <p className="mt-2 text-sm text-gray-600">控制台</p>
-                </div>
-            </div>
 
             <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
                 <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
-                    <h2 className="mb-6 text-center text-2xl font-medium text-gray-900">
-                        系统登录
-                    </h2>
+                    <div className="sm:mx-auto sm:w-full sm:max-w-md">
+                        <div className="text-center">
+                            <h1 className="text-3xl font-bold text-gray-900">Οὐρανός</h1>
+                            <p className="mt-2 text-sm text-gray-600">控制台</p>
+                        </div>
+                    </div>
 
                     {error && (
-                        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative" role="alert">
+                        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative"
+                             role="alert">
                             <span className="block sm:inline">{error}</span>
                         </div>
                     )}
@@ -103,7 +101,7 @@ export default function LoginPage() {
                             </label>
                             <div className="mt-1 relative rounded-md shadow-sm">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <User className="h-5 w-5 text-gray-400" />
+                                    <User className="h-5 w-5 text-gray-400"/>
                                 </div>
                                 <input
                                     id="username"
@@ -124,7 +122,7 @@ export default function LoginPage() {
                             </label>
                             <div className="mt-1 relative rounded-md shadow-sm">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <Lock className="h-5 w-5 text-gray-400" />
+                                    <Lock className="h-5 w-5 text-gray-400"/>
                                 </div>
                                 <input
                                     id="password"
@@ -143,34 +141,12 @@ export default function LoginPage() {
                                         className="text-gray-400 hover:text-gray-500 focus:outline-none"
                                     >
                                         {showPassword ? (
-                                            <EyeOff className="h-5 w-5" />
+                                            <EyeOff className="h-5 w-5"/>
                                         ) : (
-                                            <Eye className="h-5 w-5" />
+                                            <Eye className="h-5 w-5"/>
                                         )}
                                     </button>
                                 </div>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center">
-                                <input
-                                    id="remember"
-                                    name="remember"
-                                    type="checkbox"
-                                    checked={formData.remember}
-                                    onChange={handleChange}
-                                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                                />
-                                <label htmlFor="remember" className="ml-2 block text-sm text-gray-900">
-                                    记住我
-                                </label>
-                            </div>
-
-                            <div className="text-sm">
-                                <a href="#" className="font-medium text-blue-600 hover:text-blue-500">
-                                    忘记密码?
-                                </a>
                             </div>
                         </div>
 
@@ -182,9 +158,12 @@ export default function LoginPage() {
                             >
                                 {isLoading ? (
                                     <>
-                                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                                             xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                                    strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor"
+                                                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                         </svg>
                                         登录中...
                                     </>
