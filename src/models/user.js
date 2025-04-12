@@ -13,8 +13,8 @@ const UserSchema = new mongoose.Schema({
     },
     email: {
         type: String,
-        required: [true, '邮箱是必填项'],
-        unique: true,
+        required: false,
+        unique: false,
         match: [
             /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/,
             '请提供有效的邮箱地址'
@@ -31,8 +31,8 @@ const UserSchema = new mongoose.Schema({
     },
     role: {
         type: String,
-        enum: ['admin', 'manager', 'user'],
-        default: 'user'
+        enum: ['admin'],
+        default: 'admin'
     },
     active: {
         type: Boolean,
@@ -45,7 +45,7 @@ const UserSchema = new mongoose.Schema({
 });
 
 // 密码加密中间件
-UserSchema.pre('save', function(next) {
+UserSchema.pre('save', function (next) {
     // 如果密码没有被修改，则跳过
     if (!this.isModified('password')) {
         return next();
@@ -63,7 +63,7 @@ UserSchema.pre('save', function(next) {
 });
 
 // 验证密码的方法
-UserSchema.methods.matchPassword = function(enteredPassword) {
+UserSchema.methods.matchPassword = function (enteredPassword) {
     const hash = crypto
         .pbkdf2Sync(enteredPassword, this.salt, 1000, 64, 'sha512')
         .toString('hex');
@@ -71,7 +71,7 @@ UserSchema.methods.matchPassword = function(enteredPassword) {
 };
 
 // 生成重置密码的token
-UserSchema.methods.getResetPasswordToken = function() {
+UserSchema.methods.getResetPasswordToken = function () {
     // 生成token
     const resetToken = crypto.randomBytes(20).toString('hex');
 

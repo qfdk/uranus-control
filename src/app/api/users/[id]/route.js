@@ -36,23 +36,22 @@ export async function PUT(request, { params }) {
         const updateData = await request.json();
 
         // 检查是否是唯一约束字段的更新
-        if (updateData.username || updateData.email) {
+        if (updateData.username) {
             const existingUser = await User.findOne({
                 _id: { $ne: id }, // 排除当前用户
-                $or: [
-                    updateData.username ? { username: updateData.username } : null,
-                    updateData.email ? { email: updateData.email } : null
-                ].filter(Boolean) // 过滤掉null值
+                username: updateData.username
             });
 
             if (existingUser) {
-                const field = existingUser.username === updateData.username ? '用户名' : '邮箱';
                 return NextResponse.json(
-                    { success: false, message: `该${field}已被使用` },
+                    { success: false, message: '该用户名已被使用' },
                     { status: 400 }
                 );
             }
         }
+
+        // 确保角色始终是admin
+        updateData.role = 'admin';
 
         // 如果更新包含密码，需要确保通过用户模型的保存方法
         // 以触发密码加密中间件
