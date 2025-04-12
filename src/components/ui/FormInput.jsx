@@ -5,10 +5,14 @@ export default function FormInput({
                                       id,
                                       type = 'text',
                                       placeholder,
+                                      value,
                                       defaultValue,
                                       min,
                                       required = false,
-                                      className = ''
+                                      className = '',
+                                      error = '',
+                                      onChange,
+                                      onBlur
                                   }) {
     return (
         <div className="mb-4">
@@ -24,11 +28,15 @@ export default function FormInput({
                 id={id}
                 name={id}
                 placeholder={placeholder}
+                value={value}
                 defaultValue={defaultValue}
                 min={min}
                 required={required}
-                className={`w-full rounded-md border border-gray-300 shadow-sm px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 ${className}`}
+                onChange={onChange}
+                onBlur={onBlur}
+                className={`w-full rounded-md border border-gray-300 shadow-sm px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500 ${error ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''} ${className}`}
             />
+            {error && <p className="mt-1 text-sm text-red-500">{error}</p>}
         </div>
     );
 }

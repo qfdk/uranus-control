@@ -1,8 +1,8 @@
 'use client';
 
 // src/app/settings/page.js
-import { useState } from 'react';
-import { Settings as SettingsIcon, Database, User, ShieldAlert, Clock } from 'lucide-react';
+import {useState} from 'react';
+import {Clock, Database, Settings as SettingsIcon, ShieldAlert, User} from 'lucide-react';
 import FormInput from '@/components/ui/FormInput';
 import FormSelect from '@/components/ui/FormSelect';
 
@@ -10,20 +10,20 @@ export default function SettingsPage() {
     const [activeTab, setActiveTab] = useState('general');
 
     const languageOptions = [
-        { value: 'zh-CN', label: '简体中文' },
-        { value: 'en-US', label: 'English' }
+        {value: 'zh-CN', label: '简体中文'},
+        {value: 'en-US', label: 'English'}
     ];
 
     const timezoneOptions = [
-        { value: 'Asia/Shanghai', label: '亚洲/上海 (GMT+8)' },
-        { value: 'America/New_York', label: '美国/纽约 (GMT-5)' },
-        { value: 'Europe/London', label: '欧洲/伦敦 (GMT+0)' }
+        {value: 'Asia/Shanghai', label: '亚洲/上海 (GMT+8)'},
+        {value: 'America/New_York', label: '美国/纽约 (GMT-5)'},
+        {value: 'Europe/London', label: '欧洲/伦敦 (GMT+0)'}
     ];
 
     const backupFrequencyOptions = [
-        { value: 'daily', label: '每天' },
-        { value: 'weekly', label: '每周' },
-        { value: 'monthly', label: '每月' }
+        {value: 'daily', label: '每天'},
+        {value: 'weekly', label: '每周'},
+        {value: 'monthly', label: '每月'}
     ];
 
     return (
@@ -48,7 +48,7 @@ export default function SettingsPage() {
                                         : 'text-gray-700 hover:bg-gray-50'
                                 } mb-1`}
                             >
-                                <SettingsIcon className="w-5 h-5 mr-2 text-blue-500" />
+                                <SettingsIcon className="w-5 h-5 mr-2 text-blue-500"/>
                                 常规设置
                             </button>
                             <button
@@ -59,7 +59,7 @@ export default function SettingsPage() {
                                         : 'text-gray-700 hover:bg-gray-50'
                                 } mb-1`}
                             >
-                                <Database className="w-5 h-5 mr-2 text-gray-500" />
+                                <Database className="w-5 h-5 mr-2 text-gray-500"/>
                                 数据库设置
                             </button>
                             <button
@@ -70,7 +70,7 @@ export default function SettingsPage() {
                                         : 'text-gray-700 hover:bg-gray-50'
                                 } mb-1`}
                             >
-                                <User className="w-5 h-5 mr-2 text-gray-500" />
+                                <User className="w-5 h-5 mr-2 text-gray-500"/>
                                 用户管理
                             </button>
                             <button
@@ -81,7 +81,7 @@ export default function SettingsPage() {
                                         : 'text-gray-700 hover:bg-gray-50'
                                 } mb-1`}
                             >
-                                <ShieldAlert className="w-5 h-5 mr-2 text-gray-500" />
+                                <ShieldAlert className="w-5 h-5 mr-2 text-gray-500"/>
                                 安全设置
                             </button>
                             <button
@@ -92,7 +92,7 @@ export default function SettingsPage() {
                                         : 'text-gray-700 hover:bg-gray-50'
                                 } mb-1`}
                             >
-                                <Clock className="w-5 h-5 mr-2 text-gray-500" />
+                                <Clock className="w-5 h-5 mr-2 text-gray-500"/>
                                 备份与恢复
                             </button>
                         </nav>
@@ -112,7 +112,7 @@ export default function SettingsPage() {
                                     <FormInput
                                         label="站点名称"
                                         id="siteName"
-                                        defaultValue="Uranus 控制台"
+                                        defaultValue="Οὐρανός 控制台"
                                     />
 
                                     <FormInput
@@ -144,7 +144,8 @@ export default function SettingsPage() {
                                             className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                             defaultChecked
                                         />
-                                        <label htmlFor="emailNotifications" className="ml-2 block text-sm text-gray-700">
+                                        <label htmlFor="emailNotifications"
+                                               className="ml-2 block text-sm text-gray-700">
                                             开启电子邮件通知
                                         </label>
                                     </div>
@@ -228,7 +229,8 @@ export default function SettingsPage() {
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">admin@example.com</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">管理员</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                                <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                                <span
+                                                    className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
                                                   活跃
                                                 </span>
                                             </td>
