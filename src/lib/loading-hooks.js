@@ -4,29 +4,22 @@ import { useRouter } from 'next/navigation';
 import { useLoading } from '@/app/contexts/LoadingContext';
 import { useCallback } from 'react';
 
-// 创建一个结合导航和加载状态的hook
+// 为页面切换创建的hook
 export function useLoadingNavigation() {
     const router = useRouter();
-    const { startLoading, stopLoading } = useLoading();
+    const { startLoading } = useLoading();
 
-    // 带有加载状态的导航函数
-    const navigateWithLoading = useCallback((url, delay = 50) => {
+    // 支持编程式导航并显示加载状态
+    const navigateWithLoading = useCallback((url) => {
+        // 开始显示加载状态
         startLoading();
 
-        // 设置一个安全超时，确保加载状态最终会被清除
-        const safetyTimer = setTimeout(() => {
-            stopLoading();
-        }, 5000); // 5秒后强制结束加载状态（避免无限加载）
+        // 使用路由器导航
+        router.push(url);
 
-        setTimeout(() => {
-            router.push(url);
-            // 导航完成后，由目标页面负责停止加载
-            // 不在这里调用stopLoading()，而是在目标页面组件中调用
-
-            // 如果导航成功，清除安全计时器
-            clearTimeout(safetyTimer);
-        }, delay);
-    }, [router, startLoading, stopLoading]);
+        // 注意：不需要在这里调用stopLoading
+        // 页面转换完成后，新页面组件会自己调用stopLoading
+    }, [router, startLoading]);
 
     return { navigateWithLoading };
 }
@@ -41,6 +34,7 @@ export function useAsyncLoading() {
             startLoading();
             return await asyncFn(...args);
         } finally {
+            // 确保无论成功还是失败都停止加载
             stopLoading();
         }
     }, [startLoading, stopLoading]);

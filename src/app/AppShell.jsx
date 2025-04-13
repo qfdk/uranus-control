@@ -1,19 +1,19 @@
 'use client';
 
-import {useAuth} from './contexts/AuthContext';
-import {useEffect, useState} from 'react';
+import { useAuth } from './contexts/AuthContext';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import UserMenu from '@/components/ui/UserMenu';
 import ResponsiveNavigation from '@/components/ui/ResponsiveNavigation';
-import {usePathname} from 'next/navigation';
-import {useLoading} from '@/app/contexts/LoadingContext';
+import { usePathname } from 'next/navigation';
+import { useLoading } from '@/app/contexts/LoadingContext';
 
-export default function AppShell({children}) {
-    const {isAuthenticated, loading: authLoading} = useAuth();
+export default function AppShell({ children }) {
+    const { isAuthenticated, loading: authLoading } = useAuth();
     const pathname = usePathname();
     // 客户端渲染标志
     const [isMounted, setIsMounted] = useState(false);
-    const {stopLoading} = useLoading();
+    const { stopLoading } = useLoading();
 
     // 确保组件只在客户端渲染
     useEffect(() => {
@@ -22,10 +22,17 @@ export default function AppShell({children}) {
         // 确保在组件加载完成后停止全局加载动画
         const timer = setTimeout(() => {
             stopLoading();
-        }, 300); // 添加小延迟，使页面完全渲染
+        }, 300);
 
         return () => clearTimeout(timer);
     }, [stopLoading]);
+
+    // 监听路径变化，确保页面切换后停止加载状态
+    useEffect(() => {
+        if (isMounted) {
+            stopLoading();
+        }
+    }, [pathname, stopLoading, isMounted]);
 
     // 如果组件未挂载，继续显示加载状态
     if (!isMounted) {
