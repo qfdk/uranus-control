@@ -1,17 +1,17 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { formatDistanceToNow } from 'date-fns';
-import { FileCheck, Globe, Server } from 'lucide-react';
+import {useCallback, useEffect, useState} from 'react';
+import {formatDistanceToNow} from 'date-fns';
+import {Eye, FileCheck, Globe, Server} from 'lucide-react';
 import Link from 'next/link';
 import StatusCard from '@/components/ui/StatusCard';
 import QuickActionButton from '@/components/ui/QuickActionButton';
-import { useApp } from './contexts/AppContext';
+import {useApp} from './contexts/AppContext';
 
-export default function DashboardClientPage({ initialAgents }) {
+export default function DashboardClientPage({initialAgents}) {
     const [agents, setAgents] = useState(initialAgents || []);
     const [loading, setLoading] = useState(false);
-    const { autoRefresh, agents: contextAgents } = useApp();
+    const {autoRefresh, agents: contextAgents} = useApp();
 
     // 刷新代理数据
     const refreshDashboardData = useCallback(async () => {
@@ -108,21 +108,21 @@ export default function DashboardClientPage({ initialAgents }) {
                     title="代理节点"
                     value={`${onlineAgents.length}/${agents.length}`}
                     description="在线/总数"
-                    icon={<Server className="w-8 h-8 text-blue-500" />}
+                    icon={<Server className="w-8 h-8 text-blue-500"/>}
                     color="blue"
                 />
                 <StatusCard
                     title="网站"
                     value={totalWebsites}
                     description="托管网站总数"
-                    icon={<Globe className="w-8 h-8 text-green-500" />}
+                    icon={<Globe className="w-8 h-8 text-green-500"/>}
                     color="green"
                 />
                 <StatusCard
                     title="SSL证书"
                     value={totalCertificates}
                     description="有效证书数量"
-                    icon={<FileCheck className="w-8 h-8 text-purple-500" />}
+                    icon={<FileCheck className="w-8 h-8 text-purple-500"/>}
                     color="purple"
                 />
             </div>
@@ -150,21 +150,35 @@ export default function DashboardClientPage({ initialAgents }) {
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{agent.hostname || '未命名代理'}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.ip}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${agent.online ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                    <span
+                                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${agent.online ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                                       {agent.online ? '在线' : '离线'}
                                     </span>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.version || '未知'}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                     {agent.lastHeartbeat
-                                        ? formatDistanceToNow(new Date(agent.lastHeartbeat), { addSuffix: true })
+                                        ? formatDistanceToNow(new Date(agent.lastHeartbeat), {addSuffix: true})
                                         : '未知'}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
                                     <Link
                                         href={`/agents/${agent._id}`}
-                                        className="text-blue-600 hover:text-blue-900 mr-3"
+                                        className="text-blue-600 hover:text-blue-900 inline-flex items-center"
+                                        onClick={(e) => {
+                                            // 停止事件冒泡和默认行为
+                                            e.preventDefault();
+
+                                            // 添加加载状态
+                                            document.body.classList.add('loading-transition');
+
+                                            // 延迟跳转以确保加载状态被应用
+                                            setTimeout(() => {
+                                                window.location.href = `/agents/${agent._id}`;
+                                            }, 50);
+                                        }}
                                     >
+                                        <Eye className="w-4 h-4 mr-2"/>
                                         详情
                                     </Link>
                                 </td>
@@ -220,10 +234,10 @@ export default function DashboardClientPage({ initialAgents }) {
                     </div>
                     <div className="p-4">
                         <div className="grid grid-cols-2 gap-3">
-                            <QuickActionButton text="更新所有代理" color="blue" />
-                            <QuickActionButton text="检查SSL证书" color="green" />
-                            <QuickActionButton text="同步网站配置" color="purple" />
-                            <QuickActionButton text="系统备份" color="amber" />
+                            <QuickActionButton text="更新所有代理" color="blue"/>
+                            <QuickActionButton text="检查SSL证书" color="green"/>
+                            <QuickActionButton text="同步网站配置" color="purple"/>
+                            <QuickActionButton text="系统备份" color="amber"/>
                         </div>
                     </div>
                 </div>

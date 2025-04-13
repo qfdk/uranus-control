@@ -3,34 +3,29 @@
 import {useEffect, useState} from 'react';
 import {formatDistanceToNow} from 'date-fns';
 import Link from 'next/link';
-import {
-    ArrowLeft,
-    Cpu,
-    Database,
-    FileCheck,
-    Globe,
-    MemoryStick,
-    RefreshCw,
-    Server,
-    XCircle,
-    Zap
-} from 'lucide-react';
+import {ArrowLeft, Cpu, Database, FileCheck, Globe, MemoryStick, RefreshCw, Server, XCircle, Zap} from 'lucide-react';
 import Button from '@/components/ui/Button';
 import {useApp} from '@/app/contexts/AppContext';
 import {useRouter} from 'next/navigation';
 
 export default function AgentDetail({agent: initialAgent}) {
     const router = useRouter();
-    const {sendCommand, deleteAgent} = useApp();
-    // 添加更强大的初始化逻辑和状态日志
+    const {sendCommand, deleteAgent, autoRefresh} = useApp();
+
     const [activeTab, setActiveTab] = useState('info');
     const [renderKey, setRenderKey] = useState(0); // 强制重新渲染的辅助状态
     const [isDeleting, setIsDeleting] = useState(false);
     const [isRestarting, setIsRestarting] = useState(false);
-    const [isReloading, setIsReloading] = useState(false);
-    const [isStopping, setIsStopping] = useState(false);
     const [agent, setAgent] = useState(initialAgent);
-    const { autoRefresh} = useApp();
+
+    // 检查组件挂载和状态变化
+    useEffect(() => {
+        console.log('AgentDetail组件挂载或状态更新, 当前活动标签:', activeTab);
+
+        // 移除全局加载状态
+        document.body.classList.remove('loading-transition');
+    }, [activeTab]);
+
     // 添加自动刷新效果
     useEffect(() => {
         if (!autoRefresh) return;
@@ -45,7 +40,7 @@ export default function AgentDetail({agent: initialAgent}) {
             } catch (error) {
                 console.error('刷新代理状态失败:', error);
             }
-        }, 15000); // 15秒刷新一次
+        }, 10000); // 10秒刷新一次
 
         return () => clearInterval(intervalId);
     }, [agent._id, autoRefresh]);
@@ -87,38 +82,6 @@ export default function AgentDetail({agent: initialAgent}) {
             alert('发送重启命令失败，请重试');
         } finally {
             setIsRestarting(false);
-        }
-    };
-
-    // 重载配置处理函数
-    const handleReloadConfig = async () => {
-        try {
-            setIsReloading(true);
-            const result = await sendCommand(agent._id, 'reload');
-            alert(result.message || '配置重载命令已发送');
-        } catch (error) {
-            console.error('发送重载命令失败:', error);
-            alert('发送重载命令失败，请重试');
-        } finally {
-            setIsReloading(false);
-        }
-    };
-
-    // 停止服务处理函数
-    const handleStopService = async () => {
-        if (!confirm('确定要停止Nginx服务吗？这可能会导致托管的网站无法访问。')) {
-            return;
-        }
-
-        try {
-            setIsStopping(true);
-            const result = await sendCommand(agent._id, 'stop');
-            alert(result.message || '停止服务命令已发送');
-        } catch (error) {
-            console.error('发送停止命令失败:', error);
-            alert('发送停止命令失败，请重试');
-        } finally {
-            setIsStopping(false);
         }
     };
 
@@ -246,28 +209,6 @@ export default function AgentDetail({agent: initialAgent}) {
                     >
                         系统信息
                     </button>
-                    {/*<button*/}
-                    {/*    type="button"*/}
-                    {/*    onClick={() => handleTabChange('nginx')}*/}
-                    {/*    className={`py-4 px-1 border-b-2 font-medium text-sm ${*/}
-                    {/*        activeTab === 'nginx'*/}
-                    {/*            ? 'border-blue-500 text-blue-600'*/}
-                    {/*            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'*/}
-                    {/*    }`}*/}
-                    {/*>*/}
-                    {/*    Nginx 信息*/}
-                    {/*</button>*/}
-                    {/*<button*/}
-                    {/*    type="button"*/}
-                    {/*    onClick={() => handleTabChange('websites')}*/}
-                    {/*    className={`py-4 px-1 border-b-2 font-medium text-sm ${*/}
-                    {/*        activeTab === 'websites'*/}
-                    {/*            ? 'border-blue-500 text-blue-600'*/}
-                    {/*            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'*/}
-                    {/*    }`}*/}
-                    {/*>*/}
-                    {/*    托管站点*/}
-                    {/*</button>*/}
                 </nav>
             </div>
 
@@ -333,123 +274,6 @@ export default function AgentDetail({agent: initialAgent}) {
                         </div>
                     </div>
                 )}
-
-                {/* Nginx 信息面板 */}
-                {/*{activeTab === 'nginx' && (*/}
-                {/*    <div className="bg-white rounded-lg shadow">*/}
-                {/*        <div className="p-4 space-y-4">*/}
-                {/*            <div className="space-y-3">*/}
-                {/*                <div className="flex justify-between items-center p-2 rounded-md bg-gray-50">*/}
-                {/*                    <span className="text-sm text-gray-700">Nginx 状态</span>*/}
-                {/*                    <span*/}
-                {/*                        className={`text-sm font-medium ${agent.config?.nginxStatus !== 'KO' ? 'text-green-600' : 'text-red-600'}`}>*/}
-                {/*                      {agent.config?.nginxStatus !== 'KO' ? '运行中' : '已停止'}*/}
-                {/*                    </span>*/}
-                {/*                </div>*/}
-                {/*                <div className="flex justify-between items-center p-2 rounded-md hover:bg-gray-50">*/}
-                {/*                    <span className="text-sm text-gray-700">Nginx 版本</span>*/}
-                {/*                    <span className="text-sm font-medium">{agent.config?.nginxVersion || '未知'}</span>*/}
-                {/*                </div>*/}
-                {/*                <div className="flex justify-between items-center p-2 rounded-md hover:bg-gray-50">*/}
-                {/*                    <span className="text-sm text-gray-700">SSL 版本</span>*/}
-                {/*                    <span className="text-sm font-medium">{agent.config?.sslVersion || '未知'}</span>*/}
-                {/*                </div>*/}
-                {/*                <div className="flex justify-between items-center p-2 rounded-md hover:bg-gray-50">*/}
-                {/*                    <span className="text-sm text-gray-700">配置文件路径</span>*/}
-                {/*                    <span*/}
-                {/*                        className="text-sm font-medium overflow-hidden text-ellipsis">{agent.config?.configPath || '未知'}</span>*/}
-                {/*                </div>*/}
-                {/*            </div>*/}
-
-                {/*            <div className="pt-2 border-t border-gray-100">*/}
-                {/*                <div className="flex justify-end space-x-2 mt-2">*/}
-                {/*                    <Button*/}
-                {/*                        size="sm"*/}
-                {/*                        variant="primary"*/}
-                {/*                        disabled={!agent.online || isReloading}*/}
-                {/*                        onClick={handleReloadConfig}*/}
-                {/*                    >*/}
-                {/*                        <RefreshCw className={`w-3.5 h-3.5 mr-1 ${isReloading ? 'animate-spin' : ''}`}/>*/}
-                {/*                        {isReloading ? '重载中...' : '重载配置'}*/}
-                {/*                    </Button>*/}
-                {/*                    <Button*/}
-                {/*                        size="sm"*/}
-                {/*                        variant="danger"*/}
-                {/*                        disabled={!agent.online || isStopping}*/}
-                {/*                        onClick={handleStopService}*/}
-                {/*                    >*/}
-                {/*                        <XCircle className={`w-3.5 h-3.5 mr-1 ${isStopping ? 'animate-spin' : ''}`}/>*/}
-                {/*                        {isStopping ? '停止中...' : '停止服务'}*/}
-                {/*                    </Button>*/}
-                {/*                </div>*/}
-                {/*            </div>*/}
-                {/*        </div>*/}
-                {/*    </div>*/}
-                {/*)}*/}
-
-                {/* 托管站点面板 */}
-                {/*{activeTab === 'websites' && (*/}
-                {/*    <div className="bg-white rounded-lg shadow">*/}
-                {/*        <div className="px-4 py-3 border-b border-gray-200">*/}
-                {/*            <h2 className="text-lg font-medium text-gray-800">托管站点</h2>*/}
-                {/*        </div>*/}
-                {/*        <div className="overflow-x-auto">*/}
-                {/*            <table className="min-w-full divide-y divide-gray-200">*/}
-                {/*                <thead className="bg-gray-50">*/}
-                {/*                <tr>*/}
-                {/*                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">域名</th>*/}
-                {/*                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">反向代理</th>*/}
-                {/*                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SSL</th>*/}
-                {/*                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">证书到期</th>*/}
-                {/*                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>*/}
-                {/*                </tr>*/}
-                {/*                </thead>*/}
-                {/*                <tbody className="bg-white divide-y divide-gray-200">*/}
-                {/*                {agent.config?.sites ? (*/}
-                {/*                    agent.config.sites.map((site, index) => (*/}
-                {/*                        <tr key={index} className="hover:bg-gray-50">*/}
-                {/*                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{site.domain}</td>*/}
-                {/*                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{site.proxy}</td>*/}
-                {/*                            <td className="px-6 py-4 whitespace-nowrap text-sm">*/}
-                {/*                              <span*/}
-                {/*                                  className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${site.ssl ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>*/}
-                {/*                                {site.ssl ? '启用' : '未启用'}*/}
-                {/*                              </span>*/}
-                {/*                            </td>*/}
-                {/*                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">*/}
-                {/*                                {site.ssl && site.expiryDate ? site.expiryDate : '-'}*/}
-                {/*                            </td>*/}
-                {/*                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right space-x-2">*/}
-                {/*                                <button className="text-gray-600 hover:text-gray-900" disabled={!agent.online}>配置</button>*/}
-                {/*                                <button*/}
-                {/*                                    className="text-red-600 hover:text-red-900"*/}
-                {/*                                    disabled={!agent.online}*/}
-                {/*                                >*/}
-                {/*                                    删除*/}
-                {/*                                </button>*/}
-                {/*                            </td>*/}
-                {/*                        </tr>*/}
-                {/*                    ))*/}
-                {/*                ) : (*/}
-                {/*                    <tr>*/}
-                {/*                        <td colSpan="5" className="px-6 py-4 text-center text-sm text-gray-500">*/}
-                {/*                            暂无站点数据*/}
-                {/*                        </td>*/}
-                {/*                    </tr>*/}
-                {/*                )}*/}
-                {/*                </tbody>*/}
-                {/*            </table>*/}
-                {/*        </div>*/}
-                {/*        <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex justify-end">*/}
-                {/*            <Button*/}
-                {/*                variant="primary"*/}
-                {/*                disabled={!agent.online}*/}
-                {/*            >*/}
-                {/*                添加新站点*/}
-                {/*            </Button>*/}
-                {/*        </div>*/}
-                {/*    </div>*/}
-                {/*)}*/}
             </div>
         </div>
     );

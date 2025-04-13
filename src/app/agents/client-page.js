@@ -1,7 +1,7 @@
 'use client';
 
 // src/app/agents/client-page.js
-import {useEffect, useState, useCallback} from 'react';
+import {useCallback, useEffect, useState} from 'react';
 import {formatDistanceToNow} from 'date-fns';
 import Link from 'next/link';
 import Button from '@/components/ui/Button';
@@ -270,6 +270,18 @@ export default function AgentsClientPage({initialAgents}) {
                                         <Link
                                             href={`/agents/${agent._id}`}
                                             className="text-blue-600 hover:text-blue-900 inline-flex items-center"
+                                            onClick={(e) => {
+                                                // 停止事件冒泡和默认行为
+                                                e.preventDefault();
+
+                                                // 添加加载状态
+                                                document.body.classList.add('loading-transition');
+
+                                                // 延迟跳转以确保加载状态被应用
+                                                setTimeout(() => {
+                                                    window.location.href = `/agents/${agent._id}`;
+                                                }, 50);
+                                            }}
                                         >
                                             <Eye className="w-4 h-4 mr-2"/>
                                             详情
