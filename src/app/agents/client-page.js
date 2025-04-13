@@ -3,7 +3,6 @@
 // src/app/agents/client-page.js
 import {useCallback, useEffect, useState} from 'react';
 import {formatDistanceToNow} from 'date-fns';
-import Link from 'next/link';
 import Button from '@/components/ui/Button';
 import NavLink from '@/components/ui/NavLink';
 import {Eye, Plus, RefreshCw, Trash2} from 'lucide-react';
@@ -16,17 +15,15 @@ export default function AgentsClientPage({initialAgents}) {
     const [agents, setAgents] = useState(initialAgents || []);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
-    const [isLoading, setIsLoading] = useState(false);
     const [deleteLoading, setDeleteLoading] = useState(null);
     const {deleteAgent, autoRefresh, toggleAutoRefresh, agents: contextAgents} = useApp();
     const {logout} = useAuth();
     const pathname = usePathname();
-    const { startLoading, stopLoading } = useLoading();
-
+    const {startLoading, stopLoading, isLoading} = useLoading();
     // 刷新代理数据 - 使用useCallback包装
     const refreshAgents = useCallback(async () => {
         try {
-            setIsLoading(true);
+            startLoading();
             console.log('刷新代理数据');
             const response = await fetch('/api/agents');
 
@@ -50,7 +47,7 @@ export default function AgentsClientPage({initialAgents}) {
                 alert(`刷新代理列表失败: ${error.message}`);
             }
         } finally {
-            setIsLoading(false);
+            stopLoading();
         }
     }, [logout, autoRefresh]);
 
