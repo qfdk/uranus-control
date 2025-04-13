@@ -1,13 +1,33 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { User, LogOut, Settings, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/app/contexts/AuthContext';
+import { useLoadingNavigation } from '@/lib/loading-hooks';
 
 export default function UserMenu() {
     const [isOpen, setIsOpen] = useState(false);
     const { user, logout } = useAuth();
     const [isMounted, setIsMounted] = useState(false);
+    const menuRef = useRef(null);
+    const { navigateWithLoading } = useLoadingNavigation();
+
+    // Close menu when clicking outside
+    useEffect(() => {
+        function handleClickOutside(event) {
+            if (menuRef.current && !menuRef.current.contains(event.target)) {
+                setIsOpen(false);
+            }
+        }
+
+        // Add event listener
+        document.addEventListener('mousedown', handleClickOutside);
+
+        // Clean up
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, []);
 
     // 确保组件在客户端渲染
     useEffect(() => {
@@ -19,6 +39,12 @@ export default function UserMenu() {
         setIsOpen(false);
     };
 
+    const handleSettingsClick = (e) => {
+        e.preventDefault();
+        setIsOpen(false);
+        navigateWithLoading('/settings');
+    };
+
     // 如果组件未挂载，返回一个占位符
     if (!isMounted) {
         return (
@@ -27,33 +53,48 @@ export default function UserMenu() {
     }
 
     return (
-        <div className="relative">
+        <div className="relative" ref={menuRef}>
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center text-sm font-medium text-gray-700 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                className="flex items-center text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded-full transition duration-200"
+                aria-expanded={isOpen}
+                aria-haspopup="true"
             >
-                <div className="flex items-center bg-gray-100 hover:bg-gray-200 transition-colors rounded-full p-1.5">
-                    <User className="h-5 w-5 text-gray-600" />
-                    <ChevronDown className="ml-1 h-4 w-4 text-gray-500" />
+                <span className="sr-only">打开用户菜单</span>
+                <div className="flex items-center bg-blue-50 hover:bg-blue-100 transition-colors rounded-full p-2 border border-blue-100">
+                    <User className="h-5 w-5 text-blue-600" />
+                    <ChevronDown className={`ml-1 h-4 w-4 text-blue-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
                 </div>
             </button>
 
             {isOpen && (
-                <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
-                    <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="user-menu">
-                        <div className="px-4 py-2 border-b border-gray-100">
-                            <p className="text-sm font-medium text-gray-900">{user?.username || '管理员'}</p>
-                            <p className="text-xs text-gray-500">{user?.email || 'admin@example.com'}</p>
-                        </div>
-                        <a href="/settings" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">
+                <div
+                    className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-xl bg-white ring-1 ring-black ring-opacity-5 z-30 divide-y divide-gray-100 animate-fadeIn"
+                    role="menu"
+                    aria-orientation="vertical"
+                    aria-labelledby="user-menu-button"
+                >
+                    <div className="px-4 py-3 bg-blue-50">
+                        <p className="text-sm font-medium text-blue-800 truncate">{user?.username || '管理员'}</p>
+                        <p className="text-xs text-blue-600 truncate">{user?.email || 'admin@example.com'}</p>
+                    </div>
+
+                    <div className="py-1" role="none">
+                        <a
+                            href="/settings"
+                            onClick={handleSettingsClick}
+                            className="block px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition duration-150"
+                            role="menuitem"
+                        >
                             <div className="flex items-center">
                                 <Settings className="mr-2 h-4 w-4" />
                                 账户设置
                             </div>
                         </a>
+
                         <button
                             onClick={handleLogout}
-                            className="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                            className="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-red-50 hover:text-red-700 transition duration-150"
                             role="menuitem"
                         >
                             <div className="flex items-center">

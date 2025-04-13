@@ -84,3 +84,73 @@ body.loading-transition::before {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
+
+/* 侧边菜单滑入动画 */
+@keyframes slideInLeft {
+    from {
+        transform: translateX(-100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* 背景渐变动画 */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* 对移动端菜单应用动画 */
+.mobile-menu-enter {
+    animation: slideInLeft 0.3s ease forwards;
+}
+
+.mobile-menu-backdrop {
+    animation: fadeIn 0.2s ease forwards;
+}
+
+/* 移动端适配样式 */
+@media (max-width: 640px) {
+    /* 调整内容边距，确保在小屏幕上有足够空间 */
+    .container,
+    .max-w-7xl {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+
+    /* 调整表格在移动端的显示 */
+    table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* 确保内容不会超出屏幕 */
+    .overflow-hidden-mobile {
+        overflow: hidden;
+    }
+
+    /* 增加触摸区域大小 */
+    button,
+    [role="button"],
+    a.nav-link {
+        min-height: 44px;
+        min-width: 44px;
+    }
+}
+
+/* 当侧边菜单打开时锁定主内容滚动 */
+body.menu-open {
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+    height: 100%;
+}
