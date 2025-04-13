@@ -4,7 +4,6 @@ import { useLoading } from '@/app/contexts/LoadingContext';
 
 export default function LoadingOverlay() {
     const { isLoading } = useLoading();
-
     if (!isLoading) return null;
 
     return (

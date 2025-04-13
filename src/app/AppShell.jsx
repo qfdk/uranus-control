@@ -6,7 +6,7 @@ import Link from 'next/link';
 import UserMenu from '@/components/ui/UserMenu';
 import ResponsiveNavigation from '@/components/ui/ResponsiveNavigation';
 import {usePathname} from 'next/navigation';
-import {useLoading} from '@/lib/loading-hooks';
+import {useLoading} from '@/app/contexts/LoadingContext';
 
 export default function AppShell({children}) {
     const {isAuthenticated, loading} = useAuth();

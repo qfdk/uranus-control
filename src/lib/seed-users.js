@@ -15,8 +15,7 @@ export async function seedDefaultUsers() {
 
         // 如果已经有用户，则跳过
         if (userCount > 0) {
-            console.log('数据库中已有用户，跳过初始化');
-            return;
+            return;s
         }
 
         // 创建默认管理员用户
