@@ -2,18 +2,22 @@
 import mongoose from 'mongoose';
 
 const AgentSchema = new mongoose.Schema({
-    hostname: {type: String, required: true},
     uuid: {type: String, required: true, unique: true},
-    ip: {type: String, required: true},
-    version: String,
+    // 构建信息
     buildTime: String,
+    buildVersion: String,
     commitId: String,
-    online: {type: Boolean, default: false},
-    lastHeartbeat: {type: Date, default: Date.now},
-    token: String,
-    url: String,
+    goVersion: String,
+    // 系统信息
+    hostname: {type: String, required: true},
+    ip: {type: String, required: true},
     os: String,
     memory: String,
+    url: String,
+    token: String,
+
+    online: {type: Boolean, default: false},
+    lastHeartbeat: {type: Date, default: Date.now},
     stats: {
         websites: {type: Number, default: 0},
         certificates: {type: Number, default: 0}

@@ -344,7 +344,7 @@ export default function AgentDetail({agent: initialAgent}) {
                                     </div>
                                     <div>
                                         <p className="text-sm text-gray-500">版本</p>
-                                        <p className="text-sm font-medium">{agent.version || '未知'}</p>
+                                        <p className="text-sm font-medium">{agent.buildVersion || '未知'}</p>
                                     </div>
                                 </div>
                             </div>

@@ -264,7 +264,7 @@ export default function AgentsClientPage({initialAgents}) {
                                         {agent.online ? '在线' : `离线`}
                                     </span>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.version || '未知'}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.buildVersion || '未知'}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.stats?.websites || 0}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                     {agent.lastHeartbeat
