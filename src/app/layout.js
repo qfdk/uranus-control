@@ -3,6 +3,8 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import { AppProvider } from './contexts/AppContext';
 import { AuthProvider } from './contexts/AuthContext';
+import { LoadingProvider } from './contexts/LoadingContext';
+import LoadingOverlay from '@/components/ui/LoadingOverlay';
 import { seedDefaultUsers } from '@/lib/seed-users';
 
 // 确保在应用启动时创建默认用户
@@ -21,7 +23,10 @@ export default function RootLayout({ children }) {
         <body className={inter.className}>
         <AuthProvider>
             <AppProvider>
-                {children}
+                <LoadingProvider>
+                    <LoadingOverlay />
+                    {children}
+                </LoadingProvider>
             </AppProvider>
         </AuthProvider>
         </body>

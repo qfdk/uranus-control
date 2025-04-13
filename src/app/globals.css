@@ -44,7 +44,10 @@ input:disabled {
   cursor: not-allowed;
 }
 
-/* 修复的全局加载状态效果 */
+/*
+  旧的全局加载状态样式已被 LoadingOverlay 组件替代
+  可以保留这些样式用于兼容性，但不再需要直接操作 DOM 来添加类名
+*/
 body.loading-transition {
   overflow: hidden; /* 防止滚动 */
   position: relative;

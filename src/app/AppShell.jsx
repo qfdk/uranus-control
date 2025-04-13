@@ -1,28 +1,34 @@
 'use client';
 
-import { useAuth } from './contexts/AuthContext';
-import { useState, useEffect } from 'react';
+import {useAuth} from './contexts/AuthContext';
+import {useEffect, useState} from 'react';
 import Link from 'next/link';
 import UserMenu from '@/components/ui/UserMenu';
 import MainNavigation from '@/components/ui/MainNavigation';
-import { usePathname } from 'next/navigation';
+import {usePathname} from 'next/navigation';
+import {useLoading} from '@/lib/loading-hooks';
 
-export default function AppShell({ children }) {
-    const { isAuthenticated, loading } = useAuth();
+export default function AppShell({children}) {
+    const {isAuthenticated, loading} = useAuth();
     const pathname = usePathname();
-    // 添加客户端渲染标志
+    // 客户端渲染标志
     const [isMounted, setIsMounted] = useState(false);
+    const {stopLoading} = useLoading();
 
     // 确保组件只在客户端渲染
     useEffect(() => {
         setIsMounted(true);
-    }, []);
+
+        // 确保在组件加载完成后停止全局加载动画
+        stopLoading();
+    }, [stopLoading]);
 
     // 如果组件未挂载，返回加载状态
     if (!isMounted) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-100">
-                <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                <div
+                    className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
             </div>
         );
     }
@@ -36,11 +42,11 @@ export default function AppShell({ children }) {
     if (loading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-100">
-                <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                <div
+                    className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
             </div>
         );
     }
-
     // 如果用户已登录，则显示带导航的布局
     if (isAuthenticated) {
         return (
@@ -55,10 +61,10 @@ export default function AppShell({ children }) {
                                         <span className="ml-2 text-sm text-gray-600">控制台</span>
                                     </Link>
                                 </div>
-                                <MainNavigation />
+                                <MainNavigation/>
                             </div>
                             <div className="flex items-center">
-                                <UserMenu />
+                                <UserMenu/>
                             </div>
                         </div>
                     </div>

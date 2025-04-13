@@ -5,9 +5,11 @@ import {useCallback, useEffect, useState} from 'react';
 import {formatDistanceToNow} from 'date-fns';
 import Link from 'next/link';
 import Button from '@/components/ui/Button';
+import NavLink from '@/components/ui/NavLink';
 import {Eye, Plus, RefreshCw, Trash2} from 'lucide-react';
 import {useApp} from '@/app/contexts/AppContext';
 import {useAuth} from '@/app/contexts/AuthContext';
+import {useLoading} from '@/app/contexts/LoadingContext';
 import {usePathname} from 'next/navigation';
 
 export default function AgentsClientPage({initialAgents}) {
@@ -19,6 +21,7 @@ export default function AgentsClientPage({initialAgents}) {
     const {deleteAgent, autoRefresh, toggleAutoRefresh, agents: contextAgents} = useApp();
     const {logout} = useAuth();
     const pathname = usePathname();
+    const { startLoading, stopLoading } = useLoading();
 
     // 刷新代理数据 - 使用useCallback包装
     const refreshAgents = useCallback(async () => {
@@ -55,7 +58,10 @@ export default function AgentsClientPage({initialAgents}) {
     useEffect(() => {
         console.log('组件挂载，立即获取最新数据');
         refreshAgents();
-    }, [refreshAgents]);
+
+        // 确保停止任何可能的加载动画
+        stopLoading();
+    }, [refreshAgents, stopLoading]);
 
     // 路径变化时刷新数据
     useEffect(() => {
@@ -267,25 +273,13 @@ export default function AgentsClientPage({initialAgents}) {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
                                     <div className="flex justify-end space-x-4">
-                                        <Link
+                                        <NavLink
                                             href={`/agents/${agent._id}`}
                                             className="text-blue-600 hover:text-blue-900 inline-flex items-center"
-                                            onClick={(e) => {
-                                                // 停止事件冒泡和默认行为
-                                                e.preventDefault();
-
-                                                // 添加加载状态
-                                                document.body.classList.add('loading-transition');
-
-                                                // 延迟跳转以确保加载状态被应用
-                                                setTimeout(() => {
-                                                    window.location.href = `/agents/${agent._id}`;
-                                                }, 50);
-                                            }}
                                         >
                                             <Eye className="w-4 h-4 mr-2"/>
                                             详情
-                                        </Link>
+                                        </NavLink>
                                         <button
                                             onClick={() => handleDeleteAgent(agent._id)}
                                             disabled={deleteLoading === agent._id}

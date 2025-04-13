@@ -3,15 +3,17 @@
 import {useCallback, useEffect, useState} from 'react';
 import {formatDistanceToNow} from 'date-fns';
 import {Eye, FileCheck, Globe, Server} from 'lucide-react';
-import Link from 'next/link';
+import NavLink from '@/components/ui/NavLink';
 import StatusCard from '@/components/ui/StatusCard';
 import QuickActionButton from '@/components/ui/QuickActionButton';
 import {useApp} from './contexts/AppContext';
+import {useLoading} from './contexts/LoadingContext';
 
 export default function DashboardClientPage({initialAgents}) {
     const [agents, setAgents] = useState(initialAgents || []);
     const [loading, setLoading] = useState(false);
     const {autoRefresh, agents: contextAgents} = useApp();
+    const {stopLoading} = useLoading();
 
     // 刷新代理数据
     const refreshDashboardData = useCallback(async () => {
@@ -38,7 +40,10 @@ export default function DashboardClientPage({initialAgents}) {
     useEffect(() => {
         console.log('Dashboard: 组件挂载，立即获取最新数据');
         refreshDashboardData();
-    }, [refreshDashboardData]);
+
+        // 确保停止任何可能的加载动画
+        stopLoading();
+    }, [refreshDashboardData, stopLoading]);
 
     // 当上下文中的agents变化时，更新本地状态
     useEffect(() => {
@@ -162,25 +167,13 @@ export default function DashboardClientPage({initialAgents}) {
                                         : '未知'}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                                    <Link
+                                    <NavLink
                                         href={`/agents/${agent._id}`}
                                         className="text-blue-600 hover:text-blue-900 inline-flex items-center"
-                                        onClick={(e) => {
-                                            // 停止事件冒泡和默认行为
-                                            e.preventDefault();
-
-                                            // 添加加载状态
-                                            document.body.classList.add('loading-transition');
-
-                                            // 延迟跳转以确保加载状态被应用
-                                            setTimeout(() => {
-                                                window.location.href = `/agents/${agent._id}`;
-                                            }, 50);
-                                        }}
                                     >
                                         <Eye className="w-4 h-4 mr-2"/>
                                         详情
-                                    </Link>
+                                    </NavLink>
                                 </td>
                             </tr>
                         ))}
@@ -195,12 +188,12 @@ export default function DashboardClientPage({initialAgents}) {
                     </table>
                 </div>
                 <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 text-right">
-                    <Link
+                    <NavLink
                         href="/agents"
                         className="text-sm font-medium text-blue-600 hover:text-blue-900"
                     >
                         查看所有代理 →
-                    </Link>
+                    </NavLink>
                 </div>
             </div>
 

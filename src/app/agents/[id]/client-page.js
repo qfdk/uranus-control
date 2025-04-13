@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import AgentDetail from './client-component';
+import { useLoading } from '@/app/contexts/LoadingContext';
 
 export default function AgentDetailWrapper({ agent }) {
     // 确保客户端数据加载完成
     const [isClient, setIsClient] = useState(false);
+    const { stopLoading } = useLoading();
 
     useEffect(() => {
         // 组件挂载后，标记为客户端渲染
@@ -13,11 +15,11 @@ export default function AgentDetailWrapper({ agent }) {
 
         // 延迟移除加载状态，确保组件已完全渲染
         const timer = setTimeout(() => {
-            document.body.classList.remove('loading-transition');
-        }, 500);
+            stopLoading();
+        }, 300);
 
         return () => clearTimeout(timer);
-    }, []);
+    }, [stopLoading]);
 
     if (!isClient) {
         // 本地加载状态

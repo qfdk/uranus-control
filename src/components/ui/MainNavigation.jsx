@@ -1,8 +1,8 @@
 'use client';
 
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Globe, Settings } from 'lucide-react';
+import NavLink from './NavLink';
 
 export default function MainNavigation() {
     const pathname = usePathname();
@@ -18,7 +18,7 @@ export default function MainNavigation() {
 
     return (
         <nav className="ml-6 flex space-x-8">
-            <Link
+            <NavLink
                 href="/"
                 className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
                     isPathActive('/')
@@ -28,9 +28,9 @@ export default function MainNavigation() {
             >
                 <LayoutDashboard className="h-4 w-4 mr-1" />
                 仪表盘
-            </Link>
+            </NavLink>
 
-            <Link
+            <NavLink
                 href="/agents"
                 className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
                     isPathActive('/agents')
@@ -40,9 +40,9 @@ export default function MainNavigation() {
             >
                 <Globe className="h-4 w-4 mr-1" />
                 代理管理
-            </Link>
+            </NavLink>
 
-            <Link
+            <NavLink
                 href="/settings"
                 className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
                     isPathActive('/settings')
@@ -52,7 +52,7 @@ export default function MainNavigation() {
             >
                 <Settings className="h-4 w-4 mr-1" />
                 设置
-            </Link>
+            </NavLink>
         </nav>
     );
 }
