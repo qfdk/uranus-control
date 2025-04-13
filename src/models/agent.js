@@ -11,6 +11,7 @@ const AgentSchema = new mongoose.Schema({
     online: {type: Boolean, default: false},
     lastHeartbeat: {type: Date, default: Date.now},
     token: String,
+    url: String,
     os: String,
     memory: String,
     stats: {

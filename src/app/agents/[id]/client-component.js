@@ -3,7 +3,7 @@
 import {useEffect, useState} from 'react';
 import {formatDistanceToNow} from 'date-fns';
 import Link from 'next/link';
-import {ArrowLeft, Cpu, Database, FileCheck, Globe, MemoryStick, RefreshCw, Server, XCircle, Zap} from 'lucide-react';
+import {ArrowLeft, Cpu, Database, FileCheck, Globe, MemoryStick, RefreshCw, Server, Upload, XCircle, Zap} from 'lucide-react';
 import Button from '@/components/ui/Button';
 import {useApp} from '@/app/contexts/AppContext';
 import {useRouter} from 'next/navigation';
@@ -16,6 +16,9 @@ export default function AgentDetail({agent: initialAgent}) {
     const [renderKey, setRenderKey] = useState(0); // 强制重新渲染的辅助状态
     const [isDeleting, setIsDeleting] = useState(false);
     const [isRestarting, setIsRestarting] = useState(false);
+    const [isUpgrading, setIsUpgrading] = useState(false);
+    const [upgradeMessage, setUpgradeMessage] = useState('');
+    const [upgradeError, setUpgradeError] = useState('');
     const [agent, setAgent] = useState(initialAgent);
 
     // 检查组件挂载和状态变化
@@ -85,6 +88,53 @@ export default function AgentDetail({agent: initialAgent}) {
         }
     };
 
+    // 升级代理处理函数
+    const handleUpgradeAgent = async () => {
+        if (!confirm('确定要升级此代理吗？在升级过程中，代理可能会重启。')) {
+            return;
+        }
+
+        setUpgradeMessage('');
+        setUpgradeError('');
+
+        try {
+            setIsUpgrading(true);
+            const response = await fetch(`/api/agents/${agent._id}/upgrade`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || '升级失败');
+            }
+
+            setUpgradeMessage(data.message || '升级请求已发送');
+
+            // 升级可能需要一些时间，这里设置延迟来自动刷新代理状态
+            setTimeout(async () => {
+                try {
+                    const refreshResponse = await fetch(`/api/agents/${agent._id}`);
+                    if (refreshResponse.ok) {
+                        const updatedAgent = await refreshResponse.json();
+                        setAgent(updatedAgent);
+                    }
+                } catch (error) {
+                    console.error('刷新代理状态失败:', error);
+                }
+                setIsUpgrading(false);
+            }, 15000); // 15秒后刷新
+
+        } catch (error) {
+            console.error('升级代理失败:', error);
+            setUpgradeError(error.message || '升级代理失败，请重试');
+            setIsUpgrading(false);
+        }
+    };
+
     // 检查组件挂载和状态变化
     useEffect(() => {
         console.log('AgentDetail组件挂载或状态更新, 当前活动标签:', activeTab);
@@ -125,6 +175,14 @@ export default function AgentDetail({agent: initialAgent}) {
                 <div className="flex gap-2">
                     <Button
                         variant="primary"
+                        onClick={handleUpgradeAgent}
+                        disabled={isUpgrading || !agent.online}
+                    >
+                        <Upload className={`w-4 h-4 mr-1 ${isUpgrading ? 'animate-spin' : ''}`}/>
+                        {isUpgrading ? '升级中...' : '升级代理'}
+                    </Button>
+                    <Button
+                        variant="primary"
                         onClick={handleRestartService}
                         disabled={isRestarting || !agent.online}
                     >
@@ -141,6 +199,38 @@ export default function AgentDetail({agent: initialAgent}) {
                     </Button>
                 </div>
             </header>
+
+            {/* 升级消息显示 */}
+            {upgradeMessage && (
+                <div className="mb-6 bg-green-50 border-l-4 border-green-500 p-4">
+                    <div className="flex">
+                        <div className="flex-shrink-0">
+                            <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            </svg>
+                        </div>
+                        <div className="ml-3">
+                            <p className="text-sm text-green-700">{upgradeMessage}</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 升级错误显示 */}
+            {upgradeError && (
+                <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4">
+                    <div className="flex">
+                        <div className="flex-shrink-0">
+                            <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                            </svg>
+                        </div>
+                        <div className="ml-3">
+                            <p className="text-sm text-red-700">{upgradeError}</p>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* 状态卡片 */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">

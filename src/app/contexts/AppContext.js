@@ -190,6 +190,34 @@ export function AppProvider({children}) {
         }
     };
 
+    // Upgrade an agent
+    const upgradeAgent = async (agentId) => {
+        try {
+            const response = await fetch(`/api/agents/${agentId}/upgrade`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            // 处理认证错误
+            if (response.status === 401) {
+                logout();
+                throw new Error('会话已过期，请重新登录');
+            }
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `服务器返回错误: ${response.status}`);
+            }
+
+            return await response.json();
+        } catch (err) {
+            console.error('Error upgrading agent:', err);
+            throw err;
+        }
+    };
+
     // 切换自动刷新功能
     const toggleAutoRefresh = () => {
         setAutoRefresh(prev => !prev);
@@ -214,6 +242,7 @@ export function AppProvider({children}) {
                 deleteAgent,
                 addAgent,
                 sendCommand,
+                upgradeAgent,
                 triggerRefresh
             }}
         >
