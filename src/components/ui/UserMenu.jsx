@@ -61,7 +61,7 @@ export default function UserMenu() {
                 aria-haspopup="true"
             >
                 <span className="sr-only">打开用户菜单</span>
-                <div className="flex items-center bg-blue-50 hover:bg-blue-100 transition-colors rounded-full p-2 border border-blue-100">
+                <div className="flex items-center bg-blue-50 hover:bg-blue-100 transition-colors rounded-full p-2">
                     <User className="h-5 w-5 text-blue-600" />
                     <ChevronDown className={`ml-1 h-4 w-4 text-blue-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
                 </div>
@@ -69,16 +69,11 @@ export default function UserMenu() {
 
             {isOpen && (
                 <div
-                    className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-xl bg-white ring-1 ring-black ring-opacity-5 z-30 divide-y divide-gray-100 animate-fadeIn"
+                    className="origin-top-right absolute right-0 mt-2 w-56 rounded-lg shadow-lg bg-white z-30 divide-y divide-gray-100 animate-fadeIn overflow-hidden"
                     role="menu"
                     aria-orientation="vertical"
                     aria-labelledby="user-menu-button"
                 >
-                    <div className="px-4 py-3 bg-blue-50">
-                        <p className="text-sm font-medium text-blue-800 truncate">{user?.username || '管理员'}</p>
-                        <p className="text-xs text-blue-600 truncate">{user?.email || 'admin@example.com'}</p>
-                    </div>
-
                     <div className="py-1" role="none">
                         <a
                             href="/settings"
