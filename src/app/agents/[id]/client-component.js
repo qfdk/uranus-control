@@ -7,10 +7,14 @@ import {ArrowLeft, Cpu, Database, FileCheck, Globe, MemoryStick, RefreshCw, Serv
 import Button from '@/components/ui/Button';
 import {useApp} from '@/app/contexts/AppContext';
 import {useRouter} from 'next/navigation';
+import {useLoading} from '@/app/contexts/LoadingContext';
+import {useAsyncLoading} from '@/lib/loading-hooks';
 
 export default function AgentDetail({agent: initialAgent}) {
     const router = useRouter();
     const {sendCommand, deleteAgent, autoRefresh} = useApp();
+    const {stopLoading} = useLoading();
+    const {withLoading} = useAsyncLoading();
 
     const [activeTab, setActiveTab] = useState('info');
     const [renderKey, setRenderKey] = useState(0); // 强制重新渲染的辅助状态
@@ -25,9 +29,13 @@ export default function AgentDetail({agent: initialAgent}) {
     useEffect(() => {
         console.log('AgentDetail组件挂载或状态更新, 当前活动标签:', activeTab);
 
-        // 移除全局加载状态
-        document.body.classList.remove('loading-transition');
-    }, [activeTab]);
+        // 确保组件完全挂载后停止加载状态
+        const timer = setTimeout(() => {
+            stopLoading();
+        }, 300);
+
+        return () => clearTimeout(timer);
+    }, [activeTab, stopLoading]);
 
     // 添加自动刷新效果
     useEffect(() => {
@@ -64,9 +72,11 @@ export default function AgentDetail({agent: initialAgent}) {
 
         try {
             setIsDeleting(true);
-            await deleteAgent(agent._id);
-            // 删除成功后返回代理列表页
-            router.push('/agents');
+            await withLoading(async () => {
+                await deleteAgent(agent._id);
+                // 删除成功后返回代理列表页
+                router.push('/agents');
+            });
         } catch (error) {
             console.error('删除代理失败:', error);
             alert('删除代理失败，请重试');
@@ -78,7 +88,7 @@ export default function AgentDetail({agent: initialAgent}) {
     const handleRestartService = async () => {
         try {
             setIsRestarting(true);
-            const result = await sendCommand(agent._id, 'restart');
+            const result = await withLoading(() => sendCommand(agent._id, 'restart'));
             alert(result.message || '操作已发送');
         } catch (error) {
             console.error('发送重启命令失败:', error);
@@ -99,46 +109,42 @@ export default function AgentDetail({agent: initialAgent}) {
 
         try {
             setIsUpgrading(true);
-            const response = await fetch(`/api/agents/${agent._id}/upgrade`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-            });
+            await withLoading(async () => {
+                const response = await fetch(`/api/agents/${agent._id}/upgrade`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                });
 
-            const data = await response.json();
+                const data = await response.json();
 
-            if (!response.ok) {
-                throw new Error(data.error || '升级失败');
-            }
-
-            setUpgradeMessage(data.message || '升级请求已发送');
-
-            // 升级可能需要一些时间，这里设置延迟来自动刷新代理状态
-            setTimeout(async () => {
-                try {
-                    const refreshResponse = await fetch(`/api/agents/${agent._id}`);
-                    if (refreshResponse.ok) {
-                        const updatedAgent = await refreshResponse.json();
-                        setAgent(updatedAgent);
-                    }
-                } catch (error) {
-                    console.error('刷新代理状态失败:', error);
+                if (!response.ok) {
+                    throw new Error(data.error || '升级失败');
                 }
-                setIsUpgrading(false);
-            }, 15000); // 15秒后刷新
 
+                setUpgradeMessage(data.message || '升级请求已发送');
+
+                // 升级可能需要一些时间，这里设置延迟来自动刷新代理状态
+                setTimeout(async () => {
+                    try {
+                        const refreshResponse = await fetch(`/api/agents/${agent._id}`);
+                        if (refreshResponse.ok) {
+                            const updatedAgent = await refreshResponse.json();
+                            setAgent(updatedAgent);
+                        }
+                    } catch (error) {
+                        console.error('刷新代理状态失败:', error);
+                    }
+                    setIsUpgrading(false);
+                }, 15000); // 15秒后刷新
+            });
         } catch (error) {
             console.error('升级代理失败:', error);
             setUpgradeError(error.message || '升级代理失败，请重试');
             setIsUpgrading(false);
         }
     };
-
-    // 检查组件挂载和状态变化
-    useEffect(() => {
-        console.log('AgentDetail组件挂载或状态更新, 当前活动标签:', activeTab);
-    }, [activeTab]);
 
     if (!agent) {
         return (

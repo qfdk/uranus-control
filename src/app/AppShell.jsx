@@ -9,7 +9,7 @@ import {usePathname} from 'next/navigation';
 import {useLoading} from '@/app/contexts/LoadingContext';
 
 export default function AppShell({children}) {
-    const {isAuthenticated, loading} = useAuth();
+    const {isAuthenticated, loading: authLoading} = useAuth();
     const pathname = usePathname();
     // 客户端渲染标志
     const [isMounted, setIsMounted] = useState(false);
@@ -20,17 +20,16 @@ export default function AppShell({children}) {
         setIsMounted(true);
 
         // 确保在组件加载完成后停止全局加载动画
-        stopLoading();
+        const timer = setTimeout(() => {
+            stopLoading();
+        }, 300); // 添加小延迟，使页面完全渲染
+
+        return () => clearTimeout(timer);
     }, [stopLoading]);
 
-    // 如果组件未挂载，返回加载状态
+    // 如果组件未挂载，继续显示加载状态
     if (!isMounted) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-100">
-                <div
-                    className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-            </div>
-        );
+        return null; // 返回null，这样LoadingOverlay将继续显示
     }
 
     // 如果是登录页面，不显示导航和头部
@@ -39,14 +38,10 @@ export default function AppShell({children}) {
     }
 
     // 在认证加载过程中显示加载状态
-    if (loading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-100">
-                <div
-                    className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-            </div>
-        );
+    if (authLoading) {
+        return null; // 返回null，这样LoadingOverlay将继续显示
     }
+
     // 如果用户已登录，则显示带导航的布局
     if (isAuthenticated) {
         return (

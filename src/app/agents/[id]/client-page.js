@@ -13,7 +13,7 @@ export default function AgentDetailWrapper({ agent }) {
         // 组件挂载后，标记为客户端渲染
         setIsClient(true);
 
-        // 延迟移除加载状态，确保组件已完全渲染
+        // 确保在组件完全挂载后停止加载状态
         const timer = setTimeout(() => {
             stopLoading();
         }, 300);
@@ -22,13 +22,8 @@ export default function AgentDetailWrapper({ agent }) {
     }, [stopLoading]);
 
     if (!isClient) {
-        // 本地加载状态
-        return (
-            <div className="max-w-7xl mx-auto px-4 py-8 flex items-center justify-center">
-                <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                <p className="ml-4 text-lg font-medium text-gray-600">加载代理详情...</p>
-            </div>
-        );
+        // 不显示本地加载状态，而是依赖全局LoadingOverlay
+        return null;
     }
 
     return <AgentDetail agent={agent} />;

@@ -8,12 +8,26 @@ import StatusCard from '@/components/ui/StatusCard';
 import QuickActionButton from '@/components/ui/QuickActionButton';
 import {useApp} from './contexts/AppContext';
 import {useLoading} from './contexts/LoadingContext';
+import {useAsyncLoading} from '@/lib/loading-hooks';
 
 export default function DashboardClientPage({initialAgents}) {
     const [agents, setAgents] = useState(initialAgents || []);
     const [loading, setLoading] = useState(false);
     const {autoRefresh, agents: contextAgents} = useApp();
     const {stopLoading} = useLoading();
+    const {withLoading} = useAsyncLoading();
+    const [isMounted, setIsMounted] = useState(false);
+
+    // 组件挂载时标记客户端渲染完成
+    useEffect(() => {
+        setIsMounted(true);
+        // 确保组件完全挂载后停止加载状态
+        const timer = setTimeout(() => {
+            stopLoading();
+        }, 300);
+
+        return () => clearTimeout(timer);
+    }, [stopLoading]);
 
     // 刷新代理数据
     const refreshDashboardData = useCallback(async () => {
@@ -38,24 +52,23 @@ export default function DashboardClientPage({initialAgents}) {
 
     // 组件挂载时刷新数据
     useEffect(() => {
-        console.log('Dashboard: 组件挂载，立即获取最新数据');
-        refreshDashboardData();
-
-        // 确保停止任何可能的加载动画
-        stopLoading();
-    }, [refreshDashboardData, stopLoading]);
+        if (isMounted) {
+            console.log('Dashboard: 组件挂载，立即获取最新数据');
+            refreshDashboardData();
+        }
+    }, [refreshDashboardData, isMounted]);
 
     // 当上下文中的agents变化时，更新本地状态
     useEffect(() => {
-        console.log('Dashboard: 上下文agents变化，更新本地状态', contextAgents?.length);
-        if (contextAgents && contextAgents.length > 0) {
+        if (isMounted && contextAgents && contextAgents.length > 0) {
+            console.log('Dashboard: 上下文agents变化，更新本地状态', contextAgents?.length);
             setAgents(contextAgents);
         }
-    }, [contextAgents]);
+    }, [contextAgents, isMounted]);
 
     // 添加自动刷新功能
     useEffect(() => {
-        if (!autoRefresh) return;
+        if (!isMounted || !autoRefresh) return;
 
         console.log('Dashboard: 设置自动刷新定时器');
         // 设置定时刷新
@@ -69,7 +82,12 @@ export default function DashboardClientPage({initialAgents}) {
             console.log('Dashboard: 清除自动刷新定时器');
             clearInterval(intervalId);
         };
-    }, [autoRefresh, refreshDashboardData]);
+    }, [autoRefresh, refreshDashboardData, isMounted]);
+
+    // 如果组件还未挂载，返回null依赖全局加载状态
+    if (!isMounted) {
+        return null;
+    }
 
     // 计算统计信息
     const onlineAgents = agents.filter(agent => agent.online);
@@ -88,7 +106,7 @@ export default function DashboardClientPage({initialAgents}) {
             {/* 刷新按钮 */}
             <div className="mb-4 flex justify-end">
                 <button
-                    onClick={refreshDashboardData}
+                    onClick={() => withLoading(refreshDashboardData)}
                     disabled={loading}
                     className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-gray-50 rounded border border-gray-300 hover:bg-gray-100 disabled:opacity-50"
                 >
@@ -181,7 +199,7 @@ export default function DashboardClientPage({initialAgents}) {
                         ))}
                         {agents.length === 0 && (
                             <tr>
-                                <td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">
+                                <td colSpan="7" className="px-6 py-4 text-center text-sm text-gray-500">
                                     暂无代理数据
                                 </td>
                             </tr>

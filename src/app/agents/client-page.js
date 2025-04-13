@@ -10,6 +10,7 @@ import {useApp} from '@/app/contexts/AppContext';
 import {useAuth} from '@/app/contexts/AuthContext';
 import {useLoading} from '@/app/contexts/LoadingContext';
 import {usePathname} from 'next/navigation';
+import {useAsyncLoading} from '@/lib/loading-hooks';
 
 export default function AgentsClientPage({initialAgents}) {
     const [agents, setAgents] = useState(initialAgents || []);
@@ -20,6 +21,20 @@ export default function AgentsClientPage({initialAgents}) {
     const {logout} = useAuth();
     const pathname = usePathname();
     const {startLoading, stopLoading, isLoading} = useLoading();
+    const {withLoading} = useAsyncLoading();
+    const [isMounted, setIsMounted] = useState(false);
+
+    // 组件挂载时标记客户端渲染完成
+    useEffect(() => {
+        setIsMounted(true);
+        // 确保组件完全挂载后停止加载状态
+        const timer = setTimeout(() => {
+            stopLoading();
+        }, 300);
+
+        return () => clearTimeout(timer);
+    }, [stopLoading]);
+
     // 刷新代理数据 - 使用useCallback包装
     const refreshAgents = useCallback(async () => {
         try {
@@ -49,36 +64,35 @@ export default function AgentsClientPage({initialAgents}) {
         } finally {
             stopLoading();
         }
-    }, [logout, autoRefresh]);
+    }, [logout, autoRefresh, startLoading, stopLoading]);
 
     // 组件挂载时刷新数据
     useEffect(() => {
-        console.log('组件挂载，立即获取最新数据');
-        refreshAgents();
-
-        // 确保停止任何可能的加载动画
-        stopLoading();
-    }, [refreshAgents, stopLoading]);
+        if (isMounted) {
+            console.log('组件挂载，立即获取最新数据');
+            refreshAgents();
+        }
+    }, [isMounted, refreshAgents]);
 
     // 路径变化时刷新数据
     useEffect(() => {
-        console.log('路径变化，刷新数据:', pathname);
-        if (pathname === '/agents') {
+        if (isMounted && pathname === '/agents') {
+            console.log('路径变化，刷新数据:', pathname);
             refreshAgents();
         }
-    }, [pathname, refreshAgents]);
+    }, [pathname, refreshAgents, isMounted]);
 
     // 当上下文中的agents变化时，更新本地状态
     useEffect(() => {
-        console.log('上下文agents变化，更新本地状态', contextAgents?.length);
-        if (contextAgents && contextAgents.length > 0) {
+        if (isMounted && contextAgents && contextAgents.length > 0) {
+            console.log('上下文agents变化，更新本地状态', contextAgents?.length);
             setAgents(contextAgents);
         }
-    }, [contextAgents]);
+    }, [contextAgents, isMounted]);
 
     // 添加自动刷新功能的副作用
     useEffect(() => {
-        if (!autoRefresh) return;
+        if (!isMounted || !autoRefresh) return;
 
         console.log('设置自动刷新定时器');
         // 设置定时刷新
@@ -92,7 +106,7 @@ export default function AgentsClientPage({initialAgents}) {
             console.log('清除自动刷新定时器');
             clearInterval(intervalId);
         };
-    }, [autoRefresh, refreshAgents]); // 包含refreshAgents作为依赖
+    }, [autoRefresh, refreshAgents, isMounted]); // 包含refreshAgents作为依赖
 
     // 用于客户端过滤的逻辑
     const filteredAgents = agents.filter(agent => {
@@ -118,9 +132,11 @@ export default function AgentsClientPage({initialAgents}) {
 
         try {
             setDeleteLoading(agentId);
-            await deleteAgent(agentId);
-            // 更新本地状态，移除已删除的代理
-            setAgents(prevAgents => prevAgents.filter(agent => agent._id !== agentId));
+            await withLoading(async () => {
+                await deleteAgent(agentId);
+                // 更新本地状态，移除已删除的代理
+                setAgents(prevAgents => prevAgents.filter(agent => agent._id !== agentId));
+            });
         } catch (error) {
             console.error('删除代理失败:', error);
 
@@ -144,6 +160,11 @@ export default function AgentsClientPage({initialAgents}) {
     const handleStatusChange = (e) => {
         setStatusFilter(e.target.value);
     };
+
+    // 如果组件还未挂载，返回null依赖全局加载状态
+    if (!isMounted) {
+        return null;
+    }
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -205,7 +226,7 @@ export default function AgentsClientPage({initialAgents}) {
                             自动刷新
                         </button>
                         <button
-                            onClick={refreshAgents}
+                            onClick={() => withLoading(refreshAgents)}
                             disabled={isLoading}
                             className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-gray-50 rounded border border-gray-300 hover:bg-gray-100 disabled:opacity-50 transition-colors duration-200 min-w-[90px] justify-center"
                         >
