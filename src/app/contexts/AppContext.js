@@ -13,7 +13,7 @@ export function AppProvider({children}) {
     const [agents, setAgents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [autoRefresh, setAutoRefresh] = useState(true);
+    const [autoRefresh, setAutoRefresh] = useState(false);
     const {logout} = useAuth();
 
     // Function to fetch agents - 使用useCallback包装
