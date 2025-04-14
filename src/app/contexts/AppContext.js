@@ -1,8 +1,9 @@
 'use client';
 
-import {createContext, useContext, useEffect, useState, useCallback} from 'react';
+import {createContext, useCallback, useContext, useEffect, useState} from 'react';
 import {useAuth} from './AuthContext';
 import {useLoading} from './LoadingContext';
+import {usePathname} from 'next/navigation';
 
 const REFRESH_INTERVAL = 10000; // 10秒
 
@@ -16,13 +17,21 @@ export function AppProvider({children}) {
     const [error, setError] = useState(null);
     const [autoRefresh, setAutoRefresh] = useState(true);
     const {logout} = useAuth();
-    const {setAutoRefresh: setGlobalAutoRefresh} = useLoading(); // 这里使用useLoading
+    const {setAutoRefresh: setGlobalAutoRefresh, startLoading} = useLoading();
+    const pathname = usePathname();
 
-    // Function to fetch agents - 使用useCallback包装
+    useEffect(() => {
+        if (pathname && pathname.startsWith('/agents/')) {
+            // 当进入代理详情页面时启动加载状态
+            console.log('路径变化到代理详情页:', pathname);
+            startLoading();
+        }
+    }, [pathname, startLoading]);
+
     const fetchAgents = useCallback(async () => {
         try {
             setLoading(true);
-            console.log("AppContext: 开始获取代理数据");
+            console.log('AppContext: 开始获取代理数据');
             const response = await fetch('/api/agents');
 
             // 处理认证错误
@@ -38,7 +47,7 @@ export function AppProvider({children}) {
             }
 
             const data = await response.json();
-            console.log("AppContext: 获取到代理数据", data.length);
+            console.log('AppContext: 获取到代理数据', data.length);
             setAgents(data);
             setError(null);
         } catch (err) {
@@ -59,15 +68,15 @@ export function AppProvider({children}) {
 
     // Fetch agents on mount
     useEffect(() => {
-        console.log("AppContext: 组件挂载，首次获取数据");
+        console.log('AppContext: 组件挂载，首次获取数据');
         fetchAgents();
 
         // 设置自动刷新
         let intervalId;
         if (autoRefresh) {
-            console.log("AppContext: 设置自动刷新定时器");
+            console.log('AppContext: 设置自动刷新定时器');
             intervalId = setInterval(() => {
-                console.log("AppContext: 自动刷新触发");
+                console.log('AppContext: 自动刷新触发');
                 fetchAgents();
             }, REFRESH_INTERVAL);
         }
@@ -75,7 +84,7 @@ export function AppProvider({children}) {
         // 清除定时器
         return () => {
             if (intervalId) {
-                console.log("AppContext: 清除自动刷新定时器");
+                console.log('AppContext: 清除自动刷新定时器');
                 clearInterval(intervalId);
             }
         };
@@ -235,7 +244,7 @@ export function AppProvider({children}) {
 
     // 手动触发刷新 - 方便在任何组件中调用
     const triggerRefresh = () => {
-        console.log("手动触发全局刷新");
+        console.log('手动触发全局刷新');
         fetchAgents();
     };
 

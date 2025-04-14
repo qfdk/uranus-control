@@ -7,19 +7,26 @@ export default function LoadingOverlay() {
     const { isLoading } = useLoading();
     const [visible, setVisible] = useState(false);
 
+    // 追踪加载状态变化
+    useEffect(() => {
+        console.log('LoadingOverlay: 加载状态变为', isLoading);
+    }, [isLoading]);
+
     // 使用延迟显示和淡出效果，避免闪烁
     useEffect(() => {
         let showTimer;
         let hideTimer;
 
         if (isLoading) {
-            // 延迟显示，避免短暂操作的闪烁
+            // 延迟显示，避免短暂操作的闪烁，但要快速响应
             showTimer = setTimeout(() => {
+                console.log('LoadingOverlay: 显示加载overlay');
                 setVisible(true);
-            }, 100);
+            }, 50); // 减少延迟，使导航时的加载指示器更快显示
         } else {
             // 延迟隐藏，使过渡效果更平滑
             hideTimer = setTimeout(() => {
+                console.log('LoadingOverlay: 隐藏加载overlay');
                 setVisible(false);
             }, 300);
         }
