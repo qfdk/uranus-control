@@ -5,7 +5,7 @@ import {useCallback, useEffect, useState} from 'react';
 import {formatDistanceToNow} from 'date-fns';
 import Button from '@/components/ui/Button';
 import NavLink from '@/components/ui/NavLink';
-import {Eye, Plus, RefreshCw, Trash2} from 'lucide-react';
+import {Eye, Loader2, Plus, RefreshCw, Trash2} from 'lucide-react';
 import {useApp} from '@/app/contexts/AppContext';
 import {useAuth} from '@/app/contexts/AuthContext';
 import {useLoading} from '@/app/contexts/LoadingContext';
@@ -17,7 +17,8 @@ export default function AgentsClientPage({initialAgents}) {
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [deleteLoading, setDeleteLoading] = useState(null);
-    const [localLoading, setLocalLoading] = useState(false); // 新增本地加载状态
+    const [localLoading, setLocalLoading] = useState(false); // 本地加载状态
+    const [initialLoading, setInitialLoading] = useState(true); // 初始加载状态
     const {deleteAgent, autoRefresh, toggleAutoRefresh, agents: contextAgents} = useApp();
     const {logout} = useAuth();
     const pathname = usePathname();
@@ -65,6 +66,7 @@ export default function AgentsClientPage({initialAgents}) {
             }
         } finally {
             setLocalLoading(false);
+            setInitialLoading(false); // 确保初始加载状态也被设置为false
         }
     }, [logout, autoRefresh]);
 
@@ -89,6 +91,7 @@ export default function AgentsClientPage({initialAgents}) {
         if (isMounted && contextAgents && contextAgents.length > 0) {
             console.log('上下文agents变化，更新本地状态', contextAgents?.length);
             setAgents(contextAgents);
+            setInitialLoading(false); // 一旦接收到数据，初始加载结束
         }
     }, [contextAgents, isMounted]);
 
@@ -274,8 +277,8 @@ export default function AgentsClientPage({initialAgents}) {
                         </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                        {/* 表格加载状态 */}
-                        {localLoading && filteredAgents.length === 0 && (
+                        {/* 初始加载状态 */}
+                        {initialLoading && (
                             <tr>
                                 <td colSpan="7" className="px-6 py-12 text-center">
                                     <div className="flex flex-col items-center">
@@ -283,12 +286,29 @@ export default function AgentsClientPage({initialAgents}) {
                                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                         </svg>
-                                        <p className="text-gray-500">正在加载代理数据...</p>
+                                        <p className="text-gray-500 text-sm">正在加载代理数据...</p>
                                     </div>
                                 </td>
                             </tr>
                         )}
-                        {!localLoading && filteredAgents.map(agent => (
+
+                        {/* 局部刷新加载状态 - 当点击刷新按钮时显示，不管是否有数据 */}
+                        {!initialLoading && localLoading && (
+                            <tr>
+                                <td colSpan="7" className="px-6 py-8 text-center">
+                                    <div className="flex flex-col items-center">
+                                        <svg className="animate-spin h-6 w-6 text-blue-500 mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        <p className="text-gray-500 text-sm">刷新数据中...</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        )}
+
+                        {/* 代理数据 - 只在没有加载状态时显示 */}
+                        {!initialLoading && !localLoading && filteredAgents.length > 0 && filteredAgents.map(agent => (
                             <tr key={agent._id} className="hover:bg-gray-50">
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{agent.hostname || '未命名代理'}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.ip}</td>
@@ -346,7 +366,9 @@ export default function AgentsClientPage({initialAgents}) {
                                 </td>
                             </tr>
                         ))}
-                        {!localLoading && filteredAgents.length === 0 && (
+
+                        {/* 无数据状态 - 只在没有加载且没有数据时显示 */}
+                        {!initialLoading && !localLoading && filteredAgents.length === 0 && (
                             <tr>
                                 <td colSpan="7" className="px-6 py-12 text-center text-sm text-gray-500">
                                     {agents.length === 0 ? (
