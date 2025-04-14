@@ -5,6 +5,8 @@ import {useCallback, useEffect, useState} from 'react';
 import {formatDistanceToNow} from 'date-fns';
 import Button from '@/components/ui/Button';
 import NavLink from '@/components/ui/NavLink';
+import FormSelect from '@/components/ui/FormSelect'; // 导入 FormSelect 组件
+import FormInput from '@/components/ui/FormInput'; // 导入 FormInput 组件
 import {Eye, Plus, RefreshCw, Trash2} from 'lucide-react';
 import {useApp} from '@/app/contexts/AppContext';
 import {useAuth} from '@/app/contexts/AuthContext';
@@ -23,6 +25,13 @@ export default function AgentsClientPage({initialAgents}) {
     const {startLoading, stopLoading, isLoading} = useLoading();
     const {withLoading} = useAsyncLoading();
     const [isMounted, setIsMounted] = useState(false);
+
+    // 定义状态选项
+    const statusOptions = [
+        {value: 'all', label: '全部'},
+        {value: 'online', label: '在线'},
+        {value: 'offline', label: '离线'}
+    ];
 
     // 组件挂载时标记客户端渲染完成
     useEffect(() => {
@@ -174,40 +183,41 @@ export default function AgentsClientPage({initialAgents}) {
 
             {/* 代理过滤和搜索 */}
             <div className="mb-6 bg-white p-5 rounded-lg shadow-sm">
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-                    <div className="md:col-span-5">
-                        <div className="mb-4 md:mb-0">
-                            <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">
-                                搜索
-                            </label>
-                            <input
-                                type="text"
-                                id="search"
-                                value={searchTerm}
-                                onChange={handleSearchChange}
-                                placeholder="搜索代理名称或IP地址..."
-                                className="w-full rounded-md border border-gray-300 shadow-sm px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                            />
-                        </div>
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                    {/* 搜索框 */}
+                    <div className="md:col-span-4">
+                        <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">
+                            搜索
+                        </label>
+                        <input
+                            type="text"
+                            id="search"
+                            value={searchTerm}
+                            onChange={handleSearchChange}
+                            placeholder="搜索代理名称或IP地址..."
+                            className="w-full rounded-md border border-gray-300 shadow-sm px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        />
                     </div>
+
+                    {/* 状态选择 */}
                     <div className="md:col-span-3">
-                        <div className="mb-4 md:mb-0">
-                            <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
-                                状态
-                            </label>
-                            <select
-                                id="status"
-                                value={statusFilter}
-                                onChange={handleStatusChange}
-                                className="w-full rounded-md border border-gray-300 shadow-sm px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white disabled:bg-gray-100 disabled:text-gray-500"
-                            >
-                                <option value="all">全部</option>
-                                <option value="online">在线</option>
-                                <option value="offline">离线</option>
-                            </select>
-                        </div>
+                        <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
+                            状态
+                        </label>
+                        <select
+                            id="status"
+                            value={statusFilter}
+                            onChange={handleStatusChange}
+                            className="w-full rounded-md border border-gray-300 shadow-sm px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white disabled:bg-gray-100 disabled:text-gray-500"
+                        >
+                            <option value="all">全部</option>
+                            <option value="online">在线</option>
+                            <option value="offline">离线</option>
+                        </select>
                     </div>
-                    <div className="md:col-span-4 flex flex-row justify-end items-center gap-3">
+
+                    {/* 按钮组 */}
+                    <div className="md:col-span-5 flex justify-end items-end gap-3">
                         <button
                             onClick={toggleAutoRefresh}
                             className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded ${
