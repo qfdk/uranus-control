@@ -96,7 +96,6 @@ export default function DashboardClientPage({initialAgents}) {
 
     // 获取最近的5个代理
     const recentAgents = [...agents]
-        .sort((a, b) => new Date(b.lastHeartbeat) - new Date(a.lastHeartbeat))
         .slice(0, 5);
 
     return (
