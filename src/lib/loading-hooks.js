@@ -29,13 +29,19 @@ export function useAsyncLoading() {
     const { startLoading, stopLoading } = useLoading();
 
     // 包装异步函数，自动管理加载状态
-    const withLoading = useCallback(async (asyncFn, ...args) => {
+    // 提供一个参数来选择是否使用全局加载状态
+    const withLoading = useCallback(async (asyncFn, useGlobalLoading = true) => {
         try {
-            startLoading();
-            return await asyncFn(...args);
+            // 只有需要全局加载状态时才调用startLoading
+            if (useGlobalLoading) {
+                startLoading();
+            }
+            return await asyncFn();
         } finally {
-            // 确保无论成功还是失败都停止加载
-            stopLoading();
+            // 确保无论成功还是失败，且如果使用了全局加载状态，都停止加载
+            if (useGlobalLoading) {
+                stopLoading();
+            }
         }
     }, [startLoading, stopLoading]);
 

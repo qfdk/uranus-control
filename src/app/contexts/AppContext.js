@@ -2,6 +2,7 @@
 
 import {createContext, useContext, useEffect, useState, useCallback} from 'react';
 import {useAuth} from './AuthContext';
+import {useLoading} from './LoadingContext';
 
 const REFRESH_INTERVAL = 10000; // 10秒
 
@@ -13,8 +14,9 @@ export function AppProvider({children}) {
     const [agents, setAgents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [autoRefresh, setAutoRefresh] = useState(false);
+    const [autoRefresh, setAutoRefresh] = useState(true);
     const {logout} = useAuth();
+    const {setAutoRefresh: setGlobalAutoRefresh} = useLoading(); // 这里使用useLoading
 
     // Function to fetch agents - 使用useCallback包装
     const fetchAgents = useCallback(async () => {
@@ -46,6 +48,14 @@ export function AppProvider({children}) {
             setLoading(false);
         }
     }, [logout]);
+
+    // 当autoRefresh状态改变时，更新全局自动刷新标记
+    useEffect(() => {
+        // 确保setGlobalAutoRefresh是有效的函数
+        if (typeof setGlobalAutoRefresh === 'function') {
+            setGlobalAutoRefresh(autoRefresh);
+        }
+    }, [autoRefresh, setGlobalAutoRefresh]);
 
     // Fetch agents on mount
     useEffect(() => {

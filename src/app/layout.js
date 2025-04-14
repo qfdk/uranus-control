@@ -22,12 +22,12 @@ export default function RootLayout({ children }) {
         <html lang="zh">
         <body className={inter.className}>
         <AuthProvider>
-            <AppProvider>
-                <LoadingProvider>
+            <LoadingProvider>
+                <AppProvider>
                     <LoadingOverlay />
                     {children}
-                </LoadingProvider>
-            </AppProvider>
+                </AppProvider>
+            </LoadingProvider>
         </AuthProvider>
         </body>
         </html>

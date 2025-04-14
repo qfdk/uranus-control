@@ -12,6 +12,7 @@ export function LoadingProvider({ children }) {
     const loadingCountRef = useRef(0);
     const timeoutRef = useRef(null);
     const pathname = usePathname();
+    const [autoRefreshActive, setAutoRefreshActive] = useState(true); // 新增：标记自动刷新是否活跃
 
     // 监听路径变化，自动重置加载状态
     useEffect(() => {
@@ -33,8 +34,18 @@ export function LoadingProvider({ children }) {
         };
     }, []);
 
+    // 设置自动刷新状态
+    const setAutoRefresh = useCallback((active) => {
+        setAutoRefreshActive(active);
+    }, []);
+
     // 开始加载 - 计数器模式，支持嵌套调用
     const startLoading = useCallback(() => {
+        // 如果自动刷新活跃，则不显示全局加载状态
+        if (autoRefreshActive) {
+            return;
+        }
+
         loadingCountRef.current += 1;
         setIsLoading(true);
 
@@ -46,7 +57,7 @@ export function LoadingProvider({ children }) {
         timeoutRef.current = setTimeout(() => {
             resetLoading();
         }, 10000); // 10秒后自动重置加载状态
-    }, []);
+    }, [autoRefreshActive]);
 
     // 结束加载 - 只有当所有加载请求都结束时才设置为false
     const stopLoading = useCallback(() => {
@@ -81,7 +92,9 @@ export function LoadingProvider({ children }) {
                 isLoading,
                 startLoading,
                 stopLoading,
-                resetLoading
+                resetLoading,
+                setAutoRefresh,
+                autoRefreshActive
             }}
         >
             {children}

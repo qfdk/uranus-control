@@ -24,6 +24,7 @@ export default function AgentDetail({agent: initialAgent}) {
     const [upgradeMessage, setUpgradeMessage] = useState('');
     const [upgradeError, setUpgradeError] = useState('');
     const [agent, setAgent] = useState(initialAgent);
+    const [localLoading, setLocalLoading] = useState(false); // 添加本地加载状态
 
     // 检查组件挂载和状态变化
     useEffect(() => {
@@ -43,6 +44,8 @@ export default function AgentDetail({agent: initialAgent}) {
 
         const intervalId = setInterval(async () => {
             try {
+                // 使用本地加载状态而不是全局加载状态
+                setLocalLoading(true);
                 const response = await fetch(`/api/agents/${agent._id}`);
                 if (response.ok) {
                     const updatedAgent = await response.json();
@@ -50,11 +53,29 @@ export default function AgentDetail({agent: initialAgent}) {
                 }
             } catch (error) {
                 console.error('刷新代理状态失败:', error);
+            } finally {
+                setLocalLoading(false);
             }
         }, 10000); // 10秒刷新一次
 
         return () => clearInterval(intervalId);
     }, [agent._id, autoRefresh]);
+
+    // 手动刷新处理函数
+    const handleRefreshAgent = async () => {
+        try {
+            setLocalLoading(true);
+            const response = await fetch(`/api/agents/${agent._id}`);
+            if (response.ok) {
+                const updatedAgent = await response.json();
+                setAgent(updatedAgent);
+            }
+        } catch (error) {
+            console.error('刷新代理状态失败:', error);
+        } finally {
+            setLocalLoading(false);
+        }
+    };
 
     // 切换标签时添加调试和强制重新渲染
     const handleTabChange = (tab) => {
@@ -180,6 +201,14 @@ export default function AgentDetail({agent: initialAgent}) {
                 </div>
                 <div className="flex gap-2">
                     <Button
+                        variant="secondary"
+                        onClick={handleRefreshAgent}
+                        disabled={localLoading}
+                    >
+                        <RefreshCw className={`w-4 h-4 mr-1 ${localLoading ? 'animate-spin' : ''}`}/>
+                        {localLoading ? '刷新中...' : '刷新'}
+                    </Button>
+                    <Button
                         variant="primary"
                         onClick={handleUpgradeAgent}
                         disabled={isUpgrading || !agent.online}
@@ -205,6 +234,17 @@ export default function AgentDetail({agent: initialAgent}) {
                     </Button>
                 </div>
             </header>
+
+            {/* 加载状态指示器 */}
+            {localLoading && (
+                <div className="mb-4 bg-blue-50 border border-blue-200 p-2 rounded-md flex items-center justify-center text-blue-700">
+                    <svg className="animate-spin h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    正在刷新代理数据...
+                </div>
+            )}
 
             {/* 升级消息显示 */}
             {upgradeMessage && (

@@ -10,7 +10,8 @@ export default function FormSelect({
                                        className = '',
                                        error = '',
                                        onChange,
-                                       onBlur
+                                       onBlur,
+                                       disabled = false
                                    }) {
     return (
         <div className="mb-4">
@@ -30,6 +31,7 @@ export default function FormSelect({
                     required={required}
                     onChange={onChange}
                     onBlur={onBlur}
+                    disabled={disabled}
                     className={`appearance-none w-full rounded-md border border-gray-300 shadow-sm px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white disabled:bg-gray-100 disabled:text-gray-500 pr-8 ${error ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''} ${className}`}
                 >
                     {options.map((option) => (

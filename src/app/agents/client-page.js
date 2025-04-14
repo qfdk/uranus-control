@@ -5,8 +5,6 @@ import {useCallback, useEffect, useState} from 'react';
 import {formatDistanceToNow} from 'date-fns';
 import Button from '@/components/ui/Button';
 import NavLink from '@/components/ui/NavLink';
-import FormSelect from '@/components/ui/FormSelect'; // 导入 FormSelect 组件
-import FormInput from '@/components/ui/FormInput'; // 导入 FormInput 组件
 import {Eye, Plus, RefreshCw, Trash2} from 'lucide-react';
 import {useApp} from '@/app/contexts/AppContext';
 import {useAuth} from '@/app/contexts/AuthContext';
@@ -19,19 +17,13 @@ export default function AgentsClientPage({initialAgents}) {
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [deleteLoading, setDeleteLoading] = useState(null);
+    const [localLoading, setLocalLoading] = useState(false); // 新增本地加载状态
     const {deleteAgent, autoRefresh, toggleAutoRefresh, agents: contextAgents} = useApp();
     const {logout} = useAuth();
     const pathname = usePathname();
-    const {startLoading, stopLoading, isLoading} = useLoading();
+    const {stopLoading} = useLoading();
     const {withLoading} = useAsyncLoading();
     const [isMounted, setIsMounted] = useState(false);
-
-    // 定义状态选项
-    const statusOptions = [
-        {value: 'all', label: '全部'},
-        {value: 'online', label: '在线'},
-        {value: 'offline', label: '离线'}
-    ];
 
     // 组件挂载时标记客户端渲染完成
     useEffect(() => {
@@ -47,7 +39,8 @@ export default function AgentsClientPage({initialAgents}) {
     // 刷新代理数据 - 使用useCallback包装
     const refreshAgents = useCallback(async () => {
         try {
-            startLoading();
+            // 使用本地加载状态代替全局加载状态
+            setLocalLoading(true);
             console.log('刷新代理数据');
             const response = await fetch('/api/agents');
 
@@ -71,9 +64,9 @@ export default function AgentsClientPage({initialAgents}) {
                 alert(`刷新代理列表失败: ${error.message}`);
             }
         } finally {
-            stopLoading();
+            setLocalLoading(false);
         }
-    }, [logout, autoRefresh, startLoading, stopLoading]);
+    }, [logout, autoRefresh]);
 
     // 组件挂载时刷新数据
     useEffect(() => {
@@ -199,21 +192,28 @@ export default function AgentsClientPage({initialAgents}) {
                         />
                     </div>
 
-                    {/* 状态选择 */}
+                    {/* 状态选择 - 修改后的下拉框 */}
                     <div className="md:col-span-3">
                         <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
                             状态
                         </label>
-                        <select
-                            id="status"
-                            value={statusFilter}
-                            onChange={handleStatusChange}
-                            className="w-full rounded-md border border-gray-300 shadow-sm px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white disabled:bg-gray-100 disabled:text-gray-500"
-                        >
-                            <option value="all">全部</option>
-                            <option value="online">在线</option>
-                            <option value="offline">离线</option>
-                        </select>
+                        <div className="relative">
+                            <select
+                                id="status"
+                                value={statusFilter}
+                                onChange={handleStatusChange}
+                                className="appearance-none w-full rounded-md border border-gray-300 shadow-sm px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white disabled:bg-gray-100 disabled:text-gray-500 pr-8"
+                            >
+                                <option value="all">全部</option>
+                                <option value="online">在线</option>
+                                <option value="offline">离线</option>
+                            </select>
+                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                                    <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                                </svg>
+                            </div>
+                        </div>
                     </div>
 
                     {/* 按钮组 */}
@@ -232,11 +232,11 @@ export default function AgentsClientPage({initialAgents}) {
                             自动刷新
                         </button>
                         <button
-                            onClick={() => withLoading(refreshAgents)}
-                            disabled={isLoading}
+                            onClick={refreshAgents}
+                            disabled={localLoading}
                             className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-gray-50 rounded border border-gray-300 hover:bg-gray-100 disabled:opacity-50 transition-colors duration-200 min-w-[90px] justify-center"
                         >
-                            {isLoading ? (
+                            {localLoading ? (
                                 <>
                                     <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-700"
                                          xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -274,7 +274,21 @@ export default function AgentsClientPage({initialAgents}) {
                         </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                        {filteredAgents.map(agent => (
+                        {/* 表格加载状态 */}
+                        {localLoading && filteredAgents.length === 0 && (
+                            <tr>
+                                <td colSpan="7" className="px-6 py-12 text-center">
+                                    <div className="flex flex-col items-center">
+                                        <svg className="animate-spin h-8 w-8 text-blue-500 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        <p className="text-gray-500">正在加载代理数据...</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        )}
+                        {!localLoading && filteredAgents.map(agent => (
                             <tr key={agent._id} className="hover:bg-gray-50">
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{agent.hostname || '未命名代理'}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.ip}</td>
@@ -332,7 +346,7 @@ export default function AgentsClientPage({initialAgents}) {
                                 </td>
                             </tr>
                         ))}
-                        {filteredAgents.length === 0 && (
+                        {!localLoading && filteredAgents.length === 0 && (
                             <tr>
                                 <td colSpan="7" className="px-6 py-12 text-center text-sm text-gray-500">
                                     {agents.length === 0 ? (
