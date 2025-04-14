@@ -3,7 +3,7 @@
 import {useEffect, useState} from 'react';
 import {formatDistanceToNow} from 'date-fns';
 import Link from 'next/link';
-import {ArrowLeft, Cpu, Database, FileCheck, Globe, MemoryStick, RefreshCw, Server, Upload, XCircle, Zap} from 'lucide-react';
+import {ArrowLeft, Cpu, Database, FileCheck, Globe, MemoryStick, Server, Upload, XCircle, Zap} from 'lucide-react';
 import Button from '@/components/ui/Button';
 import {useApp} from '@/app/contexts/AppContext';
 import {useRouter} from 'next/navigation';
@@ -12,19 +12,17 @@ import {useAsyncLoading} from '@/lib/loading-hooks';
 
 export default function AgentDetail({agent: initialAgent}) {
     const router = useRouter();
-    const {sendCommand, deleteAgent, autoRefresh} = useApp();
+    const {deleteAgent, autoRefresh} = useApp();
     const {stopLoading} = useLoading();
     const {withLoading} = useAsyncLoading();
 
     const [activeTab, setActiveTab] = useState('info');
     const [renderKey, setRenderKey] = useState(0); // 强制重新渲染的辅助状态
     const [isDeleting, setIsDeleting] = useState(false);
-    const [isRestarting, setIsRestarting] = useState(false);
     const [isUpgrading, setIsUpgrading] = useState(false);
     const [upgradeMessage, setUpgradeMessage] = useState('');
     const [upgradeError, setUpgradeError] = useState('');
     const [agent, setAgent] = useState(initialAgent);
-    const [localLoading, setLocalLoading] = useState(false); // 添加本地加载状态
 
     // 检查组件挂载和状态变化
     useEffect(() => {
@@ -61,22 +59,6 @@ export default function AgentDetail({agent: initialAgent}) {
         return () => clearInterval(intervalId);
     }, [agent._id, autoRefresh]);
 
-    // 手动刷新处理函数
-    const handleRefreshAgent = async () => {
-        try {
-            setLocalLoading(true);
-            const response = await fetch(`/api/agents/${agent._id}`);
-            if (response.ok) {
-                const updatedAgent = await response.json();
-                setAgent(updatedAgent);
-            }
-        } catch (error) {
-            console.error('刷新代理状态失败:', error);
-        } finally {
-            setLocalLoading(false);
-        }
-    };
-
     // 切换标签时添加调试和强制重新渲染
     const handleTabChange = (tab) => {
         console.log('切换标签到:', tab, '当前标签:', activeTab);
@@ -105,20 +87,6 @@ export default function AgentDetail({agent: initialAgent}) {
         }
     };
 
-    // 重启服务处理函数
-    const handleRestartService = async () => {
-        try {
-            setIsRestarting(true);
-            const result = await withLoading(() => sendCommand(agent._id, 'restart'));
-            alert(result.message || '操作已发送');
-        } catch (error) {
-            console.error('发送重启命令失败:', error);
-            alert('发送重启命令失败，请重试');
-        } finally {
-            setIsRestarting(false);
-        }
-    };
-
     // 升级代理处理函数
     const handleUpgradeAgent = async () => {
         if (!confirm('确定要升级此代理吗？在升级过程中，代理可能会重启。')) {
@@ -134,8 +102,8 @@ export default function AgentDetail({agent: initialAgent}) {
                 const response = await fetch(`/api/agents/${agent._id}/upgrade`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                    },
+                        'Content-Type': 'application/json'
+                    }
                 });
 
                 const data = await response.json();
@@ -201,28 +169,12 @@ export default function AgentDetail({agent: initialAgent}) {
                 </div>
                 <div className="flex gap-2">
                     <Button
-                        variant="secondary"
-                        onClick={handleRefreshAgent}
-                        disabled={localLoading}
-                    >
-                        <RefreshCw className={`w-4 h-4 mr-1 ${localLoading ? 'animate-spin' : ''}`}/>
-                        {localLoading ? '刷新中...' : '刷新'}
-                    </Button>
-                    <Button
                         variant="primary"
                         onClick={handleUpgradeAgent}
                         disabled={isUpgrading || !agent.online}
                     >
                         <Upload className={`w-4 h-4 mr-1 ${isUpgrading ? 'animate-spin' : ''}`}/>
                         {isUpgrading ? '升级中...' : '升级代理'}
-                    </Button>
-                    <Button
-                        variant="primary"
-                        onClick={handleRestartService}
-                        disabled={isRestarting || !agent.online}
-                    >
-                        <RefreshCw className={`w-4 h-4 mr-1 ${isRestarting ? 'animate-spin' : ''}`}/>
-                        {isRestarting ? '执行中...' : '重启服务'}
                     </Button>
                     <Button
                         variant="danger"
@@ -235,24 +187,16 @@ export default function AgentDetail({agent: initialAgent}) {
                 </div>
             </header>
 
-            {/* 加载状态指示器 */}
-            {localLoading && (
-                <div className="mb-4 bg-blue-50 border border-blue-200 p-2 rounded-md flex items-center justify-center text-blue-700">
-                    <svg className="animate-spin h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    正在刷新代理数据...
-                </div>
-            )}
-
             {/* 升级消息显示 */}
             {upgradeMessage && (
                 <div className="mb-6 bg-green-50 border-l-4 border-green-500 p-4">
                     <div className="flex">
                         <div className="flex-shrink-0">
-                            <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg"
+                                 viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd"
+                                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                                      clipRule="evenodd"/>
                             </svg>
                         </div>
                         <div className="ml-3">
@@ -267,8 +211,11 @@ export default function AgentDetail({agent: initialAgent}) {
                 <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4">
                     <div className="flex">
                         <div className="flex-shrink-0">
-                            <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                            <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"
+                                 fill="currentColor">
+                                <path fillRule="evenodd"
+                                      d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                                      clipRule="evenodd"/>
                             </svg>
                         </div>
                         <div className="ml-3">
