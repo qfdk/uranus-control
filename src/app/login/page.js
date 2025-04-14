@@ -171,25 +171,6 @@ export default function LoginPage() {
                             </button>
                         </div>
                     </form>
-
-                    <div className="mt-6">
-                        <div className="relative">
-                            <div className="absolute inset-0 flex items-center">
-                                <div className="w-full border-t border-gray-300"></div>
-                            </div>
-                            <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">
-                  测试账号信息
-                </span>
-                            </div>
-                        </div>
-                        <div className="mt-6">
-                            <p className="text-center text-sm text-gray-500">
-                                用户名: <span className="font-medium text-gray-900">admin</span> |
-                                密码: <span className="font-medium text-gray-900">password</span>
-                            </p>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
