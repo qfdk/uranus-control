@@ -5,12 +5,31 @@ import {useCallback, useEffect, useState} from 'react';
 import {formatDistanceToNow} from 'date-fns';
 import Button from '@/components/ui/Button';
 import NavLink from '@/components/ui/NavLink';
-import {Eye, Loader2, Plus, RefreshCw, Trash2} from 'lucide-react';
+import {Eye, Plus, RefreshCw, Trash2} from 'lucide-react';
 import {useApp} from '@/app/contexts/AppContext';
 import {useAuth} from '@/app/contexts/AuthContext';
 import {useLoading} from '@/app/contexts/LoadingContext';
 import {usePathname} from 'next/navigation';
 import {useAsyncLoading} from '@/lib/loading-hooks';
+
+const Spinner = () => {
+    return (
+        <tr>
+            <td colSpan="7" className="px-6 py-8 text-center">
+                <div className="flex flex-col items-center">
+                    <svg className="animate-spin h-6 w-6 text-blue-500 mb-2" xmlns="http://www.w3.org/2000/svg"
+                         fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p className="text-gray-500 text-sm">刷新数据中...</p>
+                </div>
+            </td>
+        </tr>
+    );
+};
 
 export default function AgentsClientPage({initialAgents}) {
     const [agents, setAgents] = useState(initialAgents || []);
@@ -211,9 +230,12 @@ export default function AgentsClientPage({initialAgents}) {
                                 <option value="online">在线</option>
                                 <option value="offline">离线</option>
                             </select>
-                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                                    <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                            <div
+                                className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg"
+                                     viewBox="0 0 20 20">
+                                    <path
+                                        d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
                                 </svg>
                             </div>
                         </div>
@@ -278,34 +300,10 @@ export default function AgentsClientPage({initialAgents}) {
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
                         {/* 初始加载状态 */}
-                        {/*{initialLoading && (*/}
-                        {/*    <tr>*/}
-                        {/*        <td colSpan="7" className="px-6 py-12 text-center">*/}
-                        {/*            <div className="flex flex-col items-center">*/}
-                        {/*                <svg className="animate-spin h-8 w-8 text-blue-500 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">*/}
-                        {/*                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>*/}
-                        {/*                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>*/}
-                        {/*                </svg>*/}
-                        {/*                <p className="text-gray-500 text-sm">正在加载代理数据...</p>*/}
-                        {/*            </div>*/}
-                        {/*        </td>*/}
-                        {/*    </tr>*/}
-                        {/*)}*/}
+                        {initialLoading && <Spinner/>}
 
                         {/* 局部刷新加载状态 - 当点击刷新按钮时显示，不管是否有数据 */}
-                        {!initialLoading && localLoading && (
-                            <tr>
-                                <td colSpan="7" className="px-6 py-8 text-center">
-                                    <div className="flex flex-col items-center">
-                                        <svg className="animate-spin h-6 w-6 text-blue-500 mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                        </svg>
-                                        <p className="text-gray-500 text-sm">刷新数据中...</p>
-                                    </div>
-                                </td>
-                            </tr>
-                        )}
+                        {!initialLoading && localLoading && <Spinner/>}
 
                         {/* 代理数据 - 只在没有加载状态时显示 */}
                         {!initialLoading && !localLoading && filteredAgents.length > 0 && filteredAgents.map(agent => (
