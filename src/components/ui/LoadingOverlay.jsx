@@ -1,10 +1,10 @@
 'use client';
 
-import { useLoading } from '@/app/contexts/LoadingContext';
-import { useEffect, useState } from 'react';
+import {useLoading} from '@/app/contexts/LoadingContext';
+import {useEffect, useState} from 'react';
 
 export default function LoadingOverlay() {
-    const { isLoading } = useLoading();
+    const {isLoading} = useLoading();
     const [visible, setVisible] = useState(false);
 
     // 追踪加载状态变化
@@ -18,11 +18,9 @@ export default function LoadingOverlay() {
         let hideTimer;
 
         if (isLoading) {
-            // 延迟显示，避免短暂操作的闪烁，但要快速响应
-            showTimer = setTimeout(() => {
-                console.log('LoadingOverlay: 显示加载overlay');
-                setVisible(true);
-            }, 50); // 减少延迟，使导航时的加载指示器更快显示
+            // 立即显示加载状态，无延迟
+            setVisible(true);
+            console.log('LoadingOverlay: 显示加载overlay');
         } else {
             // 延迟隐藏，使过渡效果更平滑
             hideTimer = setTimeout(() => {
