@@ -13,8 +13,7 @@ import TableSpinner from '@/components/ui/TableSpinner';
 
 export default function DashboardClientPage({initialAgents}) {
     const [agents, setAgents] = useState(initialAgents || []);
-    const [loading, setLoading] = useState(false);
-    const [initialLoading, setInitialLoading] = useState(true); // 初始加载状态
+    const [isLoading, setIsLoading] = useState(false); // 单一加载状态
     const {autoRefresh, agents: contextAgents} = useApp();
     const {stopLoading} = useLoading();
     const {withLoading} = useAsyncLoading();
@@ -34,7 +33,7 @@ export default function DashboardClientPage({initialAgents}) {
     // 刷新代理数据
     const refreshDashboardData = useCallback(async () => {
         try {
-            setLoading(true);
+            setIsLoading(true);
             console.log('Dashboard: 刷新仪表盘数据');
             const response = await fetch('/api/agents');
 
@@ -48,8 +47,7 @@ export default function DashboardClientPage({initialAgents}) {
         } catch (error) {
             console.error('Dashboard: 刷新数据失败:', error);
         } finally {
-            setLoading(false);
-            setInitialLoading(false); // 确保初始加载状态也被设置为false
+            setIsLoading(false);
         }
     }, []);
 
@@ -66,7 +64,6 @@ export default function DashboardClientPage({initialAgents}) {
         if (isMounted && contextAgents && contextAgents.length > 0) {
             console.log('Dashboard: 上下文agents变化，更新本地状态', contextAgents?.length);
             setAgents(contextAgents);
-            setInitialLoading(false); // 一旦接收到数据，初始加载结束
         }
     }, [contextAgents, isMounted]);
 
@@ -99,8 +96,7 @@ export default function DashboardClientPage({initialAgents}) {
     const totalCertificates = agents.reduce((sum, agent) => sum + (agent.stats?.certificates || 0), 0);
 
     // 获取最近的5个代理
-    const recentAgents = [...agents]
-        .slice(0, 5);
+    const recentAgents = [...agents].slice(0, 5);
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -110,10 +106,10 @@ export default function DashboardClientPage({initialAgents}) {
             <div className="mb-4 flex justify-end">
                 <button
                     onClick={() => withLoading(refreshDashboardData)}
-                    disabled={loading}
+                    disabled={isLoading}
                     className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-gray-50 rounded border border-gray-300 hover:bg-gray-100 disabled:opacity-50"
                 >
-                    {loading ? (
+                    {isLoading ? (
                         <>
                             <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-700"
                                  xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -172,11 +168,11 @@ export default function DashboardClientPage({initialAgents}) {
                         </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                        {/* 初始加载状态 */}
-                        {(initialLoading || loading) && <TableSpinner/>}
+                        {/* 加载状态 */}
+                        {isLoading && <TableSpinner/>}
 
                         {/* 代理数据 - 只在没有加载状态且有数据时显示 */}
-                        {!initialLoading && !loading && recentAgents.length > 0 && recentAgents.map(agent => (
+                        {!isLoading && recentAgents.length > 0 && recentAgents.map(agent => (
                             <tr key={agent._id} className="hover:bg-gray-50">
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{agent.hostname || '未命名代理'}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.ip}</td>
@@ -206,7 +202,7 @@ export default function DashboardClientPage({initialAgents}) {
                         ))}
 
                         {/* 没有数据状态 - 只在没有加载且没有数据时显示 */}
-                        {!initialLoading && !loading && agents.length === 0 && (
+                        {!isLoading && agents.length === 0 && (
                             <tr>
                                 <td colSpan="7" className="px-6 py-4 text-center text-sm text-gray-500">
                                     暂无代理数据
