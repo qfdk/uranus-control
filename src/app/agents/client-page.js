@@ -1,6 +1,5 @@
 'use client';
 
-// src/app/agents/client-page.js
 import {useCallback, useEffect, useState} from 'react';
 import {formatDistanceToNow} from 'date-fns';
 import Button from '@/components/ui/Button';
@@ -18,8 +17,7 @@ export default function AgentsClientPage({initialAgents}) {
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [deleteLoading, setDeleteLoading] = useState(null);
-    const [localLoading, setLocalLoading] = useState(false); // 本地加载状态
-    const [initialLoading, setInitialLoading] = useState(true); // 初始加载状态
+    const [isLoading, setIsLoading] = useState(false); // Single loading state
     const {deleteAgent, autoRefresh, toggleAutoRefresh, agents: contextAgents} = useApp();
     const {logout} = useAuth();
     const pathname = usePathname();
@@ -27,10 +25,10 @@ export default function AgentsClientPage({initialAgents}) {
     const {withLoading} = useAsyncLoading();
     const [isMounted, setIsMounted] = useState(false);
 
-    // 组件挂载时标记客户端渲染完成
+    // Component mount handler
     useEffect(() => {
         setIsMounted(true);
-        // 确保组件完全挂载后停止加载状态
+        // Stop global loading when component is mounted
         const timer = setTimeout(() => {
             stopLoading();
         }, 300);
@@ -38,16 +36,15 @@ export default function AgentsClientPage({initialAgents}) {
         return () => clearTimeout(timer);
     }, [stopLoading]);
 
-    // 刷新代理数据 - 使用useCallback包装
+    // Refresh agents data
     const refreshAgents = useCallback(async () => {
         try {
-            // 使用本地加载状态代替全局加载状态
-            setLocalLoading(true);
+            setIsLoading(true);
             console.log('刷新代理数据');
             const response = await fetch('/api/agents');
 
             if (response.status === 401) {
-                // 如果返回401未授权，说明会话过期，需要重新登录
+                // Handle unauthorized response
                 alert('会话已过期，请重新登录');
                 logout();
                 return;
@@ -62,16 +59,15 @@ export default function AgentsClientPage({initialAgents}) {
             setAgents(data);
         } catch (error) {
             console.error('Failed to refresh agents:', error);
-            if (!autoRefresh) { // 只在手动刷新时显示错误通知
+            if (!autoRefresh) { // Only show error notifications for manual refreshes
                 alert(`刷新代理列表失败: ${error.message}`);
             }
         } finally {
-            setLocalLoading(false);
-            setInitialLoading(false); // 确保初始加载状态也被设置为false
+            setIsLoading(false);
         }
     }, [logout, autoRefresh]);
 
-    // 组件挂载时刷新数据
+    // Initial data loading
     useEffect(() => {
         if (isMounted) {
             console.log('组件挂载，立即获取最新数据');
@@ -79,7 +75,7 @@ export default function AgentsClientPage({initialAgents}) {
         }
     }, [isMounted, refreshAgents]);
 
-    // 路径变化时刷新数据
+    // Path change handler
     useEffect(() => {
         if (isMounted && pathname === '/agents') {
             console.log('路径变化，刷新数据:', pathname);
@@ -87,40 +83,37 @@ export default function AgentsClientPage({initialAgents}) {
         }
     }, [pathname, refreshAgents, isMounted]);
 
-    // 当上下文中的agents变化时，更新本地状态
+    // Context agents update handler
     useEffect(() => {
         if (isMounted && contextAgents && contextAgents.length > 0) {
             console.log('上下文agents变化，更新本地状态', contextAgents?.length);
             setAgents(contextAgents);
-            setInitialLoading(false); // 一旦接收到数据，初始加载结束
         }
     }, [contextAgents, isMounted]);
 
-    // 添加自动刷新功能的副作用
+    // Auto-refresh handler
     useEffect(() => {
         if (!isMounted || !autoRefresh) return;
 
         console.log('设置自动刷新定时器');
-        // 设置定时刷新
         const intervalId = setInterval(() => {
             console.log('自动刷新触发');
             refreshAgents();
-        }, 15000); // 每15秒刷新一次
+        }, 15000); // Every 15 seconds
 
-        // 清理函数
         return () => {
             console.log('清除自动刷新定时器');
             clearInterval(intervalId);
         };
-    }, [autoRefresh, refreshAgents, isMounted]); // 包含refreshAgents作为依赖
+    }, [autoRefresh, refreshAgents, isMounted]);
 
-    // 用于客户端过滤的逻辑
+    // Filter agents
     const filteredAgents = agents.filter(agent => {
-        // 状态过滤
+        // Status filter
         if (statusFilter === 'online' && !agent.online) return false;
         if (statusFilter === 'offline' && agent.online) return false;
 
-        // 搜索过滤
+        // Search filter
         if (searchTerm) {
             const search = searchTerm.toLowerCase();
             return (agent.hostname && agent.hostname.toLowerCase().includes(search)) ||
@@ -130,7 +123,7 @@ export default function AgentsClientPage({initialAgents}) {
         return true;
     });
 
-    // 删除代理
+    // Delete agent handler
     const handleDeleteAgent = async (agentId) => {
         if (!confirm('确定要删除此代理吗？此操作不可撤销。')) {
             return;
@@ -140,13 +133,13 @@ export default function AgentsClientPage({initialAgents}) {
             setDeleteLoading(agentId);
             await withLoading(async () => {
                 await deleteAgent(agentId);
-                // 更新本地状态，移除已删除的代理
+                // Update local state to remove deleted agent
                 setAgents(prevAgents => prevAgents.filter(agent => agent._id !== agentId));
             });
         } catch (error) {
             console.error('删除代理失败:', error);
 
-            // 检查是否是认证失败
+            // Check if authentication failed
             if (error.message && error.message.includes('401')) {
                 alert('会话已过期，请重新登录');
                 logout();
@@ -167,7 +160,7 @@ export default function AgentsClientPage({initialAgents}) {
         setStatusFilter(e.target.value);
     };
 
-    // 如果组件还未挂载，返回null依赖全局加载状态
+    // If component is not mounted yet, rely on global loading state
     if (!isMounted) {
         return null;
     }
@@ -178,10 +171,10 @@ export default function AgentsClientPage({initialAgents}) {
                 <h1 className="text-2xl font-bold text-gray-800">代理管理</h1>
             </header>
 
-            {/* 代理过滤和搜索 */}
+            {/* Search and filtering */}
             <div className="mb-6 bg-white p-5 rounded-lg shadow-sm">
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                    {/* 搜索框 */}
+                    {/* Search field */}
                     <div className="md:col-span-4">
                         <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">
                             搜索
@@ -196,7 +189,7 @@ export default function AgentsClientPage({initialAgents}) {
                         />
                     </div>
 
-                    {/* 状态选择 - 修改后的下拉框 */}
+                    {/* Status dropdown */}
                     <div className="md:col-span-3">
                         <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
                             状态
@@ -223,7 +216,7 @@ export default function AgentsClientPage({initialAgents}) {
                         </div>
                     </div>
 
-                    {/* 按钮组 */}
+                    {/* Action buttons */}
                     <div className="md:col-span-5 flex justify-end items-end gap-3">
                         <button
                             onClick={toggleAutoRefresh}
@@ -240,10 +233,10 @@ export default function AgentsClientPage({initialAgents}) {
                         </button>
                         <button
                             onClick={refreshAgents}
-                            disabled={localLoading}
+                            disabled={isLoading}
                             className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-gray-50 rounded border border-gray-300 hover:bg-gray-100 disabled:opacity-50 transition-colors duration-200 min-w-[90px] justify-center"
                         >
-                            {localLoading ? (
+                            {isLoading ? (
                                 <>
                                     <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-700"
                                          xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -265,7 +258,7 @@ export default function AgentsClientPage({initialAgents}) {
                 </div>
             </div>
 
-            {/* 代理列表 */}
+            {/* Agents list */}
             <div className="bg-white rounded-lg shadow overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
@@ -281,12 +274,9 @@ export default function AgentsClientPage({initialAgents}) {
                         </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                        {/* 局部刷新加载状态 - 当点击刷新按钮时显示，不管是否有数据 */}
+                        {isLoading && <TableSpinner/>}
 
-                        {(initialLoading || localLoading) && <TableSpinner/>}
-
-                        {/* 代理数据 - 只在没有加载状态时显示 */}
-                        {!initialLoading && !localLoading && filteredAgents.length > 0 && filteredAgents.map(agent => (
+                        {!isLoading && filteredAgents.length > 0 && filteredAgents.map(agent => (
                             <tr key={agent._id} className="hover:bg-gray-50">
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{agent.hostname || '未命名代理'}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.ip}</td>
@@ -345,8 +335,7 @@ export default function AgentsClientPage({initialAgents}) {
                             </tr>
                         ))}
 
-                        {/* 无数据状态 - 只在没有加载且没有数据时显示 */}
-                        {!initialLoading && !localLoading && filteredAgents.length === 0 && (
+                        {!isLoading && filteredAgents.length === 0 && (
                             <tr>
                                 <td colSpan="7" className="px-6 py-12 text-center text-sm text-gray-500">
                                     {agents.length === 0 ? (
