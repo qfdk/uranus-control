@@ -97,7 +97,7 @@ export function LoadingProvider({ children }) {
 
         timeoutRef.current = setTimeout(() => {
             resetLoading();
-        }, 10000);
+        }, 5000);
     }, [autoRefreshActive, pathname, resetLoading]);
 
     const stopLoading = useCallback(() => {
