@@ -5,8 +5,6 @@ import {useAuth} from './AuthContext';
 import {useLoading} from './LoadingContext';
 import {usePathname} from 'next/navigation';
 
-const REFRESH_INTERVAL = 10000; // 10秒
-
 // Create context
 const AppContext = createContext();
 
@@ -15,9 +13,8 @@ export function AppProvider({children}) {
     const [agents, setAgents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [autoRefresh, setAutoRefresh] = useState(true);
     const {logout} = useAuth();
-    const {setAutoRefresh: setGlobalAutoRefresh, startLoading} = useLoading();
+    const {startLoading} = useLoading();
     const pathname = usePathname();
 
     useEffect(() => {
@@ -58,37 +55,13 @@ export function AppProvider({children}) {
         }
     }, [logout]);
 
-    // 当autoRefresh状态改变时，更新全局自动刷新标记
-    useEffect(() => {
-        // 确保setGlobalAutoRefresh是有效的函数
-        if (typeof setGlobalAutoRefresh === 'function') {
-            setGlobalAutoRefresh(autoRefresh);
-        }
-    }, [autoRefresh, setGlobalAutoRefresh]);
 
     // Fetch agents on mount
     useEffect(() => {
         console.log('AppContext: 组件挂载，首次获取数据');
         fetchAgents();
 
-        // 设置自动刷新
-        let intervalId;
-        if (autoRefresh) {
-            console.log('AppContext: 设置自动刷新定时器');
-            intervalId = setInterval(() => {
-                console.log('AppContext: 自动刷新触发');
-                fetchAgents();
-            }, REFRESH_INTERVAL);
-        }
-
-        // 清除定时器
-        return () => {
-            if (intervalId) {
-                console.log('AppContext: 清除自动刷新定时器');
-                clearInterval(intervalId);
-            }
-        };
-    }, [autoRefresh, fetchAgents]); // 添加fetchAgents作为依赖
+    }, [fetchAgents]); // 添加fetchAgents作为依赖
 
     // Update an agent
     const updateAgent = async (agentId, updateData) => {
@@ -237,11 +210,6 @@ export function AppProvider({children}) {
         }
     };
 
-    // 切换自动刷新功能
-    const toggleAutoRefresh = () => {
-        setAutoRefresh(prev => !prev);
-    };
-
     // 手动触发刷新 - 方便在任何组件中调用
     const triggerRefresh = () => {
         console.log('手动触发全局刷新');
@@ -254,8 +222,6 @@ export function AppProvider({children}) {
                 agents,
                 loading,
                 error,
-                autoRefresh,
-                toggleAutoRefresh,
                 fetchAgents,
                 updateAgent,
                 deleteAgent,

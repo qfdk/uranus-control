@@ -1,18 +1,17 @@
 // src/app/contexts/LoadingContext.js
 'use client';
 
-import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { usePathname } from 'next/navigation';
+import {createContext, useCallback, useContext, useEffect, useRef, useState} from 'react';
+import {usePathname} from 'next/navigation';
 
 const LoadingContext = createContext();
 
-export function LoadingProvider({ children }) {
+export function LoadingProvider({children}) {
     // 修改初始值为false
     const [isLoading, setIsLoading] = useState(false);
     const loadingCountRef = useRef(0);
     const timeoutRef = useRef(null);
     const pathname = usePathname();
-    const [autoRefreshActive, setAutoRefreshActive] = useState(true);
     const previousPathRef = useRef(pathname);
     const navigationInProgressRef = useRef(false);
 
@@ -84,7 +83,7 @@ export function LoadingProvider({ children }) {
             window.navigationInProgress = false;
         }
 
-        if (autoRefreshActive && !navigationInProgressRef.current) {
+        if (!navigationInProgressRef.current) {
             return;
         }
 
@@ -98,7 +97,7 @@ export function LoadingProvider({ children }) {
         timeoutRef.current = setTimeout(() => {
             resetLoading();
         }, 5000);
-    }, [autoRefreshActive, pathname, resetLoading]);
+    }, [pathname, resetLoading]);
 
     const stopLoading = useCallback(() => {
         loadingCountRef.current = Math.max(0, loadingCountRef.current - 1);
@@ -123,8 +122,7 @@ export function LoadingProvider({ children }) {
                 startLoading,
                 stopLoading,
                 resetLoading,
-                setAutoRefresh,
-                autoRefreshActive
+                setAutoRefresh
             }}
         >
             {children}

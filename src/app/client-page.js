@@ -1,7 +1,7 @@
 // src/app/client-page.js 更新
 'use client';
 
-import {useCallback, useEffect, useState, useMemo} from 'react';
+import {useCallback, useEffect, useMemo, useState} from 'react';
 import {formatDistanceToNow} from 'date-fns';
 import {Eye, FileCheck, Globe, Server} from 'lucide-react';
 import NavLink from '@/components/ui/NavLink';
@@ -10,16 +10,14 @@ import QuickActionButton from '@/components/ui/QuickActionButton';
 import {useApp} from './contexts/AppContext';
 import {useMqtt} from './contexts/MqttContext'; // 添加MQTT上下文
 import {useLoading} from './contexts/LoadingContext';
-import {useAsyncLoading} from '@/lib/loading-hooks';
 import TableSpinner from '@/components/ui/TableSpinner';
 
 export default function DashboardClientPage({initialAgents}) {
     const [httpAgents, setHttpAgents] = useState(initialAgents || []);
     const [isLoading, setIsLoading] = useState(false);
-    const {autoRefresh, agents: contextAgents} = useApp();
+    const {agents: contextAgents} = useApp();
     const {connected: mqttConnected, agentState} = useMqtt(); // 获取MQTT状态和代理数据
     const {stopLoading} = useLoading();
-    const {withLoading} = useAsyncLoading();
     const [isMounted, setIsMounted] = useState(false);
 
     // 组件挂载时标记客户端渲染完成
@@ -121,7 +119,7 @@ export default function DashboardClientPage({initialAgents}) {
                     buildTime: mqttAgent.buildTime || '',
                     commitId: mqttAgent.commitId || '',
                     lastHeartbeat: mqttAgent.lastHeartbeat || new Date(),
-                    stats: { websites: 0, certificates: 0 },
+                    stats: {websites: 0, certificates: 0},
                     _fromMqtt: true // 标记这是纯MQTT代理
                 });
             }
@@ -142,30 +140,6 @@ export default function DashboardClientPage({initialAgents}) {
             });
     }, [httpAgents, mqttConnected, agentState, isMounted]);
 
-    // 添加自动刷新功能
-    useEffect(() => {
-        if (!isMounted || !autoRefresh) return;
-
-        console.log('Dashboard: 设置自动刷新定时器');
-        // 设置定时刷新
-        const intervalId = setInterval(() => {
-            // 如果MQTT已连接且有活跃代理，可以减少HTTP刷新频率
-            if (mqttConnected && Object.keys(agentState).length > 0) {
-                console.log('Dashboard: MQTT活跃中，跳过HTTP刷新');
-                return;
-            }
-
-            console.log('Dashboard: 自动刷新触发');
-            refreshDashboardData();
-        }, 15000); // 每15秒刷新一次
-
-        // 清理函数
-        return () => {
-            console.log('Dashboard: 清除自动刷新定时器');
-            clearInterval(intervalId);
-        };
-    }, [autoRefresh, refreshDashboardData, isMounted, mqttConnected, agentState]);
-
     // 如果组件还未挂载，返回null依赖全局加载状态
     if (!isMounted) {
         return null;
@@ -183,34 +157,12 @@ export default function DashboardClientPage({initialAgents}) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <h1 className="text-2xl font-bold text-gray-800 mb-6">控制台仪表盘</h1>
 
-            {/* 刷新按钮 */}
-            <div className="mb-4 flex justify-end">
-                <button
-                    onClick={() => withLoading(refreshDashboardData)}
-                    disabled={isLoading}
-                    className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-gray-50 rounded border border-gray-300 hover:bg-gray-100 disabled:opacity-50"
-                >
-                    {isLoading ? (
-                        <>
-                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-700"
-                                 xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
-                                        strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor"
-                                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            刷新中...
-                        </>
-                    ) : '刷新仪表盘'}
-                </button>
-            </div>
-
             {/* 状态卡片 */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <StatusCard
                     title="代理节点"
                     value={`${onlineAgents.length}/${agents.length}`}
-                    description={mqttConnected ? "MQTT已连接" : "通过HTTP监控"}
+                    description={mqttConnected ? 'MQTT已连接' : '通过HTTP监控'}
                     icon={<Server className="w-8 h-8 text-blue-500"/>}
                     color="blue"
                 />
@@ -333,7 +285,8 @@ export default function DashboardClientPage({initialAgents}) {
                             {/* MQTT连接状态 */}
                             <div className="flex justify-between">
                                 <span className="text-sm text-gray-500">MQTT状态</span>
-                                <span className={`text-sm font-medium ${mqttConnected ? 'text-green-600' : 'text-gray-500'}`}>
+                                <span
+                                    className={`text-sm font-medium ${mqttConnected ? 'text-green-600' : 'text-gray-500'}`}>
                                     {mqttConnected ? '已连接' : '未连接'}
                                 </span>
                             </div>
