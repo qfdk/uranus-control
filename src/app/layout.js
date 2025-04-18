@@ -4,6 +4,7 @@ import './globals.css';
 import { AppProvider } from './contexts/AppContext';
 import { AuthProvider } from './contexts/AuthContext';
 import { LoadingProvider } from './contexts/LoadingContext';
+import { MqttProvider } from './contexts/MqttContext';
 import LoadingOverlay from '@/components/ui/LoadingOverlay';
 import { seedDefaultUsers } from '@/lib/seed-users';
 
@@ -24,8 +25,10 @@ export default function RootLayout({ children }) {
         <AuthProvider>
             <LoadingProvider>
                 <AppProvider>
-                    <LoadingOverlay />
-                    {children}
+                    <MqttProvider>
+                        <LoadingOverlay />
+                        {children}
+                    </MqttProvider>
                 </AppProvider>
             </LoadingProvider>
         </AuthProvider>

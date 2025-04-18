@@ -1,11 +1,17 @@
+// src/app/agents/[id]/client-component.js 更新片段
 'use client';
 
 import {useEffect, useState} from 'react';
 import {formatDistanceToNow} from 'date-fns';
 import Link from 'next/link';
-import {ArrowLeft, Cpu, Database, FileCheck, Globe, MemoryStick, Server, Upload, XCircle, Zap} from 'lucide-react';
+import {
+    ArrowLeft, Cpu, Database, FileCheck, Globe, MemoryStick,
+    Server, Upload, XCircle, Zap, RefreshCw, Play,
+    Square, RotateCw
+} from 'lucide-react';
 import Button from '@/components/ui/Button';
 import {useApp} from '@/app/contexts/AppContext';
+import {useMqtt} from '@/app/contexts/MqttContext';
 import {useRouter} from 'next/navigation';
 import {useLoading} from '@/app/contexts/LoadingContext';
 import {useAsyncLoading} from '@/lib/loading-hooks';
@@ -15,14 +21,25 @@ export default function AgentDetail({agent: initialAgent}) {
     const {deleteAgent, autoRefresh} = useApp();
     const {stopLoading} = useLoading();
     const {withLoading} = useAsyncLoading();
+    const {
+        connected: mqttConnected,
+        reloadNginx,
+        restartNginx,
+        stopNginx,
+        startNginx,
+        upgradeAgent
+    } = useMqtt();
 
     const [activeTab, setActiveTab] = useState('info');
     const [renderKey, setRenderKey] = useState(0); // 强制重新渲染的辅助状态
     const [isDeleting, setIsDeleting] = useState(false);
     const [isUpgrading, setIsUpgrading] = useState(false);
+    const [isCommandExecuting, setIsCommandExecuting] = useState(false);
     const [upgradeMessage, setUpgradeMessage] = useState('');
     const [upgradeError, setUpgradeError] = useState('');
+    const [commandResult, setCommandResult] = useState('');
     const [agent, setAgent] = useState(initialAgent);
+    const [localLoading, setLocalLoading] = useState(false);
 
     // 检查组件挂载和状态变化
     useEffect(() => {
@@ -98,40 +115,103 @@ export default function AgentDetail({agent: initialAgent}) {
 
         try {
             setIsUpgrading(true);
-            await withLoading(async () => {
-                const response = await fetch(`/api/agents/${agent._id}/upgrade`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
+
+            // 如果MQTT已连接，优先使用MQTT发送升级命令
+            if (mqttConnected && agent.uuid) {
+                await withLoading(async () => {
+                    try {
+                        const response = await upgradeAgent(agent.uuid);
+                        setUpgradeMessage(response.message || '升级请求已发送');
+                    } catch (mqttError) {
+                        console.error('MQTT升级失败，降级到HTTP升级:', mqttError);
+                        // 如果MQTT失败，降级使用HTTP API
+                        await fallbackHttpUpgrade();
                     }
                 });
+            } else {
+                // 未连接MQTT，使用HTTP API
+                await withLoading(fallbackHttpUpgrade);
+            }
 
-                const data = await response.json();
-
-                if (!response.ok) {
-                    throw new Error(data.error || '升级失败');
-                }
-
-                setUpgradeMessage(data.message || '升级请求已发送');
-
-                // 升级可能需要一些时间，这里设置延迟来自动刷新代理状态
-                setTimeout(async () => {
-                    try {
-                        const refreshResponse = await fetch(`/api/agents/${agent._id}`);
-                        if (refreshResponse.ok) {
-                            const updatedAgent = await refreshResponse.json();
-                            setAgent(updatedAgent);
-                        }
-                    } catch (error) {
-                        console.error('刷新代理状态失败:', error);
+            // 升级可能需要一些时间，设置延迟刷新
+            setTimeout(async () => {
+                try {
+                    const refreshResponse = await fetch(`/api/agents/${agent._id}`);
+                    if (refreshResponse.ok) {
+                        const updatedAgent = await refreshResponse.json();
+                        setAgent(updatedAgent);
                     }
-                    setIsUpgrading(false);
-                }, 15000); // 15秒后刷新
-            });
+                } catch (error) {
+                    console.error('刷新代理状态失败:', error);
+                }
+                setIsUpgrading(false);
+            }, 15000); // 15秒后刷新
         } catch (error) {
             console.error('升级代理失败:', error);
             setUpgradeError(error.message || '升级代理失败，请重试');
             setIsUpgrading(false);
+        }
+    };
+
+    // HTTP升级降级方案
+    const fallbackHttpUpgrade = async () => {
+        const response = await fetch(`/api/agents/${agent._id}/upgrade`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.error || '升级失败');
+        }
+
+        const data = await response.json();
+        setUpgradeMessage(data.message || '升级请求已发送');
+    };
+
+    // 执行Nginx命令
+    const executeNginxCommand = async (commandFunction, commandName) => {
+        if (isCommandExecuting) return;
+
+        // 重置之前的命令结果
+        setCommandResult('');
+
+        try {
+            setIsCommandExecuting(true);
+
+            // 如果MQTT已连接，使用MQTT发送命令
+            if (mqttConnected && agent.uuid) {
+                const response = await commandFunction(agent.uuid);
+                setCommandResult(`${commandName}命令执行成功: ${response.message}`);
+            } else {
+                // 如果MQTT未连接，使用HTTP API
+                const response = await fetch(`/api/agents/${agent._id}/command`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ command: commandName.toLowerCase() })
+                });
+
+                const data = await response.json();
+                setCommandResult(`${commandName}命令执行成功: ${data.message || 'OK'}`);
+            }
+
+            // 成功后刷新代理状态
+            setTimeout(async () => {
+                const refreshResponse = await fetch(`/api/agents/${agent._id}`);
+                if (refreshResponse.ok) {
+                    const updatedAgent = await refreshResponse.json();
+                    setAgent(updatedAgent);
+                }
+                setIsCommandExecuting(false);
+            }, 3000);
+        } catch (error) {
+            console.error(`${commandName}命令执行失败:`, error);
+            setCommandResult(`${commandName}命令执行失败: ${error.message}`);
+            setIsCommandExecuting(false);
         }
     };
 
@@ -166,6 +246,15 @@ export default function AgentDetail({agent: initialAgent}) {
                 <div>
                     <h1 className="text-2xl font-bold text-gray-800">{agent.hostname || agent.uuid}</h1>
                     <p className="text-gray-500">UUID: {agent.uuid}</p>
+                    <div className="mt-1">
+                        <span className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${
+                            agent.online ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                            <span className={`inline-block w-2 h-2 rounded-full mr-1 ${agent.online ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                            {agent.online ? '在线' : '离线'}
+                            {mqttConnected && <span className="ml-1">(MQTT已连接)</span>}
+                        </span>
+                    </div>
                 </div>
                 <div className="flex gap-2">
                     <Button
@@ -186,6 +275,54 @@ export default function AgentDetail({agent: initialAgent}) {
                     </Button>
                 </div>
             </header>
+
+            {/* Nginx 控制按钮 */}
+            {agent.online && (
+                <div className="mb-6 bg-white rounded-lg shadow p-4">
+                    <h3 className="text-lg font-medium mb-3">Nginx 控制</h3>
+                    <div className="flex flex-wrap gap-2">
+                        <Button
+                            variant="secondary"
+                            onClick={() => executeNginxCommand(reloadNginx, "重载")}
+                            disabled={isCommandExecuting}
+                        >
+                            <RotateCw className="w-4 h-4 mr-1" />
+                            重载配置
+                        </Button>
+                        <Button
+                            variant="secondary"
+                            onClick={() => executeNginxCommand(restartNginx, "重启")}
+                            disabled={isCommandExecuting}
+                        >
+                            <RefreshCw className="w-4 h-4 mr-1" />
+                            重启服务
+                        </Button>
+                        <Button
+                            variant="secondary"
+                            onClick={() => executeNginxCommand(stopNginx, "停止")}
+                            disabled={isCommandExecuting}
+                        >
+                            <Square className="w-4 h-4 mr-1" />
+                            停止服务
+                        </Button>
+                        <Button
+                            variant="secondary"
+                            onClick={() => executeNginxCommand(startNginx, "启动")}
+                            disabled={isCommandExecuting}
+                        >
+                            <Play className="w-4 h-4 mr-1" />
+                            启动服务
+                        </Button>
+                    </div>
+
+                    {/* 命令执行结果 */}
+                    {commandResult && (
+                        <div className="mt-3 p-3 bg-gray-50 rounded-md text-sm">
+                            {commandResult}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* 升级消息显示 */}
             {upgradeMessage && (
@@ -352,6 +489,17 @@ export default function AgentDetail({agent: initialAgent}) {
                                         <p className="text-sm text-gray-500">提交ID</p>
                                         <p className="text-sm font-medium">{agent.commitId ? agent.commitId.substring(0, 8) : '未知'}</p>
                                     </div>
+                                </div>
+                            </div>
+
+                            {/* MQTT连接状态显示 */}
+                            <div className="pt-2 border-t border-gray-100">
+                                <div>
+                                    <p className="text-sm text-gray-500">MQTT连接状态</p>
+                                    <p className="text-sm font-medium flex items-center">
+                                        <span className={`inline-block w-2 h-2 rounded-full mr-2 ${mqttConnected ? 'bg-green-500' : 'bg-gray-400'}`}></span>
+                                        {mqttConnected ? 'MQTT已连接' : 'MQTT未连接 (使用HTTP API)'}
+                                    </p>
                                 </div>
                             </div>
                         </div>
