@@ -3,7 +3,7 @@ import connectDB from './mongodb';
 import Agent from '@/models/agent';
 
 // 定义心跳超时时间（毫秒）
-const HEARTBEAT_TIMEOUT = 10000; // 10秒
+const HEARTBEAT_TIMEOUT = 30000; // 10秒
 
 /**
  * 检查并更新代理状态
