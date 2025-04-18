@@ -1,20 +1,23 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
-import { useMqtt } from '@/app/contexts/MqttContext';
-import { Wifi, WifiOff, Settings, RefreshCw, Loader2 } from 'lucide-react';
+import {useEffect, useRef, useState} from 'react';
+import {useMqttClient} from '@/lib/Mqtt';
+import {Info, Loader2, RefreshCw, Settings, Wifi, WifiOff} from 'lucide-react';
 
 export default function MqttStatus() {
-    const { connected, error, isMqttEnabled, setIsMqttEnabled, reconnect } = useMqtt();
+    const {connected, error, reconnect, agentState} = useMqttClient();
+    const [isMqttEnabled, setIsMqttEnabled] = useState(true);
     const [isClient, setIsClient] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
     const [localMqttEnabled, setLocalMqttEnabled] = useState(false);
     const [isToggling, setIsToggling] = useState(false);
     const [isReconnecting, setIsReconnecting] = useState(false);
+    const [tooltipVisible, setTooltipVisible] = useState(false);
     const settingsRef = useRef(null);
+    const tooltipRef = useRef(null);
     const lastActionRef = useRef(null);
 
-    // 确保只在客户端渲染
+    // Ensure component only renders on client
     useEffect(() => {
         setIsClient(true);
         if (typeof isMqttEnabled !== 'undefined') {
@@ -22,18 +25,22 @@ export default function MqttStatus() {
         }
     }, []);
 
-    // 将本地状态与上下文状态同步
+    // Sync local state with context state
     useEffect(() => {
         if (typeof isMqttEnabled !== 'undefined' && !isToggling) {
             setLocalMqttEnabled(isMqttEnabled);
         }
     }, [isMqttEnabled, isToggling]);
 
-    // 处理点击外部关闭设置面板
+    // Handle click outside to close settings panel
     useEffect(() => {
         function handleClickOutside(event) {
             if (settingsRef.current && !settingsRef.current.contains(event.target)) {
                 setShowSettings(false);
+            }
+
+            if (tooltipRef.current && !tooltipRef.current.contains(event.target)) {
+                setTooltipVisible(false);
             }
         }
 
@@ -43,12 +50,12 @@ export default function MqttStatus() {
         };
     }, []);
 
-    // 如果不是客户端渲染，返回null
+    // If not client rendered, return null
     if (!isClient) {
         return null;
     }
 
-    // 切换MQTT状态
+    // Toggle MQTT state
     const toggleMqtt = () => {
         if (isToggling) return;
         setIsToggling(true);
@@ -68,7 +75,7 @@ export default function MqttStatus() {
         }
     };
 
-    // 手动重新连接
+    // Manual reconnect
     const handleReconnect = () => {
         if (!localMqttEnabled) return;
 
@@ -81,14 +88,14 @@ export default function MqttStatus() {
         }, 2000);
     };
 
-    // 获取状态颜色
+    // Get status color
     const getStatusColor = () => {
         if (connected) return 'bg-green-500';
         if (error) return 'bg-red-500';
         return 'bg-gray-400';
     };
 
-    // 获取按钮样式
+    // Get button style
     const getButtonStyle = () => {
         if (connected) return 'text-green-700 bg-green-50 hover:bg-green-100 border-green-200';
         if (error) return 'text-red-700 bg-red-50 hover:bg-red-100 border-red-200';
@@ -97,27 +104,61 @@ export default function MqttStatus() {
 
     return (
         <div className="relative" ref={settingsRef}>
-            <button
-                onClick={() => setShowSettings(!showSettings)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${getButtonStyle()} transition-colors duration-300`}
-                aria-label="MQTT设置"
-                title={connected ? "MQTT已连接" : error ? "MQTT连接错误" : "MQTT未连接"}
-            >
-                {connected ? (
-                    <Wifi className="w-4 h-4" />
-                ) : (
-                    <WifiOff className="w-4 h-4" />
-                )}
-                <span className="text-xs font-medium hidden sm:inline">MQTT</span>
-                <span className={`inline-block w-2 h-2 rounded-full ${getStatusColor()}`}></span>
-            </button>
+            {/* Info tooltip */}
+            {tooltipVisible && (
+                <div
+                    ref={tooltipRef}
+                    className="absolute right-0 top-0 mt-10 p-3 bg-white rounded-lg shadow-lg border border-gray-200 z-50 w-64"
+                >
+                    <h3 className="text-xs font-medium text-gray-700 mb-1">MQTT状态信息</h3>
+                    <p className="text-xs text-gray-600">
+                        MQTT为实时监控提供低延迟通信，启用后可实时查看和控制代理节点。
+                    </p>
+                    {connected && (
+                        <div className="mt-2 text-xs">
+                            <div className="font-medium text-green-700">实时监控中的代理：</div>
+                            <div className="text-gray-600 mt-1">
+                                {Object.keys(agentState).length}个代理连接
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            <div className="flex items-center gap-1">
+                {/* Info tooltip trigger */}
+                <button
+                    onClick={() => setTooltipVisible(!tooltipVisible)}
+                    className="text-gray-400 hover:text-gray-600 focus:outline-none p-1"
+                    aria-label="MQTT信息"
+                >
+                    <Info className="w-4 h-4"/>
+                </button>
+
+                {/* MQTT status button */}
+                <button
+                    onClick={() => setShowSettings(!showSettings)}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${getButtonStyle()} transition-colors duration-300`}
+                    aria-label="MQTT设置"
+                    title={connected ? 'MQTT已连接' : error ? 'MQTT连接错误' : 'MQTT未连接'}
+                >
+                    {connected ? (
+                        <Wifi className="w-4 h-4"/>
+                    ) : (
+                        <WifiOff className="w-4 h-4"/>
+                    )}
+                    <span className="text-xs font-medium hidden sm:inline">MQTT</span>
+                    <span className={`inline-block w-2 h-2 rounded-full ${getStatusColor()}`}></span>
+                </button>
+            </div>
 
             {showSettings && (
-                <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50 overflow-hidden sm:min-w-64">
+                <div
+                    className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50 overflow-hidden sm:min-w-64">
                     <div className="p-3 border-b border-gray-100">
                         <div className="flex items-center justify-between">
                             <h3 className="text-sm font-medium text-gray-700 flex items-center">
-                                <Settings className="w-4 h-4 mr-1 text-gray-500" />
+                                <Settings className="w-4 h-4 mr-1 text-gray-500"/>
                                 MQTT设置
                             </h3>
                             <button
@@ -125,8 +166,11 @@ export default function MqttStatus() {
                                 className="text-gray-400 hover:text-gray-600 rounded-full p-1 hover:bg-gray-100"
                                 aria-label="关闭"
                             >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20"
+                                     fill="currentColor">
+                                    <path fillRule="evenodd"
+                                          d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                                          clipRule="evenodd"/>
                                 </svg>
                             </button>
                         </div>
@@ -145,7 +189,17 @@ export default function MqttStatus() {
                             </span>
                         </div>
 
-                        {/* 显示上次操作信息 */}
+                        {/* Agent count when connected */}
+                        {connected && Object.keys(agentState).length > 0 && (
+                            <div className="mb-3 p-2 bg-blue-50 rounded text-xs text-blue-600 border border-blue-100">
+                                <div className="flex justify-between items-center">
+                                    <span>实时监控代理数：</span>
+                                    <span className="font-medium">{Object.keys(agentState).length}</span>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Last action info */}
                         {lastActionRef.current && (
                             <div className="mb-3 text-xs text-gray-600 italic">
                                 <div className="text-ellipsis overflow-hidden whitespace-nowrap">
@@ -162,17 +216,18 @@ export default function MqttStatus() {
                             </div>
                         )}
 
-                        {/* 统一开关按钮样式 */}
+                        {/* Toggle button with unified style */}
                         <div className="mb-4">
                             <div className="flex items-center justify-between">
                                 <span className="text-sm text-gray-700 flex-shrink-0 mr-3">启用MQTT</span>
-                                <div className="inline-block" style={{ width: '44px', flexShrink: 0 }}>
-                                    <div className="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                                         style={{ backgroundColor: localMqttEnabled ? '#2563eb' : '#e5e7eb' }}
-                                         onClick={toggleMqtt}
-                                         role="switch"
-                                         aria-checked={localMqttEnabled}
-                                         tabIndex={0}
+                                <div className="inline-block relative" style={{width: '44px', flexShrink: 0}}>
+                                    <button
+                                        className="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                                        style={{backgroundColor: localMqttEnabled ? '#2563eb' : '#e5e7eb'}}
+                                        onClick={toggleMqtt}
+                                        role="switch"
+                                        aria-checked={localMqttEnabled}
+                                        tabIndex={0}
                                     >
                                         <span className="sr-only">
                                             {localMqttEnabled ? '禁用MQTT' : '启用MQTT'}
@@ -183,7 +238,7 @@ export default function MqttStatus() {
                                                 isToggling ? 'opacity-70' : ''
                                             } ${localMqttEnabled ? 'translate-x-5' : 'translate-x-0'}`}
                                         />
-                                    </div>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -199,12 +254,12 @@ export default function MqttStatus() {
                         >
                             {isReconnecting ? (
                                 <>
-                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin"/>
                                     连接中...
                                 </>
                             ) : (
                                 <>
-                                    <RefreshCw className="w-4 h-4 mr-2" />
+                                    <RefreshCw className="w-4 h-4 mr-2"/>
                                     重新连接
                                 </>
                             )}

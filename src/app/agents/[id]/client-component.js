@@ -5,20 +5,31 @@ import {useEffect, useState} from 'react';
 import {formatDistanceToNow} from 'date-fns';
 import Link from 'next/link';
 import {
-    ArrowLeft, Cpu, Database, FileCheck, Globe, MemoryStick,
-    Server, Upload, XCircle, Zap, RefreshCw, Play,
-    Square, RotateCw
+    ArrowLeft,
+    Cpu,
+    Database,
+    FileCheck,
+    Globe,
+    MemoryStick,
+    Play,
+    RefreshCw,
+    RotateCw,
+    Server,
+    Square,
+    Upload,
+    XCircle,
+    Zap
 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import {useApp} from '@/app/contexts/AppContext';
-import {useMqtt} from '@/app/contexts/MqttContext';
+import {useMqttClient} from '@/lib/Mqtt';
 import {useRouter} from 'next/navigation';
 import {useLoading} from '@/app/contexts/LoadingContext';
 import {useAsyncLoading} from '@/lib/loading-hooks';
 
 export default function AgentDetail({agent: initialAgent}) {
     const router = useRouter();
-    const {deleteAgent, autoRefresh} = useApp();
+    const {deleteAgent} = useApp();
     const {stopLoading} = useLoading();
     const {withLoading} = useAsyncLoading();
     const {
@@ -28,7 +39,7 @@ export default function AgentDetail({agent: initialAgent}) {
         stopNginx,
         startNginx,
         upgradeAgent
-    } = useMqtt();
+    } = useMqttClient();
 
     const [activeTab, setActiveTab] = useState('info');
     const [renderKey, setRenderKey] = useState(0); // 强制重新渲染的辅助状态
@@ -52,29 +63,6 @@ export default function AgentDetail({agent: initialAgent}) {
 
         return () => clearTimeout(timer);
     }, [activeTab, stopLoading]);
-
-    // 添加自动刷新效果
-    useEffect(() => {
-        if (!autoRefresh) return;
-
-        const intervalId = setInterval(async () => {
-            try {
-                // 使用本地加载状态而不是全局加载状态
-                setLocalLoading(true);
-                const response = await fetch(`/api/agents/${agent._id}`);
-                if (response.ok) {
-                    const updatedAgent = await response.json();
-                    setAgent(updatedAgent);
-                }
-            } catch (error) {
-                console.error('刷新代理状态失败:', error);
-            } finally {
-                setLocalLoading(false);
-            }
-        }, 10000); // 10秒刷新一次
-
-        return () => clearInterval(intervalId);
-    }, [agent._id, autoRefresh]);
 
     // 切换标签时添加调试和强制重新渲染
     const handleTabChange = (tab) => {
@@ -192,7 +180,7 @@ export default function AgentDetail({agent: initialAgent}) {
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ command: commandName.toLowerCase() })
+                    body: JSON.stringify({command: commandName.toLowerCase()})
                 });
 
                 const data = await response.json();
@@ -250,7 +238,8 @@ export default function AgentDetail({agent: initialAgent}) {
                         <span className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${
                             agent.online ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                         }`}>
-                            <span className={`inline-block w-2 h-2 rounded-full mr-1 ${agent.online ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                            <span
+                                className={`inline-block w-2 h-2 rounded-full mr-1 ${agent.online ? 'bg-green-500' : 'bg-red-500'}`}></span>
                             {agent.online ? '在线' : '离线'}
                             {mqttConnected && <span className="ml-1">(MQTT已连接)</span>}
                         </span>
@@ -283,34 +272,34 @@ export default function AgentDetail({agent: initialAgent}) {
                     <div className="flex flex-wrap gap-2">
                         <Button
                             variant="secondary"
-                            onClick={() => executeNginxCommand(reloadNginx, "重载")}
+                            onClick={() => executeNginxCommand(reloadNginx, '重载')}
                             disabled={isCommandExecuting}
                         >
-                            <RotateCw className="w-4 h-4 mr-1" />
+                            <RotateCw className="w-4 h-4 mr-1"/>
                             重载配置
                         </Button>
                         <Button
                             variant="secondary"
-                            onClick={() => executeNginxCommand(restartNginx, "重启")}
+                            onClick={() => executeNginxCommand(restartNginx, '重启')}
                             disabled={isCommandExecuting}
                         >
-                            <RefreshCw className="w-4 h-4 mr-1" />
+                            <RefreshCw className="w-4 h-4 mr-1"/>
                             重启服务
                         </Button>
                         <Button
                             variant="secondary"
-                            onClick={() => executeNginxCommand(stopNginx, "停止")}
+                            onClick={() => executeNginxCommand(stopNginx, '停止')}
                             disabled={isCommandExecuting}
                         >
-                            <Square className="w-4 h-4 mr-1" />
+                            <Square className="w-4 h-4 mr-1"/>
                             停止服务
                         </Button>
                         <Button
                             variant="secondary"
-                            onClick={() => executeNginxCommand(startNginx, "启动")}
+                            onClick={() => executeNginxCommand(startNginx, '启动')}
                             disabled={isCommandExecuting}
                         >
-                            <Play className="w-4 h-4 mr-1" />
+                            <Play className="w-4 h-4 mr-1"/>
                             启动服务
                         </Button>
                     </div>
@@ -497,7 +486,8 @@ export default function AgentDetail({agent: initialAgent}) {
                                 <div>
                                     <p className="text-sm text-gray-500">MQTT连接状态</p>
                                     <p className="text-sm font-medium flex items-center">
-                                        <span className={`inline-block w-2 h-2 rounded-full mr-2 ${mqttConnected ? 'bg-green-500' : 'bg-gray-400'}`}></span>
+                                        <span
+                                            className={`inline-block w-2 h-2 rounded-full mr-2 ${mqttConnected ? 'bg-green-500' : 'bg-gray-400'}`}></span>
                                         {mqttConnected ? 'MQTT已连接' : 'MQTT未连接 (使用HTTP API)'}
                                     </p>
                                 </div>

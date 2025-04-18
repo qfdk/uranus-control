@@ -1,18 +1,18 @@
 // src/components/ui/UserMenu.jsx
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { User, LogOut, Settings, ChevronDown } from 'lucide-react';
-import { useAuth } from '@/app/contexts/AuthContext';
-import { useLoadingNavigation } from '@/lib/loading-hooks';
+import {useEffect, useRef, useState} from 'react';
+import {ChevronDown, LogOut, Settings, User} from 'lucide-react';
+import {useAuth} from '@/app/contexts/AuthContext';
+import {useLoadingNavigation} from '@/lib/loading-hooks';
 import MqttStatus from './MqttStatus';
 
 export default function UserMenu() {
     const [isOpen, setIsOpen] = useState(false);
-    const { user, logout } = useAuth();
+    const {user, logout} = useAuth();
     const [isMounted, setIsMounted] = useState(false);
     const menuRef = useRef(null);
-    const { navigateWithLoading } = useLoadingNavigation();
+    const {navigateWithLoading} = useLoadingNavigation();
 
     // Close menu when clicking outside
     useEffect(() => {
@@ -57,7 +57,7 @@ export default function UserMenu() {
     return (
         <div className="flex items-center gap-3">
             {/* MQTT状态指示器 */}
-            <MqttStatus />
+            <MqttStatus/>
 
             {/* 用户菜单 */}
             <div className="relative" ref={menuRef}>
@@ -69,8 +69,9 @@ export default function UserMenu() {
                 >
                     <span className="sr-only">打开用户菜单</span>
                     <div className="flex items-center bg-blue-50 hover:bg-blue-100 transition-colors rounded-full p-2">
-                        <User className="h-5 w-5 text-blue-600" />
-                        <ChevronDown className={`ml-1 h-4 w-4 text-blue-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                        <User className="h-5 w-5 text-blue-600"/>
+                        <ChevronDown
+                            className={`ml-1 h-4 w-4 text-blue-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}/>
                     </div>
                 </button>
 
@@ -89,7 +90,7 @@ export default function UserMenu() {
                                 role="menuitem"
                             >
                                 <div className="flex items-center">
-                                    <Settings className="mr-2 h-4 w-4" />
+                                    <Settings className="mr-2 h-4 w-4"/>
                                     账户设置
                                 </div>
                             </a>
@@ -100,7 +101,7 @@ export default function UserMenu() {
                                 role="menuitem"
                             >
                                 <div className="flex items-center">
-                                    <LogOut className="mr-2 h-4 w-4" />
+                                    <LogOut className="mr-2 h-4 w-4"/>
                                     退出登录
                                 </div>
                             </button>

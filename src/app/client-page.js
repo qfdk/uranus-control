@@ -1,29 +1,31 @@
-// src/app/client-page.js 更新
 'use client';
 
 import {useCallback, useEffect, useMemo, useState} from 'react';
 import {formatDistanceToNow} from 'date-fns';
-import {Eye, FileCheck, Globe, Server} from 'lucide-react';
+import {Eye, FileCheck, Globe, RefreshCw, Server, Zap} from 'lucide-react';
 import NavLink from '@/components/ui/NavLink';
 import StatusCard from '@/components/ui/StatusCard';
 import QuickActionButton from '@/components/ui/QuickActionButton';
 import {useApp} from './contexts/AppContext';
-import {useMqtt} from './contexts/MqttContext'; // 添加MQTT上下文
+import {useMqttClient} from '../lib/Mqtt';
 import {useLoading} from './contexts/LoadingContext';
 import TableSpinner from '@/components/ui/TableSpinner';
+import Button from '@/components/ui/Button';
 
 export default function DashboardClientPage({initialAgents}) {
     const [httpAgents, setHttpAgents] = useState(initialAgents || []);
     const [isLoading, setIsLoading] = useState(false);
-    const {agents: contextAgents} = useApp();
-    const {connected: mqttConnected, agentState} = useMqtt(); // 获取MQTT状态和代理数据
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const {agents: contextAgents, triggerRefresh} = useApp();
+    const {connected: mqttConnected, agentState, reconnect} = useMqttClient(); // Get MQTT status and agent data
     const {stopLoading} = useLoading();
     const [isMounted, setIsMounted] = useState(false);
+    const [lastMqttUpdate, setLastMqttUpdate] = useState(null);
 
-    // 组件挂载时标记客户端渲染完成
+    // Set client rendering complete flag on mount
     useEffect(() => {
         setIsMounted(true);
-        // 确保组件完全挂载后停止加载状态
+        // Ensure component is fully mounted before stopping loading state
         const timer = setTimeout(() => {
             stopLoading();
         }, 300);
@@ -31,73 +33,98 @@ export default function DashboardClientPage({initialAgents}) {
         return () => clearTimeout(timer);
     }, [stopLoading]);
 
-    // 刷新代理数据 (HTTP)
+    // Refresh agent data (HTTP)
     const refreshDashboardData = useCallback(async () => {
         try {
             setIsLoading(true);
-            console.log('Dashboard: 刷新仪表盘数据');
+            console.log('Dashboard: Refreshing dashboard data');
             const response = await fetch('/api/agents');
 
             if (!response.ok) {
-                throw new Error(`服务器返回错误: ${response.status}`);
+                throw new Error(`Server returned error: ${response.status}`);
             }
 
             const data = await response.json();
-            console.log('Dashboard: 获取到新HTTP数据:', data.length);
+            console.log('Dashboard: Got new HTTP data:', data.length);
             setHttpAgents(data);
         } catch (error) {
-            console.error('Dashboard: 刷新数据失败:', error);
+            console.error('Dashboard: Data refresh failed:', error);
         } finally {
             setIsLoading(false);
         }
     }, []);
 
-    // 组件挂载时刷新数据
+    // Refresh on mount
     useEffect(() => {
         if (isMounted) {
-            console.log('Dashboard: 组件挂载，立即获取最新数据');
+            console.log('Dashboard: Component mounted, fetching latest data');
             refreshDashboardData();
         }
     }, [refreshDashboardData, isMounted]);
 
-    // 当上下文中的agents变化时，更新本地状态
+    // Update when context agents change
     useEffect(() => {
         if (isMounted && contextAgents && contextAgents.length > 0) {
-            console.log('Dashboard: 上下文agents变化，更新本地状态', contextAgents?.length);
+            console.log('Dashboard: Context agents changed, updating local state', contextAgents?.length);
             setHttpAgents(contextAgents);
         }
     }, [contextAgents, isMounted]);
 
-    // 合并HTTP代理数据和MQTT代理状态
+    // Monitor MQTT agent state changes
+    useEffect(() => {
+        if (mqttConnected && Object.keys(agentState).length > 0) {
+            setLastMqttUpdate(new Date());
+            console.log('Dashboard: MQTT agent state updated:', Object.keys(agentState).length, 'agents');
+        }
+    }, [mqttConnected, agentState]);
+
+    // Handle manual refresh button click
+    const handleManualRefresh = useCallback(async () => {
+        setIsRefreshing(true);
+        try {
+            await triggerRefresh();
+            // If MQTT is connected, try to reconnect
+            if (mqttConnected) {
+                reconnect();
+            }
+        } finally {
+            // Short delay before turning off refresh indicator
+            setTimeout(() => {
+                setIsRefreshing(false);
+            }, 500);
+        }
+    }, [triggerRefresh, mqttConnected, reconnect]);
+
+    // Merge HTTP agent data and MQTT agent state
     const agents = useMemo(() => {
         if (!isMounted) return [];
 
-        // 如果MQTT未连接或代理状态为空，直接使用HTTP数据
+        // If MQTT not connected or agent state is empty, use HTTP data
         if (!mqttConnected || Object.keys(agentState).length === 0) {
             return httpAgents;
         }
 
-        console.log('Dashboard: 合并MQTT和HTTP代理数据');
-        console.log('- HTTP代理:', httpAgents.length);
-        console.log('- MQTT代理:', Object.keys(agentState).length);
+        console.log('Dashboard: Merging MQTT and HTTP agent data');
+        console.log('- HTTP agents:', httpAgents.length);
+        console.log('- MQTT agents:', Object.keys(agentState).length);
 
-        // 创建代理映射 (UUID -> 代理)
+        // Create agent map (UUID -> agent)
         const agentMap = new Map();
 
-        // 首先添加HTTP代理数据
+        // First add HTTP agent data
         httpAgents.forEach(agent => {
             if (agent.uuid) {
                 agentMap.set(agent.uuid, {...agent});
             } else if (agent._id) {
-                // 如果没有UUID但有_id，尝试用_id作为键
+                // If no UUID but has _id, try using _id as key
                 agentMap.set(agent._id, {...agent});
             }
         });
 
-        // 然后用MQTT数据更新或添加代理
+        // Then update or add agents with MQTT data
         Object.entries(agentState).forEach(([uuid, mqttAgent]) => {
             if (agentMap.has(uuid)) {
-                // 更新现有代理的MQTT相关属性
+                // Update existing agent with MQTT properties
                 const agent = agentMap.get(uuid);
                 agentMap.set(uuid, {
                     ...agent,
@@ -105,10 +132,11 @@ export default function DashboardClientPage({initialAgents}) {
                     lastHeartbeat: mqttAgent.lastHeartbeat || agent.lastHeartbeat,
                     hostname: agent.hostname || mqttAgent.hostname,
                     ip: agent.ip || mqttAgent.ip,
-                    _fromMqtt: true // 标记这个代理数据有MQTT更新
+                    _fromMqtt: true, // Mark as updated by MQTT
+                    _mqttTimestamp: mqttAgent.lastUpdate || new Date()
                 });
             } else {
-                // 添加新的MQTT代理
+                // Add new MQTT agent
                 agentMap.set(uuid, {
                     _id: uuid,
                     uuid: uuid,
@@ -120,19 +148,20 @@ export default function DashboardClientPage({initialAgents}) {
                     commitId: mqttAgent.commitId || '',
                     lastHeartbeat: mqttAgent.lastHeartbeat || new Date(),
                     stats: {websites: 0, certificates: 0},
-                    _fromMqtt: true // 标记这是纯MQTT代理
+                    _fromMqtt: true, // Mark as MQTT-only agent
+                    _mqttTimestamp: mqttAgent.lastUpdate || new Date()
                 });
             }
         });
 
-        // 转换回数组并排序 (优先显示在线代理，然后按心跳时间排序)
+        // Convert back to array and sort (prioritize online agents, then by heartbeat time)
         return Array.from(agentMap.values())
             .sort((a, b) => {
-                // 首先按在线状态排序
+                // First sort by online status
                 if (a.online !== b.online) {
                     return a.online ? -1 : 1;
                 }
-                // 然后按最后心跳时间排序
+                // Then sort by last heartbeat time
                 if (a.lastHeartbeat && b.lastHeartbeat) {
                     return new Date(b.lastHeartbeat) - new Date(a.lastHeartbeat);
                 }
@@ -140,29 +169,51 @@ export default function DashboardClientPage({initialAgents}) {
             });
     }, [httpAgents, mqttConnected, agentState, isMounted]);
 
-    // 如果组件还未挂载，返回null依赖全局加载状态
+    // If component not mounted, return null and rely on global loading state
     if (!isMounted) {
         return null;
     }
 
-    // 计算统计信息
+    // Calculate statistics
     const onlineAgents = agents.filter(agent => agent.online);
     const totalWebsites = agents.reduce((sum, agent) => sum + (agent.stats?.websites || 0), 0);
     const totalCertificates = agents.reduce((sum, agent) => sum + (agent.stats?.certificates || 0), 0);
 
-    // 获取最近的5个代理
+    // Get most recent 5 agents
     const recentAgents = agents.slice(0, 5);
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-            <h1 className="text-2xl font-bold text-gray-800 mb-6">控制台仪表盘</h1>
+            <div className="flex justify-between items-center mb-6">
+                <h1 className="text-2xl font-bold text-gray-800">控制台仪表盘</h1>
 
-            {/* 状态卡片 */}
+                {/* Manual refresh button */}
+                <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleManualRefresh}
+                    disabled={isRefreshing}
+                >
+                    <RefreshCw className={`w-4 h-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`}/>
+                    {isRefreshing ? '刷新中...' : '刷新数据'}
+                </Button>
+            </div>
+
+            {/* MQTT status indicator (when connected) */}
+            {mqttConnected && lastMqttUpdate && (
+                <div
+                    className="mb-4 p-2 bg-blue-50 border border-blue-100 rounded-md text-sm text-blue-700 flex items-center">
+                    <Zap className="w-4 h-4 mr-2 text-blue-500"/>
+                    <span>MQTT实时监控已连接 - 最后更新: {formatDistanceToNow(lastMqttUpdate, {addSuffix: true})}</span>
+                </div>
+            )}
+
+            {/* Status cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <StatusCard
                     title="代理节点"
                     value={`${onlineAgents.length}/${agents.length}`}
-                    description={mqttConnected ? 'MQTT已连接' : '通过HTTP监控'}
+                    description={mqttConnected ? 'MQTT实时监控' : '通过HTTP监控'}
                     icon={<Server className="w-8 h-8 text-blue-500"/>}
                     color="blue"
                 />
@@ -182,7 +233,7 @@ export default function DashboardClientPage({initialAgents}) {
                 />
             </div>
 
-            {/* 最近活动的代理 */}
+            {/* Recently active agents */}
             <div className="bg-white rounded-lg shadow mb-8">
                 <div className="px-4 py-3 border-b border-gray-200 flex justify-between items-center">
                     <h2 className="text-lg font-medium text-gray-800">最近活动的代理</h2>
@@ -206,20 +257,26 @@ export default function DashboardClientPage({initialAgents}) {
                         </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                        {/* 加载状态 */}
+                        {/* Loading state */}
                         {isLoading && <TableSpinner/>}
 
-                        {/* 代理数据 - 只在没有加载状态且有数据时显示 */}
+                        {/* Agent data - only show when not loading and data exists */}
                         {!isLoading && recentAgents.length > 0 && recentAgents.map(agent => (
                             <tr key={agent._id || agent.uuid} className="hover:bg-gray-50">
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{agent.hostname || '未命名代理'}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.ip}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                                     <span
-                                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${agent.online ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                            agent.online
+                                                ? 'bg-green-100 text-green-800'
+                                                : 'bg-red-100 text-red-800'
+                                        }`}>
                                       {agent.online ? '在线' : '离线'}
-                                        {/* 如果是MQTT更新的代理，显示实时标记 */}
-                                        {agent._fromMqtt && <span className="opacity-75">(实时)</span>}
+                                        {/* Show real-time indicator if from MQTT */}
+                                        {agent._fromMqtt && (
+                                            <span className="ml-1 opacity-75">(实时)</span>
+                                        )}
                                     </span>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.buildVersion || '未知'}</td>
@@ -241,7 +298,7 @@ export default function DashboardClientPage({initialAgents}) {
                             </tr>
                         ))}
 
-                        {/* 没有数据状态 - 只在没有加载且没有数据时显示 */}
+                        {/* No data state - only show when not loading and no data */}
                         {!isLoading && agents.length === 0 && (
                             <tr>
                                 <td colSpan="7" className="px-6 py-4 text-center text-sm text-gray-500">
@@ -262,7 +319,7 @@ export default function DashboardClientPage({initialAgents}) {
                 </div>
             </div>
 
-            {/* 系统信息和快速操作 */}
+            {/* System info and quick actions */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-white rounded-lg shadow">
                     <div className="px-4 py-3 border-b border-gray-200">
@@ -282,7 +339,7 @@ export default function DashboardClientPage({initialAgents}) {
                                 <span className="text-sm text-gray-500">数据库状态</span>
                                 <span className="text-sm font-medium text-green-600">正常</span>
                             </div>
-                            {/* MQTT连接状态 */}
+                            {/* MQTT connection status */}
                             <div className="flex justify-between">
                                 <span className="text-sm text-gray-500">MQTT状态</span>
                                 <span
@@ -290,7 +347,7 @@ export default function DashboardClientPage({initialAgents}) {
                                     {mqttConnected ? '已连接' : '未连接'}
                                 </span>
                             </div>
-                            {/* 实时代理数 */}
+                            {/* Real-time agent count */}
                             {mqttConnected && (
                                 <div className="flex justify-between">
                                     <span className="text-sm text-gray-500">实时监控代理</span>
