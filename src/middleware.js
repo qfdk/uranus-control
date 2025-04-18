@@ -1,5 +1,5 @@
 // src/middleware.js
-import { NextResponse } from 'next/server';
+import {NextResponse} from 'next/server';
 
 // 这个中间件用于服务端路由保护
 export function middleware(request) {
@@ -7,7 +7,7 @@ export function middleware(request) {
     const path = request.nextUrl.pathname;
 
     // 定义公开路径（不需要登录即可访问）
-    const publicPaths = ['/login', '/api/auth/login','/api/agents'];
+    const publicPaths = ['/login', '/api/auth/login', '/api/agents'];
 
     // 定义API路径，这些路径应当返回JSON响应而不是重定向
     const apiPaths = ['/api/agents', '/api/auth'];
@@ -35,8 +35,8 @@ export function middleware(request) {
         // 如果是API请求，返回401错误而不是重定向
         if (isApiPath) {
             return NextResponse.json(
-                { error: "认证失败", message: "请先登录" },
-                { status: 401 }
+                {error: '认证失败', message: '请先登录'},
+                {status: 401}
             );
         }
 
@@ -59,5 +59,6 @@ export const config = {
          * - _next 系统路径
          */
         '/((?!_next/static|_next/image|favicon.ico).*)',
-    ],
+        '/api/((?!agents).)*' // 匹配除了/api/agents之外的所有API路径
+    ]
 };
