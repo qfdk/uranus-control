@@ -1,14 +1,11 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useMqtt } from '@/app/contexts/MqttContext';
 import { Wifi, WifiOff, Settings, RefreshCw, Loader2 } from 'lucide-react';
 
 export default function MqttStatus() {
-    // 从MQTT上下文获取状态和函数
     const { connected, error, isMqttEnabled, setIsMqttEnabled, reconnect } = useMqtt();
-
-    // 本地状态
     const [isClient, setIsClient] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
     const [localMqttEnabled, setLocalMqttEnabled] = useState(false);
@@ -17,20 +14,17 @@ export default function MqttStatus() {
     const settingsRef = useRef(null);
     const lastActionRef = useRef(null);
 
-    // 确保只在客户端渲染，并初始化本地状态
+    // 确保只在客户端渲染
     useEffect(() => {
         setIsClient(true);
-        // 初始化本地状态为上下文的状态值
         if (typeof isMqttEnabled !== 'undefined') {
             setLocalMqttEnabled(isMqttEnabled);
-            console.log('初始MQTT状态:', isMqttEnabled);
         }
     }, []);
 
     // 将本地状态与上下文状态同步
     useEffect(() => {
         if (typeof isMqttEnabled !== 'undefined' && !isToggling) {
-            console.log('MQTT上下文状态已更新:', isMqttEnabled);
             setLocalMqttEnabled(isMqttEnabled);
         }
     }, [isMqttEnabled, isToggling]);
@@ -56,30 +50,19 @@ export default function MqttStatus() {
 
     // 切换MQTT状态
     const toggleMqtt = () => {
-        // 阻止快速多次点击
         if (isToggling) return;
-
-        // 设置正在切换状态
         setIsToggling(true);
-
-        // 更新本地状态
         const newState = !localMqttEnabled;
-        console.log(`切换MQTT状态: ${localMqttEnabled} => ${newState}`);
         setLocalMqttEnabled(newState);
-
-        // 更新上下文状态
         setIsMqttEnabled(newState);
         lastActionRef.current = `已${newState ? '启用' : '禁用'} MQTT (${new Date().toLocaleTimeString()})`;
 
-        // 1秒后解除切换状态锁定，防止快速连续点击并显示loading效果
         setTimeout(() => {
             setIsToggling(false);
         }, 1000);
 
-        // 如果启用，尝试重新连接
         if (newState) {
             setTimeout(() => {
-                console.log('自动尝试连接MQTT');
                 reconnect();
             }, 100);
         }
@@ -87,18 +70,12 @@ export default function MqttStatus() {
 
     // 手动重新连接
     const handleReconnect = () => {
-        if (!localMqttEnabled) {
-            console.log('MQTT已禁用，无法重连');
-            return;
-        }
+        if (!localMqttEnabled) return;
 
-        console.log('手动尝试重新连接MQTT');
         lastActionRef.current = `尝试重新连接 (${new Date().toLocaleTimeString()})`;
         setIsReconnecting(true);
-
         reconnect();
 
-        // 2秒后解除重连状态
         setTimeout(() => {
             setIsReconnecting(false);
         }, 2000);
@@ -136,7 +113,7 @@ export default function MqttStatus() {
             </button>
 
             {showSettings && (
-                <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50 overflow-hidden">
+                <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50 overflow-hidden sm:min-w-64">
                     <div className="p-3 border-b border-gray-100">
                         <div className="flex items-center justify-between">
                             <h3 className="text-sm font-medium text-gray-700 flex items-center">
@@ -171,40 +148,44 @@ export default function MqttStatus() {
                         {/* 显示上次操作信息 */}
                         {lastActionRef.current && (
                             <div className="mb-3 text-xs text-gray-600 italic">
-                                上次操作: {lastActionRef.current}
+                                <div className="text-ellipsis overflow-hidden whitespace-nowrap">
+                                    上次操作: {lastActionRef.current}
+                                </div>
                             </div>
                         )}
 
                         {error && (
                             <div className="mb-3 p-2 bg-red-50 rounded text-xs text-red-600 border border-red-100">
-                                错误: {typeof error === 'string' ? error : '连接失败'}
+                                <div className="text-ellipsis overflow-hidden">
+                                    错误: {typeof error === 'string' ? error : '连接失败'}
+                                </div>
                             </div>
                         )}
 
-                        <div className="flex items-center justify-between mb-4">
-                            <span className="text-sm text-gray-700">启用MQTT</span>
-                            <button
-                                onClick={toggleMqtt}
-                                disabled={isToggling}
-                                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                    localMqttEnabled ? 'bg-blue-600' : 'bg-gray-200'
-                                } ${isToggling ? 'opacity-70' : ''}`}
-                                role="switch"
-                                aria-checked={localMqttEnabled}
-                            >
-                                {isToggling ? (
-                                    <span className="absolute inset-0 flex items-center justify-center">
-                                        <span className="h-4 w-4 rounded-full bg-white/70 animate-pulse"></span>
-                                    </span>
-                                ) : (
-                                    <span
-                                        aria-hidden="true"
-                                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                            localMqttEnabled ? 'translate-x-5' : 'translate-x-0'
-                                        }`}
-                                    />
-                                )}
-                            </button>
+                        {/* 统一开关按钮样式 */}
+                        <div className="mb-4">
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm text-gray-700 flex-shrink-0 mr-3">启用MQTT</span>
+                                <div className="inline-block" style={{ width: '44px', flexShrink: 0 }}>
+                                    <div className="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                                         style={{ backgroundColor: localMqttEnabled ? '#2563eb' : '#e5e7eb' }}
+                                         onClick={toggleMqtt}
+                                         role="switch"
+                                         aria-checked={localMqttEnabled}
+                                         tabIndex={0}
+                                    >
+                                        <span className="sr-only">
+                                            {localMqttEnabled ? '禁用MQTT' : '启用MQTT'}
+                                        </span>
+                                        <span
+                                            aria-hidden="true"
+                                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                                isToggling ? 'opacity-70' : ''
+                                            } ${localMqttEnabled ? 'translate-x-5' : 'translate-x-0'}`}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <button
