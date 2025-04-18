@@ -9,7 +9,7 @@ async function getAgentData(id) {
     await connectDB();
 
     try {
-        const agent = await Agent.findOne({uuid: id});
+        const agent = await Agent.findById(id);
         if (!agent) return null;
         return JSON.parse(JSON.stringify(agent));
     } catch (error) {
