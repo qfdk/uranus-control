@@ -11,6 +11,7 @@ import {useMqttClient} from '@/lib/mqtt';
 import {useLoading} from './contexts/LoadingContext';
 import TableSpinner from '@/components/ui/TableSpinner';
 import Button from '@/components/ui/Button';
+import {combineAgentData} from '@/lib/agent-utils.js';
 
 export default function DashboardClientPage() {
     const [httpAgents, setHttpAgents] = useState([]);
@@ -99,71 +100,9 @@ export default function DashboardClientPage() {
     const agents = useMemo(() => {
         if (!isMounted) return [];
 
-        // If MQTT not connected or agent state is empty, use HTTP data
-        if (!mqttConnected || Object.keys(agentState).length === 0) {
-            return httpAgents;
-        }
-
-        console.log('Dashboard: Merging MQTT and HTTP agent data');
-        console.log('- HTTP agents:', httpAgents.length);
-        console.log('- MQTT agents:', Object.keys(agentState).length);
-
-        // Create agent map (UUID -> agent)
-        const agentMap = new Map();
-
-        // First add HTTP agent data
-        httpAgents.forEach(agent => {
-            if (agent.uuid) {
-                agentMap.set(agent.uuid, {...agent});
-            } else if (agent._id) {
-                // If no UUID but has _id, try using _id as key
-                agentMap.set(agent._id, {...agent});
-            }
-        });
-
-        // Then update or add agents with MQTT data
-        Object.entries(agentState).forEach(([uuid, mqttAgent]) => {
-            if (agentMap.has(uuid)) {
-                // Update existing agent with MQTT properties
-                const agent = agentMap.get(uuid);
-                agentMap.set(uuid, {
-                    ...agent,
-                    online: mqttAgent.online,
-                    lastHeartbeat: mqttAgent.lastHeartbeat || agent.lastHeartbeat,
-                    hostname: agent.hostname || mqttAgent.hostname,
-                    ip: agent.ip || mqttAgent.ip,
-                    _fromMqtt: true, // Mark as updated by MQTT
-                    _mqttTimestamp: mqttAgent.lastUpdate || new Date()
-                });
-            } else {
-                // Add new MQTT agent
-                agentMap.set(uuid, {
-                    _id: uuid,
-                    uuid: uuid,
-                    hostname: mqttAgent.hostname || 'Unknown Host',
-                    ip: mqttAgent.ip || '',
-                    online: mqttAgent.online || false,
-                    buildVersion: mqttAgent.buildVersion || '',
-                    buildTime: mqttAgent.buildTime || '',
-                    commitId: mqttAgent.commitId || '',
-                    lastHeartbeat: mqttAgent.lastHeartbeat || new Date(),
-                    stats: {websites: 0, certificates: 0},
-                    _fromMqtt: true, // Mark as MQTT-only agent
-                    _mqttTimestamp: mqttAgent.lastUpdate || new Date()
-                });
-            }
-        });
-
-        // Convert back to array and sort (prioritize online agents, then by heartbeat time)
-        return Array.from(agentMap.values())
-            .sort((a, b) => {
-                // First sort by online status
-                if (a.online !== b.online) {
-                    return a.online ? -1 : 1;
-                }
-                // Then sort by hostname
-                return a.hostname?.localeCompare(b.hostname) || 0;
-            });
+        // 调用共用函数处理代理数据
+        // 仪表盘页面不显示仅MQTT的代理，所以第四个参数设为false
+        return combineAgentData(httpAgents, agentState, mqttConnected);
     }, [httpAgents, mqttConnected, agentState, isMounted]);
 
     // If component not mounted, return null and rely on global loading state
@@ -259,8 +198,15 @@ export default function DashboardClientPage() {
 
                         {/* Agent data - only show when not loading and data exists */}
                         {!isLoading && recentAgents.length > 0 && recentAgents.map(agent => (
-                            <tr key={agent._id || agent.uuid} className="hover:bg-gray-50">
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{agent.hostname || '未命名代理'}</td>
+                            <tr key={agent._id || agent.uuid} className={`hover:bg-gray-50 ${agent._mqttOnly ? 'bg-blue-50' : ''}`}>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                    {agent.hostname || '未命名代理'}
+                                    {agent._mqttOnly && (
+                                        <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700">
+                                            仅MQTT
+                                        </span>
+                                    )}
+                                </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.ip}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                                     <span
@@ -284,13 +230,15 @@ export default function DashboardClientPage() {
                                         : '未知'}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                                    <NavLink
-                                        href={`/agents/${agent._id || agent.uuid}`}
-                                        className="text-blue-600 hover:text-blue-900 inline-flex items-center"
-                                    >
-                                        <Eye className="w-4 h-4 mr-2"/>
-                                        详情
-                                    </NavLink>
+                                    {!agent._mqttOnly && (
+                                        <NavLink
+                                            href={`/agents/${agent._id}`}
+                                            className="text-blue-600 hover:text-blue-900 inline-flex items-center"
+                                        >
+                                            <Eye className="w-4 h-4 mr-2"/>
+                                            详情
+                                        </NavLink>
+                                    )}
                                 </td>
                             </tr>
                         ))}

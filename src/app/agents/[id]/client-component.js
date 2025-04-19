@@ -38,7 +38,8 @@ export default function AgentDetail({agent: initialAgent}) {
         restartNginx,
         stopNginx,
         startNginx,
-        upgradeAgent
+        upgradeAgent,
+        agentState
     } = useMqttClient();
 
     const [activeTab, setActiveTab] = useState('info');
@@ -50,7 +51,35 @@ export default function AgentDetail({agent: initialAgent}) {
     const [upgradeError, setUpgradeError] = useState('');
     const [commandResult, setCommandResult] = useState('');
     const [agent, setAgent] = useState(initialAgent);
-    const [localLoading, setLocalLoading] = useState(false);
+
+    // Merge MongoDB agent with MQTT data if available
+    useEffect(() => {
+        if (mqttConnected && agent && agent.uuid && agentState[agent.uuid]) {
+            // 获取MQTT代理数据
+            const mqttAgentData = agentState[agent.uuid];
+
+            // 创建合并的代理数据
+            const updatedAgent = {
+                ...agent, // 保留MongoDB基础数据
+                // 更新实时数据
+                online: mqttAgentData.online !== undefined ? mqttAgentData.online : agent.online,
+                lastHeartbeat: mqttAgentData.lastHeartbeat || agent.lastHeartbeat,
+                // 更新系统数据（如果MQTT有提供）
+                hostname: agent.hostname || mqttAgentData.hostname,
+                ip: agent.ip || mqttAgentData.ip,
+                buildVersion: mqttAgentData.buildVersion || agent.buildVersion,
+                buildTime: mqttAgentData.buildTime || agent.buildTime,
+                commitId: mqttAgentData.commitId || agent.commitId,
+                os: mqttAgentData.os || agent.os,
+                memory: mqttAgentData.memory || agent.memory,
+                _fromMqtt: true // 标记为有MQTT数据
+            };
+
+            // 更新代理状态
+            setAgent(updatedAgent);
+            console.log('代理数据已用MQTT信息更新');
+        }
+    }, [mqttConnected, agent?.uuid, agentState]);
 
     // 检查组件挂载和状态变化
     useEffect(() => {
@@ -241,7 +270,7 @@ export default function AgentDetail({agent: initialAgent}) {
                             <span
                                 className={`inline-block w-2 h-2 rounded-full mr-1 ${agent.online ? 'bg-green-500' : 'bg-red-500'}`}></span>
                             {agent.online ? '在线' : '离线'}
-                            {mqttConnected && <span className="ml-1">(MQTT已连接)</span>}
+                            {agent._fromMqtt && <span className="ml-1">(MQTT实时)</span>}
                         </span>
                     </div>
                 </div>

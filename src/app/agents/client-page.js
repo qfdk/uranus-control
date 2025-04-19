@@ -2,7 +2,7 @@
 
 import {useCallback, useEffect, useMemo, useState} from 'react';
 import {formatDistanceToNow} from 'date-fns';
-import {Eye, Plus, Trash2} from 'lucide-react';
+import {Eye, Plus, PlusCircle, Trash2} from 'lucide-react';
 import Button from '@/components/ui/Button';
 import NavLink from '@/components/ui/NavLink';
 import {useApp} from '@/app/contexts/AppContext';
@@ -12,14 +12,16 @@ import {usePathname} from 'next/navigation';
 import {useAsyncLoading} from '@/lib/loading-hooks';
 import {useMqttClient} from '@/lib/mqtt';
 import TableSpinner from '@/components/ui/TableSpinner';
+import {combineAgentData} from '@/lib/agent-utils.js';
 
-export default function AgentsClientPage({initialAgents}) {
-    const [agents, setAgents] = useState(initialAgents || []);
+export default function AgentsClientPage() {
+    const [agents, setAgents] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [deleteLoading, setDeleteLoading] = useState(null);
+    const [registrationLoading, setRegistrationLoading] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
-    const {deleteAgent, agents: contextAgents} = useApp();
+    const {deleteAgent, agents: contextAgents, addAgent} = useApp();
     const {logout} = useAuth();
     const pathname = usePathname();
     const {stopLoading} = useLoading();
@@ -44,54 +46,8 @@ export default function AgentsClientPage({initialAgents}) {
     const combinedAgents = useMemo(() => {
         if (!isMounted) return [];
 
-        // If MQTT not connected or agent state is empty, use HTTP data
-        if (!mqttConnected || Object.keys(agentState).length === 0) {
-            return agents;
-        }
-
-        // Merge HTTP and MQTT data
-        const mergedAgents = agents.map(agent => {
-            const mqttAgentData = agentState[agent.uuid];
-
-            if (mqttAgentData) {
-                return {
-                    ...agent,
-                    ...mqttAgentData,
-                    online: mqttAgentData.online !== undefined
-                        ? mqttAgentData.online
-                        : agent.online,
-                    lastHeartbeat: mqttAgentData.lastHeartbeat || agent.lastHeartbeat,
-                    _fromMqtt: true // Mark as updated by MQTT
-                };
-            }
-
-            return agent;
-        });
-
-        // Add any new agents from MQTT that are not in HTTP data
-        Object.entries(agentState).forEach(([uuid, mqttAgent]) => {
-            if (!mergedAgents.some(a => a.uuid === uuid)) {
-                mergedAgents.push({
-                    _id: uuid,
-                    uuid: uuid,
-                    hostname: mqttAgent.hostname || 'Unknown Host',
-                    ip: mqttAgent.ip || '',
-                    online: mqttAgent.online || false,
-                    buildVersion: mqttAgent.buildVersion || '',
-                    lastHeartbeat: mqttAgent.lastHeartbeat || new Date(),
-                    _fromMqtt: true
-                });
-            }
-        });
-
-        return mergedAgents.sort((a, b) => {
-            // First sort by online status
-            if (a.online !== b.online) {
-                return a.online ? -1 : 1;
-            }
-            // Then sort by hostname
-            return a.hostname?.localeCompare(b.hostname) || 0;
-        });
+        // 调用共用函数处理代理数据
+        return combineAgentData(agents, agentState, mqttConnected);
     }, [agents, mqttConnected, agentState, isMounted]);
 
     // Refresh agents data
@@ -191,6 +147,49 @@ export default function AgentsClientPage({initialAgents}) {
         }
     };
 
+    // Add this function to handle registering MQTT-only agents
+    const handleRegisterAgent = async (agent) => {
+        try {
+            setRegistrationLoading(agent.uuid);
+
+            // Prepare the agent data for registration
+            const agentData = {
+                uuid: agent.uuid,
+                hostname: agent.hostname || 'New Agent',
+                ip: agent.ip || '',
+                online: agent.online || false,
+                buildVersion: agent.buildVersion || '',
+                buildTime: agent.buildTime || '',
+                commitId: agent.commitId || '',
+                os: agent.os || '',
+                memory: agent.memory || '',
+                lastHeartbeat: agent.lastHeartbeat || new Date()
+            };
+
+            await withLoading(async () => {
+                // Use the addAgent function from AppContext
+                await addAgent(agentData);
+
+                // Refresh the agents list to show the new registered agent
+                await refreshAgents();
+            });
+
+        } catch (error) {
+            console.error('注册代理失败:', error);
+
+            // Check if authentication failed
+            if (error.message && error.message.includes('401')) {
+                alert('会话已过期，请重新登录');
+                logout();
+                return;
+            }
+
+            alert('注册代理失败，请重试');
+        } finally {
+            setRegistrationLoading(null);
+        }
+    };
+
     const handleSearchChange = (e) => {
         setSearchTerm(e.target.value);
     };
@@ -281,9 +280,16 @@ export default function AgentsClientPage({initialAgents}) {
                         {isLoading && <TableSpinner/>}
 
                         {!isLoading && filteredAgents.length > 0 && filteredAgents.map(agent => (
-                            <tr key={agent._id || agent.uuid} className="hover:bg-gray-50">
+                            <tr key={agent._id || agent.uuid}
+                                className={`hover:bg-gray-50 ${agent._mqttOnly ? 'bg-blue-50' : ''}`}>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                                     {agent.hostname || '未命名代理'}
+                                    {agent._mqttOnly && (
+                                        <span
+                                            className="ml-2 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700">
+                                            仅MQTT
+                                        </span>
+                                    )}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.ip}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm">
@@ -312,36 +318,68 @@ export default function AgentsClientPage({initialAgents}) {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
                                     <div className="flex justify-end space-x-4">
-                                        <NavLink
-                                            href={`/agents/${agent._id || agent.uuid}`}
-                                            className="text-blue-600 hover:text-blue-900 inline-flex items-center"
-                                        >
-                                            <Eye className="w-4 h-4 mr-2"/>
-                                            详情
-                                        </NavLink>
-                                        <button
-                                            onClick={() => handleDeleteAgent(agent._id || agent.uuid)}
-                                            disabled={deleteLoading === agent._id}
-                                            className="text-red-600 hover:text-red-900 inline-flex items-center"
-                                        >
-                                            {deleteLoading === agent._id ? (
-                                                <>
-                                                    <svg className="animate-spin h-4 w-4 mr-2 text-red-600"
-                                                         xmlns="http://www.w3.org/2000" fill="none" viewBox="0 0 24 24">
-                                                        <circle className="opacity-25" cx="12" cy="12" r="10"
-                                                                stroke="currentColor" strokeWidth="4"></circle>
-                                                        <path className="opacity-75" fill="currentColor"
-                                                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                                    </svg>
-                                                    删除中...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Trash2 className="w-4 h-4 mr-2"/>
-                                                    删除
-                                                </>
-                                            )}
-                                        </button>
+                                        {agent._needsRegistration ? (
+                                            // For MQTT-only agents, show register button
+                                            <button
+                                                onClick={() => handleRegisterAgent(agent)}
+                                                disabled={registrationLoading === agent.uuid}
+                                                className="text-green-600 hover:text-green-900 inline-flex items-center"
+                                            >
+                                                {registrationLoading === agent.uuid ? (
+                                                    <>
+                                                        <svg className="animate-spin h-4 w-4 mr-2 text-green-600"
+                                                             xmlns="http://www.w3.org/2000/svg" fill="none"
+                                                             viewBox="0 0 24 24">
+                                                            <circle className="opacity-25" cx="12" cy="12" r="10"
+                                                                    stroke="currentColor" strokeWidth="4"></circle>
+                                                            <path className="opacity-75" fill="currentColor"
+                                                                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                        </svg>
+                                                        注册中...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <PlusCircle className="w-4 h-4 mr-2"/>
+                                                        注册代理
+                                                    </>
+                                                )}
+                                            </button>
+                                        ) : (
+                                            // For regular agents, show normal actions
+                                            <>
+                                                <NavLink
+                                                    href={`/agents/${agent._id}`}
+                                                    className="text-blue-600 hover:text-blue-900 inline-flex items-center"
+                                                >
+                                                    <Eye className="w-4 h-4 mr-2"/>
+                                                    详情
+                                                </NavLink>
+                                                <button
+                                                    onClick={() => handleDeleteAgent(agent._id)}
+                                                    disabled={deleteLoading === agent._id}
+                                                    className="text-red-600 hover:text-red-900 inline-flex items-center"
+                                                >
+                                                    {deleteLoading === agent._id ? (
+                                                        <>
+                                                            <svg className="animate-spin h-4 w-4 mr-2 text-red-600"
+                                                                 xmlns="http://www.w3.org/2000/svg" fill="none"
+                                                                 viewBox="0 0 24 24">
+                                                                <circle className="opacity-25" cx="12" cy="12" r="10"
+                                                                        stroke="currentColor" strokeWidth="4"></circle>
+                                                                <path className="opacity-75" fill="currentColor"
+                                                                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                            </svg>
+                                                            删除中...
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Trash2 className="w-4 h-4 mr-2"/>
+                                                            删除
+                                                        </>
+                                                    )}
+                                                </button>
+                                            </>
+                                        )}
                                     </div>
                                 </td>
                             </tr>

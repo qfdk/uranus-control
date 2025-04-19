@@ -138,7 +138,7 @@ async function startServer() {
                                 {
                                     online: payload.status === 'online'
                                 },
-                                {upsert: true, new: true}
+                                {upsert: false, new: false}
                             );
 
                             if (updatedAgent) {
