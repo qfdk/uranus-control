@@ -81,8 +81,16 @@ export default function AgentsClientPage() {
     // Initial data loading
     useEffect(() => {
         if (isMounted) {
-            console.log('组件挂载，立即获取最新数据');
+            // 初始加载
             refreshAgents();
+
+            // 设置定期刷新
+            const pollingInterval = setInterval(() => {
+                console.log('定时轮询刷新代理列表');
+                refreshAgents();
+            }, 5000); // 每5秒刷新一次
+
+            return () => clearInterval(pollingInterval);
         }
     }, [isMounted, refreshAgents]);
 

@@ -435,20 +435,49 @@ export function useMqttClient() {
         };
     }, [client, connect]);
 
+
+    // 修改useMqttClient钩子，在return语句之前添加Nginx命令函数
+
+// 添加Nginx命令函数
+    const reloadNginx = useCallback((uuid) => {
+        return sendCommand(uuid, 'reload_nginx');
+    }, [sendCommand]);
+
+    const restartNginx = useCallback((uuid) => {
+        return sendCommand(uuid, 'restart_nginx');
+    }, [sendCommand]);
+
+    const stopNginx = useCallback((uuid) => {
+        return sendCommand(uuid, 'stop_nginx');
+    }, [sendCommand]);
+
+    const startNginx = useCallback((uuid) => {
+        return sendCommand(uuid, 'start_nginx');
+    }, [sendCommand]);
+
+    const upgradeAgent = useCallback((uuid) => {
+        return sendCommand(uuid, 'upgrade');
+    }, [sendCommand]);
+
     return {
         connected,
         error,
-        agentState,  // Expose current agent state
+        agentState,
         sendCommand,
         reconnect: connect,
-        // Add a manual disconnect method
         disconnect: useCallback(() => {
             if (client && client.connected) {
                 client.end();
                 setClient(null);
                 setConnected(false);
             }
-        }, [client])
+        }, [client]),
+        // 添加Nginx命令函数
+        reloadNginx,
+        restartNginx,
+        stopNginx,
+        startNginx,
+        upgradeAgent
     };
 }
 
