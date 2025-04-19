@@ -53,7 +53,7 @@ export function useMqttClient() {
             // Throttle logging to avoid console spam
             const now = Date.now();
             if (now - lastUpdateTimestampRef.current > 1000) {
-                console.log(`MQTT message received on topic ${topic}`, payload);
+                // console.log(`MQTT message received on topic ${topic}`, payload);
                 lastUpdateTimestampRef.current = now;
             }
 
