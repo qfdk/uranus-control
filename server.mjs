@@ -132,7 +132,6 @@ async function startServer() {
                 else if (topic === TOPICS.STATUS) {
                     if (payload.uuid) {
                         const uuid = payload.uuid;
-
                         try {
                             const updatedAgent = await Agent.findOneAndUpdate(
                                 {uuid},

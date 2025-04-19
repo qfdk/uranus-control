@@ -28,8 +28,7 @@ export async function POST(request) {
             {uuid: data.uuid},
             {
                 ...data,
-                online: true,
-                lastHeartbeat: new Date()
+                online: true
             },
             {upsert: true, new: true}
         );
