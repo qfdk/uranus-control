@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import {useApp} from '@/app/contexts/AppContext';
-import {useMqttClient} from '@/lib/Mqtt';
+import {useMqttClient} from '@/lib/mqtt';
 import {useRouter} from 'next/navigation';
 import {useLoading} from '@/app/contexts/LoadingContext';
 import {useAsyncLoading} from '@/lib/loading-hooks';

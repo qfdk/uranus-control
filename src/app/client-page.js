@@ -7,7 +7,7 @@ import NavLink from '@/components/ui/NavLink';
 import StatusCard from '@/components/ui/StatusCard';
 import QuickActionButton from '@/components/ui/QuickActionButton';
 import {useApp} from './contexts/AppContext';
-import {useMqttClient} from '../lib/Mqtt';
+import {useMqttClient} from '@/lib/mqtt';
 import {useLoading} from './contexts/LoadingContext';
 import TableSpinner from '@/components/ui/TableSpinner';
 import Button from '@/components/ui/Button';
@@ -161,11 +161,8 @@ export default function DashboardClientPage({initialAgents}) {
                 if (a.online !== b.online) {
                     return a.online ? -1 : 1;
                 }
-                // Then sort by last heartbeat time
-                if (a.lastHeartbeat && b.lastHeartbeat) {
-                    return new Date(b.lastHeartbeat) - new Date(a.lastHeartbeat);
-                }
-                return 0;
+                // Then sort by hostname
+                return a.hostname?.localeCompare(b.hostname) || 0;
             });
     }, [httpAgents, mqttConnected, agentState, isMounted]);
 

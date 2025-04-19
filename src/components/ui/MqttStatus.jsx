@@ -1,7 +1,7 @@
 'use client';
 
 import {useEffect, useRef, useState} from 'react';
-import {useMqttClient} from '@/lib/Mqtt';
+import {useMqttClient} from '@/lib/mqtt';
 import {Info, Loader2, RefreshCw, Settings, Wifi, WifiOff} from 'lucide-react';
 
 export default function MqttStatus() {

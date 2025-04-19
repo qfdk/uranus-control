@@ -10,7 +10,7 @@ export async function GET() {
     try {
         // 先检查并更新代理状态
         await checkAgentsStatus();
-        // 然后获取最新的代理列表，按照hostname和uuid排序
+        // 然后获取最新的代理列表，按照hostname
         const agents = await Agent.find({}).sort({hostname: 1});
         return NextResponse.json(agents);
     } catch (error) {

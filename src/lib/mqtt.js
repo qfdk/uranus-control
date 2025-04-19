@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import mqtt from 'mqtt';
-import { v4 as uuidv4 } from 'uuid';
+import {v4 as uuidv4} from 'uuid';
 
 // MQTT configuration
 const MQTT_BROKER = 'wss://mqtt.qfdk.me/mqtt'; // WebSocket connection
@@ -14,7 +14,7 @@ const MQTT_OPTIONS = {
     keepalive: 30, // Add keepalive option, 30 seconds
     will: {  // Last will message, sent when client disconnects unexpectedly
         topic: 'uranus/clients/status',
-        payload: JSON.stringify({ clientId: `uranus-control-${uuidv4()}`, status: 'offline' }),
+        payload: JSON.stringify({clientId: `uranus-control-${uuidv4()}`, status: 'offline'}),
         qos: 1,
         retain: false
     }
@@ -26,7 +26,7 @@ const TOPICS = {
     STATUS: 'uranus/status',
     COMMAND: 'uranus/command/',    // Will append agent UUID
     RESPONSE: 'uranus/response/',  // Will append agent UUID
-    CLIENT_HEARTBEAT: 'uranus/clients/heartbeat', // Client heartbeat topic
+    CLIENT_HEARTBEAT: 'uranus/clients/heartbeat' // Client heartbeat topic
 };
 
 /**
@@ -45,6 +45,103 @@ export function useMqttClient() {
     const isInitializedRef = useRef(false);
     const connectionCheckTimerRef = useRef(null);
     const lastUpdateTimestampRef = useRef(Date.now());
+    // Handle received messages
+    const handleMessage = useCallback((topic, message) => {
+        try {
+            const payload = JSON.parse(message.toString());
+
+            // Throttle logging to avoid console spam
+            const now = Date.now();
+            if (now - lastUpdateTimestampRef.current > 1000) {
+                console.log(`MQTT message received on topic ${topic}`, payload);
+                lastUpdateTimestampRef.current = now;
+            }
+
+            if (topic === TOPICS.HEARTBEAT) {
+                // Handle heartbeat message
+                if (payload.uuid) {
+                    const uuid = payload.uuid;
+                    const timestamp = new Date();
+
+                    // Update state reference for direct access elsewhere
+                    const newAgentState = {
+                        ...agentStateRef.current,
+                        [uuid]: {
+                            ...agentStateRef.current[uuid],
+                            ...payload,
+                            online: true,
+                            lastHeartbeat: timestamp,
+                            lastUpdate: timestamp
+                        }
+                    };
+
+                    agentStateRef.current = newAgentState;
+
+                    // Update React state to trigger re-render
+                    setAgentState(prevState => {
+                        // Only update if there are actual changes to avoid unnecessary renders
+                        if (JSON.stringify(prevState[uuid]) !== JSON.stringify(newAgentState[uuid])) {
+                            return {...newAgentState};
+                        }
+                        return prevState;
+                    });
+
+                    // Ensure subscribed to this agent's response topic
+                    if (client && client.connected) {
+                        const responseTopic = `${TOPICS.RESPONSE}${uuid}`;
+                        client.subscribe(responseTopic, {qos: 1});
+                    }
+                }
+            } else if (topic === TOPICS.STATUS) {
+                // Handle status message
+                if (payload.uuid) {
+                    const uuid = payload.uuid;
+                    const timestamp = new Date();
+
+                    // Update state reference
+                    const newAgentState = {
+                        ...agentStateRef.current,
+                        [uuid]: {
+                            ...agentStateRef.current[uuid],
+                            online: payload.status === 'online',
+                            lastStatusChange: timestamp,
+                            lastUpdate: timestamp
+                        }
+                    };
+
+                    agentStateRef.current = newAgentState;
+
+                    // Update React state
+                    setAgentState({...newAgentState});
+
+                    console.log(`MQTT: Agent ${uuid} status changed to ${payload.status}`);
+                }
+            } else if (topic.startsWith(TOPICS.RESPONSE)) {
+                // Handle response message
+                const uuid = topic.substring(TOPICS.RESPONSE.length);
+                const requestId = payload.requestId;
+
+                // Check if there's a corresponding pending command
+                if (pendingCommands.current.has(requestId)) {
+                    const {resolve, reject} = pendingCommands.current.get(requestId);
+
+                    // Delete this command
+                    pendingCommands.current.delete(requestId);
+
+                    // Resolve or reject the promise based on response
+                    if (payload.success) {
+                        console.log(`Command ${requestId} executed successfully on agent ${uuid}`);
+                        resolve(payload);
+                    } else {
+                        console.error(`Command ${requestId} failed on agent ${uuid}:`, payload.message);
+                        reject(new Error(payload.message || 'Command execution failed'));
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('Error parsing MQTT message:', err, message.toString());
+        }
+    }, [client]);
 
     // Connect to MQTT server
     const connect = useCallback(() => {
@@ -71,7 +168,7 @@ export function useMqttClient() {
             // Use fixed clientId
             const mqttOptions = {
                 ...MQTT_OPTIONS,
-                clientId: clientIdRef.current,
+                clientId: clientIdRef.current
             };
 
             const mqttClient = mqtt.connect(MQTT_BROKER, mqttOptions);
@@ -83,20 +180,20 @@ export function useMqttClient() {
                 reconnectCountRef.current = 0; // Reset reconnect counter
 
                 // Subscribe to heartbeat topic
-                mqttClient.subscribe(TOPICS.HEARTBEAT, { qos: 1 });
-                mqttClient.subscribe(TOPICS.STATUS, { qos: 1 });
+                mqttClient.subscribe(TOPICS.HEARTBEAT, {qos: 1});
+                mqttClient.subscribe(TOPICS.STATUS, {qos: 1});
 
                 // Send online status
                 mqttClient.publish('uranus/clients/status', JSON.stringify({
                     clientId: clientIdRef.current,
                     status: 'online',
                     timestamp: Date.now()
-                }), { qos: 1 });
+                }), {qos: 1});
 
                 // When receiving new agent state, subscribe to that agent's response topic
                 Object.keys(agentStateRef.current).forEach(uuid => {
                     const responseTopic = `${TOPICS.RESPONSE}${uuid}`;
-                    mqttClient.subscribe(responseTopic, { qos: 1 });
+                    mqttClient.subscribe(responseTopic, {qos: 1});
                     console.log(`Subscribed to response topic for agent ${uuid}`);
                 });
 
@@ -104,7 +201,7 @@ export function useMqttClient() {
                 mqttClient.publish('uranus/request_status', JSON.stringify({
                     clientId: clientIdRef.current,
                     timestamp: Date.now()
-                }), { qos: 1 });
+                }), {qos: 1});
             });
 
             mqttClient.on('error', (err) => {
@@ -146,105 +243,8 @@ export function useMqttClient() {
                 connect();
             }, 5000);
         }
-    }, [client]);
+    }, [client, handleMessage]);
 
-    // Handle received messages
-    const handleMessage = useCallback((topic, message) => {
-        try {
-            const payload = JSON.parse(message.toString());
-
-            // Throttle logging to avoid console spam
-            const now = Date.now();
-            if (now - lastUpdateTimestampRef.current > 1000) {
-                console.log(`MQTT message received on topic ${topic}`, payload);
-                lastUpdateTimestampRef.current = now;
-            }
-
-            if (topic === TOPICS.HEARTBEAT) {
-                // Handle heartbeat message
-                if (payload.uuid) {
-                    const uuid = payload.uuid;
-                    const timestamp = new Date();
-
-                    // Update state reference for direct access elsewhere
-                    const newAgentState = {
-                        ...agentStateRef.current,
-                        [uuid]: {
-                            ...agentStateRef.current[uuid],
-                            ...payload,
-                            online: true,
-                            lastHeartbeat: timestamp,
-                            lastUpdate: timestamp,
-                        }
-                    };
-
-                    agentStateRef.current = newAgentState;
-
-                    // Update React state to trigger re-render
-                    setAgentState(prevState => {
-                        // Only update if there are actual changes to avoid unnecessary renders
-                        if (JSON.stringify(prevState[uuid]) !== JSON.stringify(newAgentState[uuid])) {
-                            return {...newAgentState};
-                        }
-                        return prevState;
-                    });
-
-                    // Ensure subscribed to this agent's response topic
-                    if (client && client.connected) {
-                        const responseTopic = `${TOPICS.RESPONSE}${uuid}`;
-                        client.subscribe(responseTopic, { qos: 1 });
-                    }
-                }
-            } else if (topic === TOPICS.STATUS) {
-                // Handle status message
-                if (payload.uuid) {
-                    const uuid = payload.uuid;
-                    const timestamp = new Date();
-
-                    // Update state reference
-                    const newAgentState = {
-                        ...agentStateRef.current,
-                        [uuid]: {
-                            ...agentStateRef.current[uuid],
-                            online: payload.status === 'online',
-                            lastStatusChange: timestamp,
-                            lastUpdate: timestamp,
-                        }
-                    };
-
-                    agentStateRef.current = newAgentState;
-
-                    // Update React state
-                    setAgentState({...newAgentState});
-
-                    console.log(`MQTT: Agent ${uuid} status changed to ${payload.status}`);
-                }
-            } else if (topic.startsWith(TOPICS.RESPONSE)) {
-                // Handle response message
-                const uuid = topic.substring(TOPICS.RESPONSE.length);
-                const requestId = payload.requestId;
-
-                // Check if there's a corresponding pending command
-                if (pendingCommands.current.has(requestId)) {
-                    const { resolve, reject } = pendingCommands.current.get(requestId);
-
-                    // Delete this command
-                    pendingCommands.current.delete(requestId);
-
-                    // Resolve or reject the promise based on response
-                    if (payload.success) {
-                        console.log(`Command ${requestId} executed successfully on agent ${uuid}`);
-                        resolve(payload);
-                    } else {
-                        console.error(`Command ${requestId} failed on agent ${uuid}:`, payload.message);
-                        reject(new Error(payload.message || 'Command execution failed'));
-                    }
-                }
-            }
-        } catch (err) {
-            console.error('Error parsing MQTT message:', err, message.toString());
-        }
-    }, [client]);
 
     // Send command to agent
     const sendCommand = useCallback((uuid, command, params = {}) => {
@@ -268,11 +268,11 @@ export function useMqttClient() {
                 params,
                 requestId,
                 timestamp: Date.now(),
-                clientId: clientIdRef.current,
+                clientId: clientIdRef.current
             };
 
             // Save pending command
-            pendingCommands.current.set(requestId, { resolve, reject, timestamp: Date.now() });
+            pendingCommands.current.set(requestId, {resolve, reject, timestamp: Date.now()});
 
             // Set command timeout
             setTimeout(() => {
@@ -286,7 +286,7 @@ export function useMqttClient() {
             const commandTopic = `${TOPICS.COMMAND}${uuid}`;
             console.log(`Sending command to ${commandTopic}:`, commandMessage);
 
-            client.publish(commandTopic, JSON.stringify(commandMessage), { qos: 1 }, (err) => {
+            client.publish(commandTopic, JSON.stringify(commandMessage), {qos: 1}, (err) => {
                 if (err) {
                     pendingCommands.current.delete(requestId);
                     reject(new Error(`Failed to send command: ${err.message}`));
@@ -303,7 +303,7 @@ export function useMqttClient() {
             const now = Date.now();
             let expiredCount = 0;
 
-            pendingCommands.current.forEach(({ timestamp }, requestId) => {
+            pendingCommands.current.forEach(({timestamp}, requestId) => {
                 // Clean up commands older than 30 seconds
                 if (now - timestamp > 30000) {
                     pendingCommands.current.delete(requestId);
@@ -328,7 +328,7 @@ export function useMqttClient() {
             client.publish(TOPICS.CLIENT_HEARTBEAT, JSON.stringify({
                 clientId: clientIdRef.current,
                 timestamp: Date.now()
-            }), { qos: 0 });
+            }), {qos: 0});
         }, 15000);
 
         return () => clearInterval(heartbeatInterval);
@@ -390,7 +390,7 @@ export function useMqttClient() {
                             clientId: clientIdRef.current,
                             status: 'offline',
                             timestamp: Date.now()
-                        }), { qos: 1 }, () => {
+                        }), {qos: 1}, () => {
                             client.end();
                         });
                     } else {
@@ -409,7 +409,7 @@ export function useMqttClient() {
                 connectionCheckTimerRef.current = null;
             }
         };
-    }, [connect]);
+    }, [client, connect]);
 
     // Add network status listener
     useEffect(() => {
@@ -453,4 +453,4 @@ export function useMqttClient() {
 }
 
 // Export MQTT topics
-export { TOPICS };
+export {TOPICS};
