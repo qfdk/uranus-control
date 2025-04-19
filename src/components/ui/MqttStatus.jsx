@@ -3,6 +3,7 @@
 import {useEffect, useRef, useState} from 'react';
 import {useMqttClient} from '@/lib/mqtt';
 import {Info, Loader2, RefreshCw, Settings, Wifi, WifiOff} from 'lucide-react';
+import Switch from '@/components/ui/Switch.jsx';
 
 export default function MqttStatus() {
     const {connected, error, reconnect, agentState} = useMqttClient();
@@ -32,7 +33,7 @@ export default function MqttStatus() {
         }
     }, [isMqttEnabled, isToggling]);
 
-    // Handle click outside to close settings panel
+    // Close menu when clicking outside
     useEffect(() => {
         function handleClickOutside(event) {
             if (settingsRef.current && !settingsRef.current.contains(event.target)) {
@@ -216,31 +217,13 @@ export default function MqttStatus() {
                             </div>
                         )}
 
-                        {/* Toggle button with unified style */}
-                        <div className="mb-4">
-                            <div className="flex items-center justify-between">
-                                <span className="text-sm text-gray-700 flex-shrink-0 mr-3">启用MQTT</span>
-                                <div className="inline-block relative" style={{width: '44px', flexShrink: 0}}>
-                                    <button
-                                        className="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                                        style={{backgroundColor: localMqttEnabled ? '#2563eb' : '#e5e7eb'}}
-                                        onClick={toggleMqtt}
-                                        role="switch"
-                                        aria-checked={localMqttEnabled}
-                                        tabIndex={0}
-                                    >
-                                        <span className="sr-only">
-                                            {localMqttEnabled ? '禁用MQTT' : '启用MQTT'}
-                                        </span>
-                                        <span
-                                            aria-hidden="true"
-                                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                                isToggling ? 'opacity-70' : ''
-                                            } ${localMqttEnabled ? 'translate-x-5' : 'translate-x-0'}`}
-                                        />
-                                    </button>
-                                </div>
-                            </div>
+                        <div className="mb-4 flex items-center justify-between">
+                            <Switch
+                                label="启用MQTT"
+                                checked={localMqttEnabled}
+                                onChange={toggleMqtt}
+                                disabled={isToggling}
+                            />
                         </div>
 
                         <button
