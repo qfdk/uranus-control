@@ -3,7 +3,6 @@ import {createServer} from 'http';
 import {parse} from 'url';
 import next from 'next';
 import mqtt from 'mqtt';
-
 // 导入现有的数据库连接和模型
 import connectDB from './src/lib/mongodb.js';
 import Agent from './src/models/agent.js';
@@ -139,7 +138,7 @@ async function startServer() {
                                 {
                                     online: payload.status === 'online'
                                 },
-                                {upsert: false, new: true}
+                                {upsert: true, new: true}
                             );
 
                             if (updatedAgent) {

@@ -1,6 +1,7 @@
 // src/lib/mongodb.js
 import mongoose from 'mongoose';
-
+import {loadEnv} from './load-env.mjs';
+loadEnv();
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/uranus-control';
 
 let cached = global.mongoose;
