@@ -112,8 +112,7 @@ async function startServer() {
 
                             // 更新数据库中的代理
                             try {
-                                // const updatedAgent =
-                                await Agent.findOneAndUpdate(
+                                const updatedAgent = await Agent.findOneAndUpdate(
                                     {uuid},
                                     {
                                         ...payload,
@@ -122,7 +121,7 @@ async function startServer() {
                                     },
                                     {upsert: true, new: true}
                                 );
-                                // console.log(`已在数据库中更新代理 ${uuid} (${updatedAgent.hostname})`);
+                                console.log(`已在数据库中更新代理 ${uuid} (${updatedAgent.hostname})`);
                             } catch (dbError) {
                                 console.error(`在数据库中更新代理 ${uuid} 时出错:`, dbError);
                             }
