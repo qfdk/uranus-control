@@ -12,8 +12,8 @@ import {useLoading} from './contexts/LoadingContext';
 import TableSpinner from '@/components/ui/TableSpinner';
 import Button from '@/components/ui/Button';
 
-export default function DashboardClientPage({initialAgents}) {
-    const [httpAgents, setHttpAgents] = useState(initialAgents || []);
+export default function DashboardClientPage() {
+    const [httpAgents, setHttpAgents] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const {agents: contextAgents, triggerRefresh} = useApp();

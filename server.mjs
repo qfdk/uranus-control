@@ -102,7 +102,6 @@ async function startServer() {
                 if (topic === TOPICS.HEARTBEAT) {
                     if (payload.uuid) {
                         const uuid = payload.uuid;
-
                         // 实现限流以避免数据库过载
                         const now = Date.now();
                         const lastUpdate = updateThrottles.get(uuid) || 0;
@@ -138,8 +137,7 @@ async function startServer() {
                             const updatedAgent = await Agent.findOneAndUpdate(
                                 {uuid},
                                 {
-                                    online: payload.status === 'online',
-                                    lastHeartbeat: new Date()
+                                    online: payload.status === 'online'
                                 },
                                 {upsert: false, new: true}
                             );
