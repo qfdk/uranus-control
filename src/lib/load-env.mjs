@@ -20,10 +20,4 @@ export function loadEnv() {
             break;
         }
     }
-
-    // 输出关键环境变量（可选的调试信息）
-    console.log('环境变量加载完成');
-    console.log('MONGODB_URI:', process.env.MONGODB_URI);
-    console.log('MQTT_BROKER:', process.env.MQTT_BROKER);
-    console.log('PORT:', process.env.PORT);
 }

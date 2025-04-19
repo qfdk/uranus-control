@@ -1,15 +1,16 @@
 'use client';
 
-import {useCallback, useEffect, useState} from 'react';
+import {useCallback, useEffect, useMemo, useState} from 'react';
 import {formatDistanceToNow} from 'date-fns';
+import {Eye, Plus, Trash2} from 'lucide-react';
 import Button from '@/components/ui/Button';
 import NavLink from '@/components/ui/NavLink';
-import {Eye, Plus, Trash2} from 'lucide-react';
 import {useApp} from '@/app/contexts/AppContext';
 import {useAuth} from '@/app/contexts/AuthContext';
 import {useLoading} from '@/app/contexts/LoadingContext';
 import {usePathname} from 'next/navigation';
 import {useAsyncLoading} from '@/lib/loading-hooks';
+import {useMqttClient} from '@/lib/mqtt';
 import TableSpinner from '@/components/ui/TableSpinner';
 
 export default function AgentsClientPage({initialAgents}) {
@@ -17,13 +18,16 @@ export default function AgentsClientPage({initialAgents}) {
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [deleteLoading, setDeleteLoading] = useState(null);
-    const [isLoading, setIsLoading] = useState(false); // Single loading state
+    const [isLoading, setIsLoading] = useState(false);
     const {deleteAgent, agents: contextAgents} = useApp();
     const {logout} = useAuth();
     const pathname = usePathname();
     const {stopLoading} = useLoading();
     const {withLoading} = useAsyncLoading();
     const [isMounted, setIsMounted] = useState(false);
+
+    // MQTT integration
+    const {connected: mqttConnected, agentState} = useMqttClient();
 
     // Component mount handler
     useEffect(() => {
@@ -35,6 +39,60 @@ export default function AgentsClientPage({initialAgents}) {
 
         return () => clearTimeout(timer);
     }, [stopLoading]);
+
+    // Agents data that combines HTTP and MQTT data
+    const combinedAgents = useMemo(() => {
+        if (!isMounted) return [];
+
+        // If MQTT not connected or agent state is empty, use HTTP data
+        if (!mqttConnected || Object.keys(agentState).length === 0) {
+            return agents;
+        }
+
+        // Merge HTTP and MQTT data
+        const mergedAgents = agents.map(agent => {
+            const mqttAgentData = agentState[agent.uuid];
+
+            if (mqttAgentData) {
+                return {
+                    ...agent,
+                    ...mqttAgentData,
+                    online: mqttAgentData.online !== undefined
+                        ? mqttAgentData.online
+                        : agent.online,
+                    lastHeartbeat: mqttAgentData.lastHeartbeat || agent.lastHeartbeat,
+                    _fromMqtt: true // Mark as updated by MQTT
+                };
+            }
+
+            return agent;
+        });
+
+        // Add any new agents from MQTT that are not in HTTP data
+        Object.entries(agentState).forEach(([uuid, mqttAgent]) => {
+            if (!mergedAgents.some(a => a.uuid === uuid)) {
+                mergedAgents.push({
+                    _id: uuid,
+                    uuid: uuid,
+                    hostname: mqttAgent.hostname || 'Unknown Host',
+                    ip: mqttAgent.ip || '',
+                    online: mqttAgent.online || false,
+                    buildVersion: mqttAgent.buildVersion || '',
+                    lastHeartbeat: mqttAgent.lastHeartbeat || new Date(),
+                    _fromMqtt: true
+                });
+            }
+        });
+
+        return mergedAgents.sort((a, b) => {
+            // First sort by online status
+            if (a.online !== b.online) {
+                return a.online ? -1 : 1;
+            }
+            // Then sort by hostname
+            return a.hostname?.localeCompare(b.hostname) || 0;
+        });
+    }, [agents, mqttConnected, agentState, isMounted]);
 
     // Refresh agents data
     const refreshAgents = useCallback(async () => {
@@ -58,6 +116,7 @@ export default function AgentsClientPage({initialAgents}) {
             console.log('获取到新数据:', data.length);
             setAgents(data);
         } catch (error) {
+            console.error('刷新代理数据失败:', error);
         } finally {
             setIsLoading(false);
         }
@@ -88,7 +147,7 @@ export default function AgentsClientPage({initialAgents}) {
     }, [contextAgents, isMounted]);
 
     // Filter agents
-    const filteredAgents = agents.filter(agent => {
+    const filteredAgents = combinedAgents.filter(agent => {
         // Status filter
         if (statusFilter === 'online' && !agent.online) return false;
         if (statusFilter === 'offline' && agent.online) return false;
@@ -148,7 +207,12 @@ export default function AgentsClientPage({initialAgents}) {
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <header className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <h1 className="text-2xl font-bold text-gray-800">代理管理</h1>
+                <h1 className="text-2xl font-bold text-gray-800">
+                    代理管理
+                    {mqttConnected && (
+                        <span className="ml-2 text-xs text-blue-500">(MQTT实时)</span>
+                    )}
+                </h1>
             </header>
 
             {/* Search and filtering */}
@@ -217,8 +281,10 @@ export default function AgentsClientPage({initialAgents}) {
                         {isLoading && <TableSpinner/>}
 
                         {!isLoading && filteredAgents.length > 0 && filteredAgents.map(agent => (
-                            <tr key={agent._id} className="hover:bg-gray-50">
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{agent.hostname || '未命名代理'}</td>
+                            <tr key={agent._id || agent.uuid} className="hover:bg-gray-50">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                    {agent.hostname || '未命名代理'}
+                                </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.ip}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                                     <span
@@ -227,11 +293,18 @@ export default function AgentsClientPage({initialAgents}) {
                                                 ? 'bg-green-100 text-green-800'
                                                 : 'bg-red-100 text-red-800'
                                         }`}>
-                                        {agent.online ? '在线' : `离线`}
+                                        {agent.online ? '在线' : '离线'}
+                                        {agent._fromMqtt && (
+                                            <span className="ml-1 opacity-75">(实时)</span>
+                                        )}
                                     </span>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.buildVersion || '未知'}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.commitId ? agent.commitId.substring(0, 8) : '未知'}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {agent.buildVersion || '未知'}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {agent.commitId ? agent.commitId.substring(0, 8) : '未知'}
+                                </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                     {agent.lastHeartbeat
                                         ? formatDistanceToNow(new Date(agent.lastHeartbeat), {addSuffix: true})
@@ -240,22 +313,21 @@ export default function AgentsClientPage({initialAgents}) {
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
                                     <div className="flex justify-end space-x-4">
                                         <NavLink
-                                            href={`/agents/${agent._id}`}
+                                            href={`/agents/${agent._id || agent.uuid}`}
                                             className="text-blue-600 hover:text-blue-900 inline-flex items-center"
                                         >
                                             <Eye className="w-4 h-4 mr-2"/>
                                             详情
                                         </NavLink>
                                         <button
-                                            onClick={() => handleDeleteAgent(agent._id)}
+                                            onClick={() => handleDeleteAgent(agent._id || agent.uuid)}
                                             disabled={deleteLoading === agent._id}
                                             className="text-red-600 hover:text-red-900 inline-flex items-center"
                                         >
                                             {deleteLoading === agent._id ? (
                                                 <>
                                                     <svg className="animate-spin h-4 w-4 mr-2 text-red-600"
-                                                         xmlns="http://www.w3.org/2000/svg" fill="none"
-                                                         viewBox="0 0 24 24">
+                                                         xmlns="http://www.w3.org/2000" fill="none" viewBox="0 0 24 24">
                                                         <circle className="opacity-25" cx="12" cy="12" r="10"
                                                                 stroke="currentColor" strokeWidth="4"></circle>
                                                         <path className="opacity-75" fill="currentColor"
@@ -285,6 +357,7 @@ export default function AgentsClientPage({initialAgents}) {
                                                 variant="primary"
                                                 size="sm"
                                                 onClick={() => {
+                                                    // 可以在这里添加添加代理的逻辑
                                                 }}
                                             >
                                                 <Plus className="w-4 h-4 mr-1"/>

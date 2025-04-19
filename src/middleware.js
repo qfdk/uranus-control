@@ -7,10 +7,10 @@ export function middleware(request) {
     const path = request.nextUrl.pathname;
 
     // 定义公开路径（不需要登录即可访问）
-    const publicPaths = ['/login', '/api/auth/login', '/api/agents'];
+    const publicPaths = ['/login', '/api/auth/login'];
 
     // 定义API路径，这些路径应当返回JSON响应而不是重定向
-    const apiPaths = ['/api/agents', '/api/auth'];
+    const apiPaths = ['/api/auth'];
 
     // 检查当前路径是否是API路径
     const isApiPath = apiPaths.some(
@@ -58,7 +58,6 @@ export const config = {
          * - 静态文件 (例如 /static/...)
          * - _next 系统路径
          */
-        '/((?!_next/static|_next/image|favicon.ico).*)',
-        '/api/((?!agents).)*' // 匹配除了/api/agents之外的所有API路径
+        '/((?!_next/static|_next/image|favicon.ico).*)'
     ]
 };
