@@ -98,15 +98,20 @@ export default function AgentsClientPage() {
     useEffect(() => {
         if (mqttConnected && agentState && isMounted) {
             const mqttAgentCount = Object.keys(agentState).length;
+            const httpAgentCount = agents.length;
 
-            // 如果代理数量发生变化，刷新代理列表
-            if (prevMqttAgentCount.current !== mqttAgentCount) {
-                console.log(`MQTT代理数量变化: ${prevMqttAgentCount.current} -> ${mqttAgentCount}，刷新数据`);
+            console.log(`MQTT状态更新: MQTT代理=${mqttAgentCount}个, HTTP代理=${httpAgentCount}个`);
+
+            // 只有当MQTT代理数量大于HTTP代理数量时才刷新（表示有新代理）
+            if (mqttAgentCount > httpAgentCount && prevMqttAgentCount.current !== mqttAgentCount) {
+                console.log(`发现新代理: MQTT=${mqttAgentCount}, HTTP=${httpAgentCount}, 执行刷新`);
                 refreshAgents();
-                prevMqttAgentCount.current = mqttAgentCount;
             }
+
+            // 无论如何都更新上一次的计数
+            prevMqttAgentCount.current = mqttAgentCount;
         }
-    }, [mqttConnected, agentState, refreshAgents, isMounted]);
+    }, [mqttConnected, agentState, refreshAgents, isMounted, agents.length]);
 
     // 路径变化处理
     useEffect(() => {

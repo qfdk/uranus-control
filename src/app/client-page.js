@@ -74,21 +74,27 @@ export default function DashboardClientPage() {
         }
     }, [contextAgents, isMounted]);
 
-    // 监控MQTT代理状态变化
+// 监控MQTT代理状态变化
     useEffect(() => {
-        if (mqttConnected && Object.keys(agentState).length > 0) {
-            setLastMqttUpdate(new Date());
-            console.log('Dashboard: MQTT代理状态更新:', Object.keys(agentState).length, '个代理');
-
-            // 监控MQTT代理数量变化
+        if (mqttConnected && Object.keys(agentState).length > 0 && isMounted) {
             const mqttAgentCount = Object.keys(agentState).length;
-            if (prevMqttAgentCount.current !== mqttAgentCount) {
-                console.log(`Dashboard: MQTT代理数量变化: ${prevMqttAgentCount.current} -> ${mqttAgentCount}，刷新数据`);
+            const httpAgentCount = httpAgents.length;
+
+            setLastMqttUpdate(new Date());
+            console.log('仪表盘合并代理数据：',
+                `MQTT代理：${mqttAgentCount}个`,
+                `HTTP代理：${httpAgentCount}个`);
+
+            // 只有当MQTT代理数量超过HTTP代理数量时才刷新（表示有新代理加入）
+            if (mqttAgentCount > httpAgentCount && prevMqttAgentCount.current !== mqttAgentCount) {
+                console.log(`仪表盘：发现新代理，MQTT=${mqttAgentCount}, HTTP=${httpAgentCount}，执行刷新`);
                 refreshDashboardData();
-                prevMqttAgentCount.current = mqttAgentCount;
             }
+
+            // 总是更新计数器
+            prevMqttAgentCount.current = mqttAgentCount;
         }
-    }, [mqttConnected, agentState, refreshDashboardData]);
+    }, [mqttConnected, agentState, refreshDashboardData, isMounted, httpAgents.length]);
 
     // 处理手动刷新按钮点击
     const handleManualRefresh = useCallback(async () => {
@@ -187,10 +193,12 @@ export default function DashboardClientPage() {
 
             {/* 最近活动的代理 */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-8">
-                <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <div
+                    className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
                     <h2 className="text-lg font-medium text-gray-800 dark:text-white">最近活动的代理</h2>
                     {mqttConnected && (
-                        <span className="px-2 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium rounded-full">
+                        <span
+                            className="px-2 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium rounded-full">
                             MQTT实时 ({Object.keys(agentState).length})
                         </span>
                     )}
@@ -256,7 +264,8 @@ export default function DashboardClientPage() {
                         {/* 无数据状态 - 仅在不加载且无数据时显示 */}
                         {!isLoading && agents.length === 0 && (
                             <tr>
-                                <td colSpan="7" className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                                <td colSpan="7"
+                                    className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
                                     暂无代理数据
                                 </td>
                             </tr>
@@ -264,7 +273,8 @@ export default function DashboardClientPage() {
                         </tbody>
                     </table>
                 </div>
-                <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-right">
+                <div
+                    className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-right">
                     <NavLink
                         href="/agents"
                         className="text-sm font-medium text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
@@ -288,7 +298,8 @@ export default function DashboardClientPage() {
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-sm text-gray-500 dark:text-gray-400">最后更新</span>
-                                <span className="text-sm font-medium dark:text-gray-300">{new Date().toLocaleDateString()}</span>
+                                <span
+                                    className="text-sm font-medium dark:text-gray-300">{new Date().toLocaleDateString()}</span>
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-sm text-gray-500 dark:text-gray-400">数据库状态</span>
