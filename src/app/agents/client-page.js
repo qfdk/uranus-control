@@ -91,14 +91,6 @@ export default function AgentsClientPage() {
         if (isMounted) {
             // 初始加载
             refreshAgents();
-
-            // 设置定期刷新
-            const pollingInterval = setInterval(() => {
-                console.log('定时轮询刷新代理列表');
-                refreshAgents();
-            }, 30000); // 每30秒刷新一次
-
-            return () => clearInterval(pollingInterval);
         }
     }, [isMounted, refreshAgents]);
 
@@ -250,7 +242,8 @@ export default function AgentsClientPage() {
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
                     {/* 搜索字段 */}
                     <div className="md:col-span-4">
-                        <label htmlFor="search" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        <label htmlFor="search"
+                               className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                             搜索
                         </label>
                         <input
@@ -265,7 +258,8 @@ export default function AgentsClientPage() {
 
                     {/* 状态下拉菜单 */}
                     <div className="md:col-span-3">
-                        <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        <label htmlFor="status"
+                               className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                             状态
                         </label>
                         <div className="relative">
@@ -359,9 +353,10 @@ export default function AgentsClientPage() {
                                             >
                                                 {registrationLoading === agent.uuid ? (
                                                     <>
-                                                        <svg className="animate-spin h-4 w-4 mr-2 text-green-600 dark:text-green-400"
-                                                             xmlns="http://www.w3.org/2000/svg" fill="none"
-                                                             viewBox="0 0 24 24">
+                                                        <svg
+                                                            className="animate-spin h-4 w-4 mr-2 text-green-600 dark:text-green-400"
+                                                            xmlns="http://www.w3.org/2000/svg" fill="none"
+                                                            viewBox="0 0 24 24">
                                                             <circle className="opacity-25" cx="12" cy="12" r="10"
                                                                     stroke="currentColor" strokeWidth="4"></circle>
                                                             <path className="opacity-75" fill="currentColor"
@@ -393,9 +388,10 @@ export default function AgentsClientPage() {
                                                 >
                                                     {deleteLoading === agent._id ? (
                                                         <>
-                                                            <svg className="animate-spin h-4 w-4 mr-2 text-red-600 dark:text-red-400"
-                                                                 xmlns="http://www.w3.org/2000/svg" fill="none"
-                                                                 viewBox="0 0 24 24">
+                                                            <svg
+                                                                className="animate-spin h-4 w-4 mr-2 text-red-600 dark:text-red-400"
+                                                                xmlns="http://www.w3.org/2000/svg" fill="none"
+                                                                viewBox="0 0 24 24">
                                                                 <circle className="opacity-25" cx="12" cy="12" r="10"
                                                                         stroke="currentColor" strokeWidth="4"></circle>
                                                                 <path className="opacity-75" fill="currentColor"
@@ -419,7 +415,8 @@ export default function AgentsClientPage() {
 
                         {!isLoading && filteredAgents.length === 0 && (
                             <tr>
-                                <td colSpan="7" className="px-6 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
+                                <td colSpan="7"
+                                    className="px-6 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
                                     {agents.length === 0 ? (
                                         <div className="flex flex-col items-center">
                                             <p className="mb-2">暂无代理数据</p>
