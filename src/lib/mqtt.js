@@ -45,6 +45,23 @@ export function useMqttClient() {
     const isInitializedRef = useRef(false);
     const connectionCheckTimerRef = useRef(null);
     const lastUpdateTimestampRef = useRef(Date.now());
+    const currentAgentUUID = useRef(null);
+
+    // 设置当前查看的代理UUID并订阅其响应主题
+    const setCurrentAgent = useCallback((uuid) => {
+        if (!uuid || currentAgentUUID.current === uuid) return;
+
+        console.log(`设置当前代理: ${uuid}`);
+        currentAgentUUID.current = uuid;
+
+        // 如果MQTT已连接，订阅该代理的响应主题
+        if (client && client.connected) {
+            const responseTopic = `${TOPICS.RESPONSE}${uuid}`;
+            client.subscribe(responseTopic, {qos: 1});
+            console.log(`已订阅代理响应主题: ${responseTopic}`);
+        }
+    }, [client]);
+
     // Handle received messages
     const handleMessage = useCallback((topic, message) => {
         try {
@@ -93,13 +110,19 @@ export function useMqttClient() {
                     }
                 }
             } else if (topic.startsWith(TOPICS.RESPONSE)) {
+                console.log(`收到MQTT响应: ${topic}`, payload);
                 // Handle response message
                 const uuid = topic.substring(TOPICS.RESPONSE.length);
                 const requestId = payload.requestId;
 
                 // Check if there's a corresponding pending command
                 if (pendingCommands.current.has(requestId)) {
-                    const {resolve, reject} = pendingCommands.current.get(requestId);
+                    const {resolve, reject, timeoutId} = pendingCommands.current.get(requestId);
+
+                    // 清除超时
+                    if (timeoutId) {
+                        clearTimeout(timeoutId);
+                    }
 
                     // Delete this command
                     pendingCommands.current.delete(requestId);
@@ -158,6 +181,13 @@ export function useMqttClient() {
                 // Subscribe to heartbeat topic
                 mqttClient.subscribe(TOPICS.HEARTBEAT, {qos: 1});
                 mqttClient.subscribe(TOPICS.STATUS, {qos: 1});
+
+                // 如果有当前查看的代理，订阅其响应主题
+                if (currentAgentUUID.current) {
+                    const responseTopic = `${TOPICS.RESPONSE}${currentAgentUUID.current}`;
+                    mqttClient.subscribe(responseTopic, {qos: 1});
+                    console.log(`已订阅当前代理响应主题: ${responseTopic}`);
+                }
 
                 // Send online status
                 mqttClient.publish('uranus/clients/status', JSON.stringify({
@@ -221,7 +251,6 @@ export function useMqttClient() {
         }
     }, [client, handleMessage]);
 
-
     // Send command to agent
     const sendCommand = useCallback((uuid, command, params = {}) => {
         return new Promise((resolve, reject) => {
@@ -235,38 +264,56 @@ export function useMqttClient() {
                 return;
             }
 
-            // Create request ID
-            const requestId = uuidv4();
-
-            // Build command message
-            const commandMessage = {
-                command,
-                params,
-                requestId,
-                timestamp: Date.now(),
-                clientId: clientIdRef.current
-            };
-
-            // Save pending command
-            pendingCommands.current.set(requestId, {resolve, reject, timestamp: Date.now()});
-
-            // Set command timeout
-            setTimeout(() => {
-                if (pendingCommands.current.has(requestId)) {
-                    pendingCommands.current.delete(requestId);
-                    reject(new Error('Command execution timeout'));
-                }
-            }, 30000); // 30 second timeout
-
-            // Publish command message
-            const commandTopic = `${TOPICS.COMMAND}${uuid}`;
-            console.log(`Sending command to ${commandTopic}:`, commandMessage);
-
-            client.publish(commandTopic, JSON.stringify(commandMessage), {qos: 1}, (err) => {
+            // 确保订阅了代理的响应主题
+            const responseTopic = `${TOPICS.RESPONSE}${uuid}`;
+            client.subscribe(responseTopic, {qos: 1}, (err) => {
                 if (err) {
-                    pendingCommands.current.delete(requestId);
-                    reject(new Error(`Failed to send command: ${err.message}`));
+                    reject(new Error(`订阅响应主题失败: ${err.message}`));
+                    return;
                 }
+
+                console.log(`已确保订阅响应主题: ${responseTopic}`);
+
+                // Create request ID
+                const requestId = uuidv4();
+
+                // Build command message
+                const commandMessage = {
+                    command,
+                    params,
+                    requestId,
+                    timestamp: Date.now(),
+                    clientId: clientIdRef.current
+                };
+
+                // 设置超时
+                const timeoutId = setTimeout(() => {
+                    if (pendingCommands.current.has(requestId)) {
+                        console.warn(`命令执行超时: ${command}, requestId: ${requestId}`);
+                        pendingCommands.current.delete(requestId);
+                        reject(new Error('Command execution timeout'));
+                    }
+                }, 20000); // 20秒超时
+
+                // 保存待处理命令
+                pendingCommands.current.set(requestId, {
+                    resolve,
+                    reject,
+                    timeoutId,
+                    timestamp: Date.now()
+                });
+
+                // Publish command message
+                const commandTopic = `${TOPICS.COMMAND}${uuid}`;
+                console.log(`Sending command to ${commandTopic}:`, commandMessage);
+
+                client.publish(commandTopic, JSON.stringify(commandMessage), {qos: 1}, (err) => {
+                    if (err) {
+                        clearTimeout(timeoutId);
+                        pendingCommands.current.delete(requestId);
+                        reject(new Error(`Failed to send command: ${err.message}`));
+                    }
+                });
             });
         });
     }, [client]);
@@ -279,9 +326,12 @@ export function useMqttClient() {
             const now = Date.now();
             let expiredCount = 0;
 
-            pendingCommands.current.forEach(({timestamp}, requestId) => {
+            pendingCommands.current.forEach(({timestamp, timeoutId}, requestId) => {
                 // Clean up commands older than 30 seconds
                 if (now - timestamp > 30000) {
+                    if (timeoutId) {
+                        clearTimeout(timeoutId);
+                    }
                     pendingCommands.current.delete(requestId);
                     expiredCount++;
                 }
@@ -411,10 +461,7 @@ export function useMqttClient() {
         };
     }, [client, connect]);
 
-
-    // 修改useMqttClient钩子，在return语句之前添加Nginx命令函数
-
-// 添加Nginx命令函数
+    // 添加Nginx命令函数
     const reloadNginx = useCallback((uuid) => {
         return sendCommand(uuid, 'reload_nginx');
     }, [sendCommand]);
@@ -453,9 +500,11 @@ export function useMqttClient() {
         restartNginx,
         stopNginx,
         startNginx,
-        upgradeAgent
+        upgradeAgent,
+        // 添加设置当前代理函数
+        setCurrentAgent
     };
 }
 
 // Export MQTT topics
-export {TOPICS};
+export { TOPICS };

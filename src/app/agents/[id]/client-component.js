@@ -15,6 +15,7 @@ import {
     RotateCw,
     Server,
     Square,
+    Terminal,
     Upload,
     XCircle,
     Zap
@@ -27,6 +28,7 @@ import { useClientMount } from '@/hooks/useClientMount';
 import { useNginxCommands } from '@/hooks/useNginxCommands';
 import { useAgentRefresh } from '@/hooks/useAgentRefresh';
 import { combineSingleAgentData } from '@/lib/agent-utils';
+import TerminalComponent from '@/components/ui/Terminal';
 
 export default function AgentDetail({ agent: initialAgent }) {
     const router = useRouter();
@@ -34,7 +36,8 @@ export default function AgentDetail({ agent: initialAgent }) {
     const { deleteAgent, upgradeAgent } = useAgentRefresh([]);
     const {
         connected: mqttConnected,
-        agentState
+        agentState,
+        setCurrentAgent  // 使用设置当前代理的函数
     } = useMqttClient();
 
     const [renderKey, setRenderKey] = useState(0);
@@ -43,6 +46,7 @@ export default function AgentDetail({ agent: initialAgent }) {
     const [upgradeMessage, setUpgradeMessage] = useState('');
     const [upgradeError, setUpgradeError] = useState('');
     const [agent, setAgent] = useState(initialAgent);
+    const [showTerminal, setShowTerminal] = useState(false);
 
     // 使用自定义Hook处理客户端挂载
     const isMounted = useClientMount();
@@ -123,6 +127,18 @@ export default function AgentDetail({ agent: initialAgent }) {
         }
     };
 
+    // 切换终端显示
+    const toggleTerminal = () => {
+        const newState = !showTerminal;
+        setShowTerminal(newState);
+
+        // 仅在显示终端时订阅响应主题
+        if (newState && agent && agent.uuid) {
+            console.log('终端已打开，设置当前代理:', agent.uuid);
+            setCurrentAgent(agent.uuid);
+        }
+    };
+
     if (!isMounted) {
         return null;
     }
@@ -182,8 +198,26 @@ export default function AgentDetail({ agent: initialAgent }) {
                         <XCircle className={`w-4 h-4 mr-1 ${isDeleting ? 'animate-spin' : ''}`}/>
                         {isDeleting ? '删除中...' : '删除代理'}
                     </Button>
+                    <Button
+                        variant={showTerminal ? "secondary" : "primary"}
+                        onClick={toggleTerminal}
+                    >
+                        <Terminal className="w-4 h-4 mr-1"/>
+                        {showTerminal ? '隐藏终端' : '终端'}
+                    </Button>
                 </div>
             </header>
+
+            {/* 终端组件 */}
+            {showTerminal && (
+                <div className="mb-6">
+                    <TerminalComponent
+                        agentId={agent._id}
+                        agentUuid={agent.uuid}
+                        isOnline={agent.online}
+                    />
+                </div>
+            )}
 
             {/* Nginx 控制按钮 */}
             {agent.online && (
