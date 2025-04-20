@@ -91,6 +91,9 @@ export default function DashboardClientPage() {
     const totalWebsites = combinedAgents.reduce((sum, agent) => sum + (agent.stats?.websites || 0), 0);
     const totalCertificates = combinedAgents.reduce((sum, agent) => sum + (agent.stats?.certificates || 0), 0);
 
+    // 获取MQTT活跃代理数量
+    const mqttAgentCount = mqttConnected ? Object.keys(agentState).length : 0;
+
     // 获取最近的5个代理
     const recentAgents = combinedAgents.slice(0, 5);
 
@@ -124,7 +127,7 @@ export default function DashboardClientPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <StatusCard
                     title="代理节点"
-                    value={`${onlineAgents.length}/${combinedAgents.length}`}
+                    value={`${mqttAgentCount}/${agents.length}`}
                     description={mqttConnected ? 'MQTT实时监控' : '通过HTTP监控'}
                     icon={<Server className="w-8 h-8 text-blue-500 dark:text-blue-400"/>}
                     color="blue"
@@ -172,7 +175,7 @@ export default function DashboardClientPage() {
                         </thead>
                         <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                         {/* 加载状态 */}
-                        {isLoading && <TableSpinner/>}
+                        {isLoading && <TableSpinner message="加载代理数据中..."/>}
 
                         {/* 代理数据 - 仅在不加载且数据存在时显示 */}
                         {!isLoading && recentAgents.length > 0 && recentAgents.map(agent => (
@@ -214,6 +217,15 @@ export default function DashboardClientPage() {
                                 </td>
                             </tr>
                         ))}
+
+                        {/* 无数据状态 */}
+                        {!isLoading && recentAgents.length === 0 && (
+                            <tr>
+                                <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
+                                    暂无代理数据
+                                </td>
+                            </tr>
+                        )}
                         </tbody>
                     </table>
                 </div>
