@@ -92,30 +92,6 @@ export function useMqttClient() {
                         client.subscribe(responseTopic, {qos: 1});
                     }
                 }
-            } else if (topic === TOPICS.STATUS) {
-                // Handle status message
-                if (payload.uuid) {
-                    const uuid = payload.uuid;
-                    const timestamp = new Date();
-
-                    // Update state reference
-                    const newAgentState = {
-                        ...agentStateRef.current,
-                        [uuid]: {
-                            ...agentStateRef.current[uuid],
-                            online: payload.status === 'online',
-                            lastStatusChange: timestamp,
-                            lastUpdate: timestamp
-                        }
-                    };
-
-                    agentStateRef.current = newAgentState;
-
-                    // Update React state
-                    setAgentState({...newAgentState});
-
-                    console.log(`MQTT: Agent ${uuid} status changed to ${payload.status}`);
-                }
             } else if (topic.startsWith(TOPICS.RESPONSE)) {
                 // Handle response message
                 const uuid = topic.substring(TOPICS.RESPONSE.length);

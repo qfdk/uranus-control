@@ -272,7 +272,7 @@ export default function AgentsClientPage() {
             {/* Agents list */}
             <div className="bg-white rounded-lg shadow overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
+                    <table className="min-w-full divide-y divide-gray-200 high-contrast">
                         <thead className="bg-gray-50">
                         <tr>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">名称</th>
@@ -294,32 +294,32 @@ export default function AgentsClientPage() {
                                     {agent.hostname || '未命名代理'}
                                     {agent._mqttOnly && (
                                         <span
-                                            className="ml-2 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700">
-                                            仅MQTT
-                                        </span>
+                                            className="ml-2 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 font-semibold">
+                            仅MQTT
+                        </span>
                                     )}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.ip}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{agent.ip}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                    <span
-                                        className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                            agent.online
-                                                ? 'bg-green-100 text-green-800'
-                                                : 'bg-red-100 text-red-800'
-                                        }`}>
-                                        {agent.online ? '在线' : '离线'}
-                                        {agent._fromMqtt && (
-                                            <span className="ml-1 opacity-75">(实时)</span>
-                                        )}
-                                    </span>
+                    <span
+                        className={`status-label ${
+                            agent.online
+                                ? 'status-online'
+                                : 'status-offline'
+                        }`}>
+                        {agent.online ? '在线' : '离线'}
+                        {agent._fromMqtt && (
+                            <span className="ml-1 opacity-75">(实时)</span>
+                        )}
+                    </span>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                                     {agent.buildVersion || '未知'}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                                     {agent.commitId ? agent.commitId.substring(0, 8) : '未知'}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                                     {agent.lastHeartbeat
                                         ? formatDistanceToNow(new Date(agent.lastHeartbeat), {addSuffix: true})
                                         : '未知'}
@@ -357,7 +357,7 @@ export default function AgentsClientPage() {
                                             <>
                                                 <NavLink
                                                     href={`/agents/${agent._id}`}
-                                                    className="text-blue-600 hover:text-blue-900 inline-flex items-center"
+                                                    className="text-blue-600 hover:text-blue-900 inline-flex items-center font-medium"
                                                 >
                                                     <Eye className="w-4 h-4 mr-2"/>
                                                     详情
@@ -365,7 +365,7 @@ export default function AgentsClientPage() {
                                                 <button
                                                     onClick={() => handleDeleteAgent(agent._id)}
                                                     disabled={deleteLoading === agent._id}
-                                                    className="text-red-600 hover:text-red-900 inline-flex items-center"
+                                                    className="text-red-600 hover:text-red-900 inline-flex items-center font-medium"
                                                 >
                                                     {deleteLoading === agent._id ? (
                                                         <>
@@ -395,7 +395,7 @@ export default function AgentsClientPage() {
 
                         {!isLoading && filteredAgents.length === 0 && (
                             <tr>
-                                <td colSpan="7" className="px-6 py-12 text-center text-sm text-gray-500">
+                                <td colSpan="7" className="px-6 py-12 text-center text-sm text-gray-700">
                                     {agents.length === 0 ? (
                                         <div className="flex flex-col items-center">
                                             <p className="mb-2">暂无代理数据</p>

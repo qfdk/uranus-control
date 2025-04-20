@@ -14,6 +14,22 @@ export default function AppShell({ children }) {
     // 客户端渲染标志
     const [isMounted, setIsMounted] = useState(false);
     const { stopLoading } = useLoading();
+    const [isMobile, setIsMobile] = useState(false);
+
+    // 检查设备类型
+    useEffect(() => {
+        const checkIsMobile = () => {
+            setIsMobile(window.innerWidth < 768);
+        };
+
+        // 初始检查
+        checkIsMobile();
+
+        // 添加窗口大小变化监听
+        window.addEventListener('resize', checkIsMobile);
+
+        return () => window.removeEventListener('resize', checkIsMobile);
+    }, []);
 
     // 确保组件只在客户端渲染
     useEffect(() => {
@@ -54,19 +70,23 @@ export default function AppShell({ children }) {
         return (
             <div className="min-h-screen bg-gray-100">
                 <header className="bg-white shadow-sm sticky top-0 z-20">
-                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                        <div className="flex justify-between h-16">
+                    <div className="max-w-7xl mx-auto nav-container">
+                        <div className="flex justify-between items-center h-14 px-2 sm:px-4 lg:px-6">
+                            {/* Logo 部分 */}
                             <div className="flex flex-1 items-center">
                                 <div className="flex-shrink-0 flex items-center">
                                     <Link href="/" className="flex items-center group">
-                                        <span className="text-xl md:text-2xl font-bold text-gray-900 group-hover:text-blue-600 transition-colors">Οὐρανός</span>
+                                        <span className="text-lg md:text-xl font-bold text-gray-900 group-hover:text-blue-600 transition-colors">Οὐρανός</span>
                                         <span className="ml-1 text-xs md:text-sm text-gray-600 group-hover:text-blue-500 transition-colors">控制台</span>
                                     </Link>
                                 </div>
+                                {/* 响应式导航组件 */}
                                 <ResponsiveNavigation />
                             </div>
-                            <div className="flex items-center">
-                                <UserMenu/>
+
+                            {/* 用户菜单部分 - 使用自定义类名 */}
+                            <div className="flex items-center user-menu">
+                                <UserMenu />
                             </div>
                         </div>
                     </div>

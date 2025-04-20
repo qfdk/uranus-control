@@ -1,3 +1,5 @@
+// 修改 src/components/ui/ResponsiveNavigation.jsx
+
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -11,7 +13,7 @@ export default function ResponsiveNavigation() {
     const [isMobile, setIsMobile] = useState(false);
     const menuRef = useRef(null);
 
-    // Check if we're on mobile on component mount and window resize
+    // 检查是否为移动设备
     useEffect(() => {
         const checkIsMobile = () => {
             setIsMobile(window.innerWidth < 768);
@@ -20,22 +22,22 @@ export default function ResponsiveNavigation() {
             }
         };
 
-        // Initial check
+        // 初始检查
         checkIsMobile();
 
-        // Add resize listener
+        // 添加窗口大小变化监听
         window.addEventListener('resize', checkIsMobile);
 
-        // Clean up
+        // 清理
         return () => window.removeEventListener('resize', checkIsMobile);
     }, []);
 
-    // Close mobile menu when route changes
+    // 路由变化时关闭菜单
     useEffect(() => {
         setIsOpen(false);
     }, [pathname]);
 
-    // Close menu when clicking outside
+    // 点击外部区域关闭菜单
     useEffect(() => {
         function handleClickOutside(event) {
             if (menuRef.current && !menuRef.current.contains(event.target) && isOpen) {
@@ -49,23 +51,23 @@ export default function ResponsiveNavigation() {
         };
     }, [isOpen]);
 
-    // Handle body scroll lock when menu is open
+    // 菜单打开时锁定滚动
     useEffect(() => {
         if (isOpen) {
-            // Lock scroll
+            // 锁定滚动
             document.body.style.overflow = 'hidden';
         } else {
-            // Restore scroll
+            // 恢复滚动
             document.body.style.overflow = '';
         }
 
         return () => {
-            // Cleanup
+            // 清理
             document.body.style.overflow = '';
         };
     }, [isOpen]);
 
-    // Check if current path matches menu item
+    // 检查路径是否匹配菜单项
     const isPathActive = (path) => {
         if (path === '/') {
             return pathname === '/';
@@ -73,76 +75,78 @@ export default function ResponsiveNavigation() {
         return pathname.startsWith(path);
     };
 
-    // Navigation items
+    // 导航项目
     const navItems = [
-        { href: '/', label: '仪表盘', icon: <LayoutDashboard className="h-5 w-5 mr-2" /> },
-        { href: '/agents', label: '代理管理', icon: <Globe className="h-5 w-5 mr-2" /> },
-        { href: '/settings', label: '设置', icon: <Settings className="h-5 w-5 mr-2" /> }
+        { href: '/', label: '仪表盘', icon: <LayoutDashboard className="h-5 w-5" /> },
+        { href: '/agents', label: '代理管理', icon: <Globe className="h-5 w-5" /> },
+        { href: '/settings', label: '设置', icon: <Settings className="h-5 w-5" /> }
     ];
 
     return (
         <div className="relative flex items-center" ref={menuRef}>
-            {/* Mobile navigation toggle */}
+            {/* 移动端导航切换按钮 */}
             {isMobile && (
                 <button
                     type="button"
-                    className="ml-4 inline-flex items-center justify-center p-2 rounded-md text-gray-600 hover:text-blue-600 hover:bg-blue-50 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="ml-2 inline-flex items-center justify-center p-1.5 rounded-md text-gray-600 hover:text-blue-600 hover:bg-blue-50 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     onClick={() => setIsOpen(!isOpen)}
                     aria-expanded={isOpen}
                 >
                     <span className="sr-only">{isOpen ? '关闭菜单' : '打开菜单'}</span>
                     {isOpen ? (
-                        <X className="block h-6 w-6" aria-hidden="true" />
+                        <X className="block h-5 w-5" aria-hidden="true" />
                     ) : (
-                        <Menu className="block h-6 w-6" aria-hidden="true" />
+                        <Menu className="block h-5 w-5" aria-hidden="true" />
                     )}
                 </button>
             )}
 
-            {/* Desktop navigation */}
+            {/* 桌面导航 */}
             {!isMobile && (
-                <nav className="ml-8 flex space-x-6">
+                <nav className="ml-6 flex space-x-2">
                     {navItems.map((item) => (
                         <NavLink
                             key={item.href}
                             href={item.href}
-                            className={`inline-flex items-center px-3 py-2 border-b-2 text-sm font-medium transition-all duration-200 ${
+                            className={`inline-flex items-center px-2.5 py-1.5 text-sm font-medium transition-all duration-200 rounded ${
                                 isPathActive(item.href)
-                                    ? 'border-blue-600 text-blue-700'
-                                    : 'border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-900 hover:bg-gray-50'
+                                    ? 'bg-blue-50 text-blue-700'
+                                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                             }`}
                         >
-                            {item.icon}
-                            {item.label}
+                            <span className="flex items-center">
+                              {item.icon}
+                                <span className="ml-1.5">{item.label}</span>
+                            </span>
                         </NavLink>
                     ))}
                 </nav>
             )}
 
-            {/* Mobile navigation menu and backdrop */}
+            {/* 移动端侧边菜单 */}
             {isMobile && isOpen && (
                 <>
-                    {/* Backdrop overlay */}
+                    {/* 半透明背景 */}
                     <div
-                        className="fixed inset-0 bg-white/80 backdrop-blur-sm z-10 transition-opacity"
+                        className="fixed inset-0 bg-black/30 backdrop-blur-sm z-10 transition-opacity"
                         onClick={() => setIsOpen(false)}
                         aria-hidden="true"
                     ></div>
 
-                    {/* Menu container - positioned as a sidebar */}
+                    {/* 侧边菜单 */}
                     <div className="fixed inset-y-0 left-0 w-64 bg-white shadow-lg z-20 transform transition-transform duration-300 ease-in-out">
-                        {/* Menu header */}
+                        {/* 菜单标题 */}
                         <div className="flex items-center justify-between p-4 border-b border-gray-200">
                             <span className="font-medium text-gray-800">导航菜单</span>
                             <button
                                 className="text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-md p-1"
                                 onClick={() => setIsOpen(false)}
                             >
-                                <X className="h-6 w-6" />
+                                <X className="h-5 w-5" />
                             </button>
                         </div>
 
-                        {/* Menu items */}
+                        {/* 菜单项 */}
                         <nav className="py-2 h-full overflow-y-auto">
                             {navItems.map((item) => (
                                 <NavLink
@@ -156,7 +160,7 @@ export default function ResponsiveNavigation() {
                                 >
                                     <div className="flex items-center">
                                         {item.icon}
-                                        <span>{item.label}</span>
+                                        <span className="ml-3">{item.label}</span>
                                     </div>
                                 </NavLink>
                             ))}

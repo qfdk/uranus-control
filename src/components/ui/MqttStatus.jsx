@@ -1,5 +1,6 @@
 'use client';
 
+// src/components/ui/MqttStatus.jsx
 import {useEffect, useRef, useState} from 'react';
 import {useMqttClient} from '@/lib/mqtt';
 import {Info, Loader2, RefreshCw, Settings, Wifi, WifiOff} from 'lucide-react';
@@ -14,11 +15,30 @@ export default function MqttStatus() {
     const [isToggling, setIsToggling] = useState(false);
     const [isReconnecting, setIsReconnecting] = useState(false);
     const [tooltipVisible, setTooltipVisible] = useState(false);
+    const [isMobile, setIsMobile] = useState(false);
     const settingsRef = useRef(null);
     const tooltipRef = useRef(null);
     const lastActionRef = useRef(null);
 
-    // Ensure component only renders on client
+    // 检查设备类型
+    useEffect(() => {
+        const checkIsMobile = () => {
+            setIsMobile(window.innerWidth < 768);
+            if (window.innerWidth < 768 && showSettings) {
+                setShowSettings(false);
+            }
+        };
+
+        // 初始检查
+        checkIsMobile();
+
+        // 添加窗口大小变化监听
+        window.addEventListener('resize', checkIsMobile);
+
+        return () => window.removeEventListener('resize', checkIsMobile);
+    }, [showSettings]);
+
+    // 确保组件只在客户端渲染
     useEffect(() => {
         setIsClient(true);
         if (typeof isMqttEnabled !== 'undefined') {
@@ -26,14 +46,14 @@ export default function MqttStatus() {
         }
     }, []);
 
-    // Sync local state with context state
+    // 同步本地状态与上下文状态
     useEffect(() => {
         if (typeof isMqttEnabled !== 'undefined' && !isToggling) {
             setLocalMqttEnabled(isMqttEnabled);
         }
     }, [isMqttEnabled, isToggling]);
 
-    // Close menu when clicking outside
+    // 点击外部区域关闭菜单
     useEffect(() => {
         function handleClickOutside(event) {
             if (settingsRef.current && !settingsRef.current.contains(event.target)) {
@@ -51,12 +71,12 @@ export default function MqttStatus() {
         };
     }, []);
 
-    // If not client rendered, return null
+    // 如果未客户端渲染，返回null
     if (!isClient) {
         return null;
     }
 
-    // Toggle MQTT state
+    // 切换MQTT状态
     const toggleMqtt = () => {
         if (isToggling) return;
         setIsToggling(true);
@@ -76,7 +96,7 @@ export default function MqttStatus() {
         }
     };
 
-    // Manual reconnect
+    // 手动重连
     const handleReconnect = () => {
         if (!localMqttEnabled) return;
 
@@ -89,14 +109,14 @@ export default function MqttStatus() {
         }, 2000);
     };
 
-    // Get status color
+    // 获取状态颜色
     const getStatusColor = () => {
         if (connected) return 'bg-green-500';
         if (error) return 'bg-red-500';
         return 'bg-gray-400';
     };
 
-    // Get button style
+    // 获取按钮样式
     const getButtonStyle = () => {
         if (connected) return 'text-green-700 bg-green-50 hover:bg-green-100 border-green-200';
         if (error) return 'text-red-700 bg-red-50 hover:bg-red-100 border-red-200';
@@ -105,7 +125,7 @@ export default function MqttStatus() {
 
     return (
         <div className="relative" ref={settingsRef}>
-            {/* Info tooltip */}
+            {/* 信息提示 */}
             {tooltipVisible && (
                 <div
                     ref={tooltipRef}
@@ -126,36 +146,56 @@ export default function MqttStatus() {
                 </div>
             )}
 
-            <div className="flex items-center gap-1">
-                {/* Info tooltip trigger */}
-                <button
-                    onClick={() => setTooltipVisible(!tooltipVisible)}
-                    className="text-gray-400 hover:text-gray-600 focus:outline-none p-1"
-                    aria-label="MQTT信息"
-                >
-                    <Info className="w-4 h-4"/>
-                </button>
+            <div className="flex items-center gap-0.5">
+                {/* 移动端简化显示 */}
+                {isMobile ? (
+                    <button
+                        onClick={() => setShowSettings(!showSettings)}
+                        className={`flex items-center justify-center p-1.5 rounded-full ${getButtonStyle()} transition-colors duration-300`}
+                        aria-label={connected ? 'MQTT已连接' : error ? 'MQTT连接错误' : 'MQTT未连接'}
+                        title={connected ? 'MQTT已连接' : error ? 'MQTT连接错误' : 'MQTT未连接'}
+                    >
+                        {connected ? (
+                            <Wifi className="w-5 h-5 text-green-500"/>
+                        ) : (
+                            <WifiOff className="w-5 h-5 text-gray-500"/>
+                        )}
+                    </button>
+                ) : (
+                    // 桌面版完整显示
+                    <>
+                        {/* 信息按钮 */}
+                        <button
+                            onClick={() => setTooltipVisible(!tooltipVisible)}
+                            className="text-gray-400 hover:text-gray-600 focus:outline-none p-1"
+                            aria-label="MQTT信息"
+                        >
+                            <Info className="w-4 h-4"/>
+                        </button>
 
-                {/* MQTT status button */}
-                <button
-                    onClick={() => setShowSettings(!showSettings)}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${getButtonStyle()} transition-colors duration-300`}
-                    aria-label="MQTT设置"
-                    title={connected ? 'MQTT已连接' : error ? 'MQTT连接错误' : 'MQTT未连接'}
-                >
-                    {connected ? (
-                        <Wifi className="w-4 h-4"/>
-                    ) : (
-                        <WifiOff className="w-4 h-4"/>
-                    )}
-                    <span className="text-xs font-medium hidden sm:inline">MQTT</span>
-                    <span className={`inline-block w-2 h-2 rounded-full ${getStatusColor()}`}></span>
-                </button>
+                        {/* MQTT状态按钮 */}
+                        <button
+                            onClick={() => setShowSettings(!showSettings)}
+                            className={`flex items-center gap-1.5 px-2 py-1 rounded-full border ${getButtonStyle()} transition-colors duration-300`}
+                            aria-label="MQTT设置"
+                            title={connected ? 'MQTT已连接' : error ? 'MQTT连接错误' : 'MQTT未连接'}
+                        >
+                            {connected ? (
+                                <Wifi className="w-4 h-4"/>
+                            ) : (
+                                <WifiOff className="w-4 h-4"/>
+                            )}
+                            <span className="text-xs font-medium hidden sm:inline">MQTT</span>
+                            <span className={`inline-block w-2 h-2 rounded-full ${getStatusColor()}`}></span>
+                        </button>
+                    </>
+                )}
             </div>
 
+            {/* 设置面板 - 移动端和桌面端共用 */}
             {showSettings && (
                 <div
-                    className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50 overflow-hidden sm:min-w-64">
+                    className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50 overflow-hidden">
                     <div className="p-3 border-b border-gray-100">
                         <div className="flex items-center justify-between">
                             <h3 className="text-sm font-medium text-gray-700 flex items-center">
@@ -190,7 +230,7 @@ export default function MqttStatus() {
                             </span>
                         </div>
 
-                        {/* Agent count when connected */}
+                        {/* 连接时显示代理数 */}
                         {connected && Object.keys(agentState).length > 0 && (
                             <div className="mb-3 p-2 bg-blue-50 rounded text-xs text-blue-600 border border-blue-100">
                                 <div className="flex justify-between items-center">
@@ -200,7 +240,7 @@ export default function MqttStatus() {
                             </div>
                         )}
 
-                        {/* Last action info */}
+                        {/* 显示上次操作信息 */}
                         {lastActionRef.current && (
                             <div className="mb-3 text-xs text-gray-600 italic">
                                 <div className="text-ellipsis overflow-hidden whitespace-nowrap">
@@ -209,6 +249,7 @@ export default function MqttStatus() {
                             </div>
                         )}
 
+                        {/* 显示错误信息 */}
                         {error && (
                             <div className="mb-3 p-2 bg-red-50 rounded text-xs text-red-600 border border-red-100">
                                 <div className="text-ellipsis overflow-hidden">
@@ -217,6 +258,7 @@ export default function MqttStatus() {
                             </div>
                         )}
 
+                        {/* MQTT开关 */}
                         <div className="mb-4 flex items-center justify-between">
                             <Switch
                                 label="启用MQTT"
@@ -226,6 +268,7 @@ export default function MqttStatus() {
                             />
                         </div>
 
+                        {/* 重连按钮 */}
                         <button
                             onClick={handleReconnect}
                             disabled={!localMqttEnabled || isReconnecting}
@@ -248,6 +291,7 @@ export default function MqttStatus() {
                             )}
                         </button>
 
+                        {/* 提示文本 */}
                         <p className="mt-3 text-xs text-gray-500">
                             使用MQTT可以实现更实时的代理监控和控制
                         </p>
