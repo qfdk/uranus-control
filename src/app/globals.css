@@ -471,3 +471,90 @@ body.dark-mode span.bg-blue-100.text-blue-700 {
         font-weight: 700 !important;
     }
 }
+
+/* 暗黑模式下的文本颜色调整 */
+.dark-mode .text-blue-600 {
+    color: #93c5fd !important; /* blue-300更浅的蓝色 */
+}
+
+.dark-mode .text-blue-700 {
+    color: #60a5fa !important; /* blue-400 */
+}
+
+.dark-mode .text-blue-800,
+.dark-mode .text-blue-900 {
+    color: #3b82f6 !important; /* blue-500 */
+}
+
+/* 其他常见文本颜色修复 */
+.dark-mode .text-green-600 {
+    color: #34d399 !important; /* green-400 */
+}
+
+.dark-mode .text-red-600 {
+    color: #f87171 !important; /* red-400 */
+}
+
+.dark-mode .text-purple-600 {
+    color: #a78bfa !important; /* purple-400 */
+}
+
+/* 链接悬停状态 */
+.dark-mode .hover\:text-blue-900:hover {
+    color: #bfdbfe !important; /* blue-200 */
+}
+
+/* 导航菜单hover效果优化 */
+body.dark-mode nav a:hover,
+body.dark-mode .mobile-menu a:hover,
+body.dark-mode button[role="link"]:hover {
+    background-color: rgba(30, 41, 59, 0.8) !important; /* 更深的背景 */
+    color: #93c5fd !important; /* 柔和的蓝色 */
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); /* 添加轻微文字阴影增强可读性 */
+}
+
+/* 当前活动菜单项 */
+body.dark-mode .bg-blue-50 {
+    background-color: rgba(30, 58, 138, 0.4) !important; /* 深蓝背景 */
+}
+
+body.dark-mode .text-blue-700.bg-blue-50 {
+    color: #93c5fd !important; /* 确保活动菜单项文字更柔和 */
+    font-weight: 600; /* 增加字重 */
+}
+
+/* 悬停状态的图标颜色调整 */
+body.dark-mode nav a:hover svg,
+body.dark-mode .mobile-menu a:hover svg {
+    color: #93c5fd !important;
+}
+/* UserMenu 暗黑模式优化 */
+/* 下拉菜单背景和边框 */
+body.dark-mode #user-menu-button,
+body.dark-mode .user-menu button {
+    background-color: rgba(30, 58, 138, 0.3) !important;
+    border-color: rgba(59, 130, 246, 0.3) !important;
+}
+
+/* 下拉菜单项hover效果 */
+body.dark-mode .user-menu div[role="menu"] button:hover,
+body.dark-mode .user-menu div[role="menu"] a:hover {
+    background-color: rgba(30, 58, 138, 0.5) !important;
+    color: #bfdbfe !important;
+}
+
+/* 用户菜单文本颜色 */
+body.dark-mode .user-menu div[role="menu"] {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .user-menu div[role="menu"] button,
+body.dark-mode .user-menu div[role="menu"] a {
+    color: #e2e8f0 !important;
+}
+
+/* 图标颜色 */
+body.dark-mode .user-menu div[role="menu"] svg {
+    color: #60a5fa !important;
+}
