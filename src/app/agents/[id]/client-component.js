@@ -5,20 +5,18 @@ import {formatDistanceToNow} from 'date-fns';
 import Link from 'next/link';
 import {
     ArrowLeft,
+    Clock,
     Cpu,
-    Database,
-    FileCheck,
-    Globe,
-    MemoryStick,
+    HardDrive,
+    Info,
     Play,
     RefreshCw,
     RotateCw,
     Server,
     Square,
-    Terminal,
+    TerminalSquare,
     Upload,
-    XCircle,
-    Zap
+    XCircle
 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import StatusMessage from '@/components/ui/StatusMessage';
@@ -41,6 +39,7 @@ export default function AgentDetail({agent: initialAgent}) {
         setCurrentAgent
     } = useMqttClient();
 
+    const [activeTab, setActiveTab] = useState('info');
     const [renderKey, setRenderKey] = useState(0);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isUpgrading, setIsUpgrading] = useState(false);
@@ -50,7 +49,6 @@ export default function AgentDetail({agent: initialAgent}) {
         show: false
     });
     const [agent, setAgent] = useState(initialAgent);
-    const [showTerminal, setShowTerminal] = useState(false);
     const statusTimeoutRef = useRef(null);
 
     // 使用自定义Hook处理客户端挂载
@@ -84,6 +82,14 @@ export default function AgentDetail({agent: initialAgent}) {
             }
         };
     }, []);
+
+    // 当切换到终端标签时设置当前代理
+    useEffect(() => {
+        if (activeTab === 'terminal' && agent?.uuid) {
+            console.log('终端标签已激活，设置当前代理:', agent.uuid);
+            setCurrentAgent(agent.uuid);
+        }
+    }, [activeTab, agent?.uuid, setCurrentAgent]);
 
     // 处理删除代理
     const handleDeleteAgent = async () => {
@@ -135,7 +141,6 @@ export default function AgentDetail({agent: initialAgent}) {
                 message: '删除代理失败: ' + error.message,
                 show: true
             });
-            // 移除finally块，因为已在上面处理了setIsDeleting(false)
         }
     };
 
@@ -194,18 +199,6 @@ export default function AgentDetail({agent: initialAgent}) {
         }
     };
 
-    // 切换终端显示
-    const toggleTerminal = () => {
-        const newState = !showTerminal;
-        setShowTerminal(newState);
-
-        // 仅在显示终端时订阅响应主题
-        if (newState && agent && agent.uuid) {
-            console.log('终端已打开，设置当前代理:', agent.uuid);
-            setCurrentAgent(agent.uuid);
-        }
-    };
-
     // 清除升级状态消息
     const clearUpgradeStatus = () => {
         setUpgradeStatus({
@@ -235,7 +228,7 @@ export default function AgentDetail({agent: initialAgent}) {
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6" key={renderKey}>
-            <div className="mb-6">
+            <div className="mb-4">
                 <Link href="/agents" className="flex items-center text-blue-600 hover:text-blue-800">
                     <ArrowLeft className="w-4 h-4 mr-1"/>
                     返回代理列表
@@ -244,11 +237,11 @@ export default function AgentDetail({agent: initialAgent}) {
 
             <header className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-800">{agent.hostname || agent.uuid}</h1>
-                    <p className="text-gray-500">UUID: {agent.uuid}</p>
+                    <h1 className="text-2xl font-bold text-gray-800 dark:text-white">{agent.hostname || agent.uuid}</h1>
+                    <p className="text-gray-500 dark:text-gray-400">UUID: {agent.uuid}</p>
                     <div className="mt-1">
                         <span className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${
-                            agent.online ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                            agent.online ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
                         }`}>
                             <span
                                 className={`inline-block w-2 h-2 rounded-full mr-1 ${agent.online ? 'bg-green-500' : 'bg-red-500'}`}></span>
@@ -274,13 +267,6 @@ export default function AgentDetail({agent: initialAgent}) {
                         <XCircle className={`w-4 h-4 mr-1 ${isDeleting ? 'animate-spin' : ''}`}/>
                         {isDeleting ? '删除中...' : '删除代理'}
                     </Button>
-                    <Button
-                        variant={showTerminal ? 'secondary' : 'primary'}
-                        onClick={toggleTerminal}
-                    >
-                        <Terminal className="w-4 h-4 mr-1"/>
-                        {showTerminal ? '隐藏终端' : '终端'}
-                    </Button>
                 </div>
             </header>
 
@@ -292,191 +278,225 @@ export default function AgentDetail({agent: initialAgent}) {
                 onClose={clearUpgradeStatus}
             />
 
-            {/* 终端组件 */}
-            {showTerminal && (
-                <div className="mb-6">
-                    <TerminalComponent
-                        agentId={agent._id}
-                        agentUuid={agent.uuid}
-                        isOnline={agent.online}
-                    />
-                </div>
-            )}
-
             {/* 命令执行状态 */}
-            {agent.online && <StatusMessage
+            {agent.online && activeTab === 'info' && <StatusMessage
                 type={commandMessage.type}
                 message={commandMessage.content}
                 show={commandMessage.show}
                 onClose={clearMessage}
-                className="mt-3"
+                className="mt-3 mb-4"
             />}
 
-            {/* Nginx 控制按钮 */}
-            {agent.online && (
-                <div className="mb-6 bg-white rounded-lg shadow p-4 dark:bg-gray-800">
-                    <h3 className="text-lg font-medium mb-3 dark:text-white">Nginx 控制</h3>
-                    <div className="flex flex-wrap gap-2">
-                        <Button
-                            variant="primary"
-                            onClick={reloadNginx}
-                            disabled={isExecuting}
-                        >
-                            <RotateCw className={`w-4 h-4 mr-1 ${isExecuting ? 'animate-spin' : ''}`}/>
-                            重载配置
-                        </Button>
-                        <Button
-                            variant="success"
-                            onClick={restartNginx}
-                            disabled={isExecuting}
-                        >
-                            <RefreshCw className={`w-4 h-4 mr-1 ${isExecuting ? 'animate-spin' : ''}`}/>
-                            重启服务
-                        </Button>
-                        <Button
-                            variant="danger"
-                            onClick={stopNginx}
-                            disabled={isExecuting}
-                        >
-                            <Square className="w-4 h-4 mr-1"/>
-                            停止服务
-                        </Button>
-                        <Button
-                            variant="warning"
-                            onClick={startNginx}
-                            disabled={isExecuting}
-                        >
-                            <Play className="w-4 h-4 mr-1"/>
-                            启动服务
-                        </Button>
+            {/* 选项卡导航 */}
+            <div className="flex border-b border-gray-200 dark:border-gray-700 mb-6">
+                <button
+                    onClick={() => setActiveTab('info')}
+                    className={`py-3 px-6 text-sm font-medium border-b-2 -mb-px flex items-center ${
+                        activeTab === 'info'
+                            ? 'border-blue-500 text-blue-600 dark:text-blue-400 dark:border-blue-400'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                    }`}
+                >
+                    <Info className="w-4 h-4 mr-2"/>
+                    信息详情
+                </button>
+                <button
+                    onClick={() => setActiveTab('terminal')}
+                    className={`py-3 px-6 text-sm font-medium border-b-2 -mb-px flex items-center ${
+                        activeTab === 'terminal'
+                            ? 'border-blue-500 text-blue-600 dark:text-blue-400 dark:border-blue-400'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                    }`}
+                    disabled={!agent.online}
+                >
+                    <TerminalSquare className="w-4 h-4 mr-2"/>
+                    终端
+                    {!agent.online && <span
+                        className="ml-2 text-xs bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 px-1.5 py-0.5 rounded-full">离线</span>}
+                </button>
+            </div>
+
+            {/* 信息详情选项卡 */}
+            {activeTab === 'info' && (
+                <div className="space-y-6">
+                    {/* 基本状态信息 */}
+                    <div className="bg-white rounded-lg shadow dark:bg-gray-800 overflow-hidden">
+                        <div className="p-5 border-b border-gray-200 dark:border-gray-700">
+                            <h2 className="text-lg font-medium text-gray-800 dark:text-white mb-4">基本状态</h2>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div className="flex items-center">
+                                    <div className="p-2 rounded-md bg-blue-50 dark:bg-blue-900/30 mr-3">
+                                        <Clock className="w-5 h-5 text-blue-500 dark:text-blue-400"/>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400">最后心跳</p>
+                                        <p className="text-sm font-medium dark:text-white">
+                                            {agent.lastHeartbeat
+                                                ? formatDistanceToNow(new Date(agent.lastHeartbeat), {addSuffix: true})
+                                                : '未知'}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center">
+                                    <div className="p-2 rounded-md bg-green-50 dark:bg-green-900/30 mr-3">
+                                        <Cpu className="w-5 h-5 text-green-500 dark:text-green-400"/>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400">操作系统</p>
+                                        <p className="text-sm font-medium dark:text-white">{agent.os || '未知'}</p>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center">
+                                    <div className="p-2 rounded-md bg-purple-50 dark:bg-purple-900/30 mr-3">
+                                        <HardDrive className="w-5 h-5 text-purple-500 dark:text-purple-400"/>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400">内存</p>
+                                        <p className="text-sm font-medium dark:text-white">{agent.memory || '未知'}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 详细信息 */}
+                        <div className="p-5">
+                            <h2 className="text-lg font-medium text-gray-800 dark:text-white mb-4">详细信息</h2>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">IP地址</h3>
+                                    <p className="text-sm font-medium dark:text-white mt-1">{agent.ip || '未知'}</p>
+                                </div>
+
+                                <div>
+                                    <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">版本</h3>
+                                    <p className="text-sm font-medium dark:text-white mt-1">{agent.buildVersion || '未知'}</p>
+                                </div>
+
+                                <div>
+                                    <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">构建时间</h3>
+                                    <p className="text-sm font-medium dark:text-white mt-1">{agent.buildTime || '未知'}</p>
+                                </div>
+
+                                <div>
+                                    <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">提交ID</h3>
+                                    <p className="text-sm font-medium dark:text-white mt-1">
+                                        {agent.commitId ? agent.commitId.substring(0, 8) : '未知'}
+                                        {agent.commitId &&
+                                            <span className="text-xs text-gray-400 ml-2">{agent.commitId}</span>}
+                                    </p>
+                                </div>
+
+                                <div>
+                                    <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">MQTT连接状态</h3>
+                                    <p className="text-sm font-medium flex items-center dark:text-white mt-1">
+                                        <span
+                                            className={`inline-block w-2 h-2 rounded-full mr-2 ${mqttConnected ? 'bg-green-500' : 'bg-gray-400'}`}></span>
+                                        {mqttConnected ? 'MQTT已连接' : 'MQTT未连接 (使用HTTP API)'}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
+
+                    {/* Nginx控制面板 */}
+                    {agent.online && (
+                        <div className="bg-white rounded-lg shadow dark:bg-gray-800">
+                            <div className="p-5">
+                                <div className="flex items-center mb-4">
+                                    <Server className="w-5 h-5 text-blue-500 dark:text-blue-400 mr-2"/>
+                                    <h2 className="text-lg font-medium text-gray-800 dark:text-white">Nginx服务控制</h2>
+                                </div>
+
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div className="flex flex-col">
+                                        <Button
+                                            variant="primary"
+                                            onClick={reloadNginx}
+                                            disabled={isExecuting}
+                                            className="flex justify-center items-center h-full"
+                                        >
+                                            <RotateCw
+                                                className={`w-4 h-4 mr-1.5 ${isExecuting ? 'animate-spin' : ''}`}/>
+                                            重载配置
+                                        </Button>
+                                    </div>
+
+                                    <div className="flex flex-col">
+                                        <Button
+                                            variant="success"
+                                            onClick={restartNginx}
+                                            disabled={isExecuting}
+                                            className="flex justify-center items-center h-full"
+                                        >
+                                            <RefreshCw
+                                                className={`w-4 h-4 mr-1.5 ${isExecuting ? 'animate-spin' : ''}`}/>
+                                            重启服务
+                                        </Button>
+                                    </div>
+
+                                    <div className="flex flex-col">
+                                        <Button
+                                            variant="danger"
+                                            onClick={stopNginx}
+                                            disabled={isExecuting}
+                                            className="flex justify-center items-center h-full"
+                                        >
+                                            <Square className="w-4 h-4 mr-1.5"/>
+                                            停止服务
+                                        </Button>
+                                    </div>
+
+                                    <div className="flex flex-col">
+                                        <Button
+                                            variant="warning"
+                                            onClick={startNginx}
+                                            disabled={isExecuting}
+                                            className="flex justify-center items-center h-full"
+                                        >
+                                            <Play className="w-4 h-4 mr-1.5"/>
+                                            启动服务
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 
-            {/* 状态卡片 */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div
-                    className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 transition-shadow hover:shadow dark:bg-gray-800 dark:border-gray-700">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm text-gray-500 mb-1 dark:text-gray-400">状态</p>
-                            <p className="text-xl font-bold flex items-center dark:text-white">
-                                <span
-                                    className={`inline-block w-3 h-3 rounded-full mr-2 ${agent.online ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                                {agent.online ? '在线' : '离线'}
-                            </p>
-                            <p className="text-xs text-gray-500 mt-1 dark:text-gray-400">
-                                最后心跳: {agent.lastHeartbeat
-                                ? formatDistanceToNow(new Date(agent.lastHeartbeat), {addSuffix: true})
-                                : '未知'}
-                            </p>
+            {/* 终端选项卡 */}
+            {activeTab === 'terminal' && (
+                <div>
+                    {agent.online ? (
+                        <TerminalComponent
+                            agentId={agent._id}
+                            agentUuid={agent.uuid}
+                            isOnline={agent.online}
+                        />
+                    ) : (
+                        <div className="bg-white rounded-lg shadow dark:bg-gray-800 p-5 text-center">
+                            <div className="py-10">
+                                <div
+                                    className="inline-flex items-center justify-center p-3 bg-red-100 dark:bg-red-900/30 rounded-full mb-4">
+                                    <XCircle className="w-8 h-8 text-red-500 dark:text-red-400"/>
+                                </div>
+                                <h3 className="text-lg font-medium text-gray-800 dark:text-white mb-2">代理当前离线</h3>
+                                <p className="text-gray-500 dark:text-gray-400 mb-4">
+                                    无法访问终端，请等待代理重新上线后再试
+                                </p>
+                                <Button
+                                    variant="primary"
+                                    onClick={() => setActiveTab('info')}
+                                >
+                                    返回信息页面
+                                </Button>
+                            </div>
                         </div>
-                        <div className="bg-blue-50 p-3 rounded-full dark:bg-blue-900/30">
-                            <Server className="w-6 h-6 text-blue-500 dark:text-blue-400"/>
-                        </div>
-                    </div>
+                    )}
                 </div>
-
-                <div
-                    className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 transition-shadow hover:shadow dark:bg-gray-800 dark:border-gray-700">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm text-gray-500 mb-1 dark:text-gray-400">网站</p>
-                            <p className="text-xl font-bold dark:text-white">{agent.stats?.websites || 0}</p>
-                            <p className="text-xs text-gray-500 mt-1 dark:text-gray-400">托管站点数量</p>
-                        </div>
-                        <div className="bg-green-50 p-3 rounded-full dark:bg-green-900/30">
-                            <Globe className="w-6 h-6 text-green-500 dark:text-green-400"/>
-                        </div>
-                    </div>
-                </div>
-
-                <div
-                    className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 transition-shadow hover:shadow dark:bg-gray-800 dark:border-gray-700">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm text-gray-500 mb-1 dark:text-gray-400">SSL证书</p>
-                            <p className="text-xl font-bold dark:text-white">{agent.stats?.certificates || 0}</p>
-                            <p className="text-xs text-gray-500 mt-1 dark:text-gray-400">有效证书数量</p>
-                        </div>
-                        <div className="bg-purple-50 p-3 rounded-full dark:bg-purple-900/30">
-                            <FileCheck className="w-6 h-6 text-purple-500 dark:text-purple-400"/>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* 系统信息面板 */}
-            <div className="bg-white rounded-lg shadow dark:bg-gray-800">
-                <div className="p-4 space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="flex items-start">
-                            <div className="bg-gray-100 p-2 rounded-md mr-3 dark:bg-gray-700">
-                                <Cpu className="w-5 h-5 text-gray-500 dark:text-gray-400"/>
-                            </div>
-                            <div>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">操作系统</p>
-                                <p className="text-sm font-medium dark:text-white">{agent.os || '未知'}</p>
-                            </div>
-                        </div>
-
-                        <div className="flex items-start">
-                            <div className="bg-gray-100 p-2 rounded-md mr-3 dark:bg-gray-700">
-                                <MemoryStick className="w-5 h-5 text-gray-500 dark:text-gray-400"/>
-                            </div>
-                            <div>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">内存</p>
-                                <p className="text-sm font-medium dark:text-white">{agent.memory || '未知'}</p>
-                            </div>
-                        </div>
-
-                        <div className="flex items-start">
-                            <div className="bg-gray-100 p-2 rounded-md mr-3 dark:bg-gray-700">
-                                <Database className="w-5 h-5 text-gray-500 dark:text-gray-400"/>
-                            </div>
-                            <div>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">IP地址</p>
-                                <p className="text-sm font-medium dark:text-white">{agent.ip || '未知'}</p>
-                            </div>
-                        </div>
-
-                        <div className="flex items-start">
-                            <div className="bg-gray-100 p-2 rounded-md mr-3 dark:bg-gray-700">
-                                <Zap className="w-5 h-5 text-gray-500 dark:text-gray-400"/>
-                            </div>
-                            <div>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">版本</p>
-                                <p className="text-sm font-medium dark:text-white">{agent.buildVersion || '未知'}</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="pt-2 border-t border-gray-100 dark:border-gray-700">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">构建时间</p>
-                                <p className="text-sm font-medium dark:text-white">{agent.buildTime || '未知'}</p>
-                            </div>
-                            <div>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">提交ID</p>
-                                <p className="text-sm font-medium dark:text-white">{agent.commitId ? agent.commitId.substring(0, 8) : '未知'}</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* MQTT连接状态显示 */}
-                    <div className="pt-2 border-t border-gray-100 dark:border-gray-700">
-                        <div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">MQTT连接状态</p>
-                            <p className="text-sm font-medium flex items-center dark:text-white">
-                                <span
-                                    className={`inline-block w-2 h-2 rounded-full mr-2 ${mqttConnected ? 'bg-green-500' : 'bg-gray-400'}`}></span>
-                                {mqttConnected ? 'MQTT已连接' : 'MQTT未连接 (使用HTTP API)'}
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            )}
         </div>
     );
 }
