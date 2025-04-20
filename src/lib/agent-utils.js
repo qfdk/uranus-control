@@ -18,7 +18,7 @@ export function combineAgentData(httpAgents, mqttAgentState, mqttConnected) {
     // 处理结果数组
     const resultAgents = httpAgents.map(agent => {
         // 基础是MongoDB的代理数据
-        const resultAgent = { ...agent };
+        const resultAgent = {...agent};
 
         // 如果MQTT已连接且该代理在MQTT状态中存在
         if (mqttConnected && agent.uuid && mqttAgentState && mqttAgentState[agent.uuid]) {
@@ -44,4 +44,34 @@ export function combineAgentData(httpAgents, mqttAgentState, mqttConnected) {
         // 然后按主机名排序
         return (a.hostname || '').localeCompare(b.hostname || '');
     });
+}
+
+/**
+ * 合并单个代理的HTTP/MongoDB数据与MQTT实时数据
+ * @param {Object} agent - 从MongoDB获取的单个代理数据
+ * @param {Object} mqttAgentState - MQTT代理状态数据
+ * @param {boolean} mqttConnected - MQTT连接状态
+ * @returns {Object} 合并后的代理数据
+ */
+export function combineSingleAgentData(agent, mqttAgentState, mqttConnected) {
+    if (!agent || !agent.uuid) return agent;
+
+    const resultAgent = {...agent};
+
+    if (mqttConnected && mqttAgentState && mqttAgentState[agent.uuid]) {
+        const mqttData = mqttAgentState[agent.uuid];
+
+        resultAgent.online = mqttData.online !== undefined ? mqttData.online : agent.online;
+        resultAgent.lastHeartbeat = mqttData.lastHeartbeat || agent.lastHeartbeat;
+        resultAgent.hostname = agent.hostname || mqttData.hostname;
+        resultAgent.ip = agent.ip || mqttData.ip;
+        resultAgent.buildVersion = mqttData.buildVersion || agent.buildVersion;
+        resultAgent.buildTime = mqttData.buildTime || agent.buildTime;
+        resultAgent.commitId = mqttData.commitId || agent.commitId;
+        resultAgent.os = mqttData.os || agent.os;
+        resultAgent.memory = mqttData.memory || agent.memory;
+        resultAgent._fromMqtt = true;
+    }
+
+    return resultAgent;
 }

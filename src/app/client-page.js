@@ -6,79 +6,33 @@ import {Eye, FileCheck, Globe, RefreshCw, Server, Zap} from 'lucide-react';
 import NavLink from '@/components/ui/NavLink';
 import StatusCard from '@/components/ui/StatusCard';
 import QuickActionButton from '@/components/ui/QuickActionButton';
-import {useApp} from './contexts/AppContext';
 import {useMqttClient} from '@/lib/mqtt';
-import {useLoading} from './contexts/LoadingContext';
 import TableSpinner from '@/components/ui/TableSpinner';
 import Button from '@/components/ui/Button';
 import {combineAgentData} from '@/lib/agent-utils.js';
+import {useClientMount} from '@/hooks/useClientMount';
+import {useAgentRefresh} from '@/hooks/useAgentRefresh';
 
 export default function DashboardClientPage() {
-    const [httpAgents, setHttpAgents] = useState([]);
-    const [isLoading, setIsLoading] = useState(false);
-    const [isRefreshing, setIsRefreshing] = useState(false);
-    const {agents: contextAgents, triggerRefresh} = useApp();
-    const {connected: mqttConnected, agentState, reconnect} = useMqttClient(); // 获取MQTT状态和代理数据
-    const {stopLoading} = useLoading();
-    const [isMounted, setIsMounted] = useState(false);
     const [lastMqttUpdate, setLastMqttUpdate] = useState(null);
+
+    // 使用自定义Hook处理客户端挂载
+    const isMounted = useClientMount();
+
+    // 使用自定义Hook处理代理数据
+    const {agents, isLoading, setIsLoading, refreshAgents} = useAgentRefresh([]);
+
+    // MQTT集成
+    const {connected: mqttConnected, agentState, reconnect} = useMqttClient();
 
     // 跟踪上一次MQTT代理数量
     const prevMqttAgentCount = useRef(0);
 
-    // 设置客户端渲染完成标志
-    useEffect(() => {
-        setIsMounted(true);
-        // 确保组件完全挂载后再停止加载状态
-        const timer = setTimeout(() => {
-            stopLoading();
-        }, 300);
-
-        return () => clearTimeout(timer);
-    }, [stopLoading]);
-
-    // 刷新代理数据 (HTTP)
-    const refreshDashboardData = useCallback(async () => {
-        try {
-            setIsLoading(true);
-            console.log('Dashboard: 刷新仪表盘数据');
-            const response = await fetch('/api/agents');
-
-            if (!response.ok) {
-                throw new Error(`服务器返回错误: ${response.status}`);
-            }
-
-            const data = await response.json();
-            console.log('Dashboard: 获取到新HTTP数据:', data.length);
-            setHttpAgents(data);
-        } catch (error) {
-            console.error('Dashboard: 数据刷新失败:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    }, []);
-
-    // 组件挂载时刷新
-    useEffect(() => {
-        if (isMounted) {
-            console.log('Dashboard: 组件挂载，获取最新数据');
-            refreshDashboardData();
-        }
-    }, [refreshDashboardData, isMounted]);
-
-    // 当上下文代理变化时更新
-    useEffect(() => {
-        if (isMounted && contextAgents && contextAgents.length > 0) {
-            console.log('Dashboard: 上下文代理变化，更新本地状态', contextAgents?.length);
-            setHttpAgents(contextAgents);
-        }
-    }, [contextAgents, isMounted]);
-
-// 监控MQTT代理状态变化
+    // 监控MQTT代理状态变化
     useEffect(() => {
         if (mqttConnected && Object.keys(agentState).length > 0 && isMounted) {
             const mqttAgentCount = Object.keys(agentState).length;
-            const httpAgentCount = httpAgents.length;
+            const httpAgentCount = agents.length;
 
             setLastMqttUpdate(new Date());
             console.log('仪表盘合并代理数据：',
@@ -88,19 +42,20 @@ export default function DashboardClientPage() {
             // 只有当MQTT代理数量超过HTTP代理数量时才刷新（表示有新代理加入）
             if (mqttAgentCount > httpAgentCount && prevMqttAgentCount.current !== mqttAgentCount) {
                 console.log(`仪表盘：发现新代理，MQTT=${mqttAgentCount}, HTTP=${httpAgentCount}，执行刷新`);
-                refreshDashboardData();
+                refreshAgents();
             }
 
             // 总是更新计数器
             prevMqttAgentCount.current = mqttAgentCount;
         }
-    }, [mqttConnected, agentState, refreshDashboardData, isMounted, httpAgents.length]);
+    }, [mqttConnected, agentState, refreshAgents, isMounted, agents.length]);
 
     // 处理手动刷新按钮点击
     const handleManualRefresh = useCallback(async () => {
-        setIsRefreshing(true);
+        setIsLoading(true);
         try {
-            await triggerRefresh();
+            await refreshAgents(true);
+
             // 如果MQTT已连接，尝试重连
             if (mqttConnected) {
                 reconnect();
@@ -108,24 +63,23 @@ export default function DashboardClientPage() {
         } finally {
             // 短暂延迟后关闭刷新指示器
             setTimeout(() => {
-                setIsRefreshing(false);
+                setIsLoading(false);
             }, 500);
         }
-    }, [triggerRefresh, mqttConnected, reconnect]);
+    }, [refreshAgents, mqttConnected, reconnect]);
 
-    // 合并HTTP代理数据和MQTT代理状态
-    const agents = useMemo(() => {
+    // 合并代理数据（HTTP和MQTT）
+    const combinedAgents = useMemo(() => {
         if (!isMounted) return [];
 
         console.log('仪表盘合并代理数据：',
-            `HTTP代理：${httpAgents.length}个`,
-            `MQTT状态：${Object.keys(agentState).length}个`,
-            `MQTT已连接：${mqttConnected ? '是' : '否'}`
+            `HTTP代理：${agents.length}个`,
+            `MQTT状态：${mqttConnected ? Object.keys(agentState).length + '个' : '未连接'}`
         );
 
         // 调用共用函数处理代理数据
-        return combineAgentData(httpAgents, agentState, mqttConnected);
-    }, [httpAgents, mqttConnected, agentState, isMounted]);
+        return combineAgentData(agents, agentState, mqttConnected);
+    }, [agents, mqttConnected, agentState, isMounted]);
 
     // 如果组件未挂载，返回null并依赖全局加载状态
     if (!isMounted) {
@@ -133,12 +87,12 @@ export default function DashboardClientPage() {
     }
 
     // 计算统计信息
-    const onlineAgents = agents.filter(agent => agent.online);
-    const totalWebsites = agents.reduce((sum, agent) => sum + (agent.stats?.websites || 0), 0);
-    const totalCertificates = agents.reduce((sum, agent) => sum + (agent.stats?.certificates || 0), 0);
+    const onlineAgents = combinedAgents.filter(agent => agent.online);
+    const totalWebsites = combinedAgents.reduce((sum, agent) => sum + (agent.stats?.websites || 0), 0);
+    const totalCertificates = combinedAgents.reduce((sum, agent) => sum + (agent.stats?.certificates || 0), 0);
 
     // 获取最近的5个代理
-    const recentAgents = agents.slice(0, 5);
+    const recentAgents = combinedAgents.slice(0, 5);
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -150,10 +104,10 @@ export default function DashboardClientPage() {
                     variant="secondary"
                     size="sm"
                     onClick={handleManualRefresh}
-                    disabled={isRefreshing}
+                    disabled={isLoading}
                 >
-                    <RefreshCw className={`w-4 h-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`}/>
-                    {isRefreshing ? '刷新中...' : '刷新数据'}
+                    <RefreshCw className={`w-4 h-4 mr-1 ${isLoading ? 'animate-spin' : ''}`}/>
+                    {isLoading ? '刷新中...' : '刷新数据'}
                 </Button>
             </div>
 
@@ -170,7 +124,7 @@ export default function DashboardClientPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <StatusCard
                     title="代理节点"
-                    value={`${onlineAgents.length}/${agents.length}`}
+                    value={`${onlineAgents.length}/${combinedAgents.length}`}
                     description={mqttConnected ? 'MQTT实时监控' : '通过HTTP监控'}
                     icon={<Server className="w-8 h-8 text-blue-500 dark:text-blue-400"/>}
                     color="blue"
@@ -260,16 +214,6 @@ export default function DashboardClientPage() {
                                 </td>
                             </tr>
                         ))}
-
-                        {/* 无数据状态 - 仅在不加载且无数据时显示 */}
-                        {!isLoading && agents.length === 0 && (
-                            <tr>
-                                <td colSpan="7"
-                                    className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
-                                    暂无代理数据
-                                </td>
-                            </tr>
-                        )}
                         </tbody>
                     </table>
                 </div>

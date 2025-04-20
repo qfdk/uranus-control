@@ -1,90 +1,35 @@
 'use client';
 
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {formatDistanceToNow} from 'date-fns';
-import {Eye, Plus, PlusCircle, Trash2} from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { formatDistanceToNow } from 'date-fns';
+import { Eye, Plus, PlusCircle, Trash2 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import NavLink from '@/components/ui/NavLink';
-import {useApp} from '@/app/contexts/AppContext';
-import {useAuth} from '@/app/contexts/AuthContext';
-import {useLoading} from '@/app/contexts/LoadingContext';
-import {usePathname} from 'next/navigation';
-import {useAsyncLoading} from '@/lib/loading-hooks';
-import {useMqttClient} from '@/lib/mqtt';
+import { usePathname } from 'next/navigation';
+import { useMqttClient } from '@/lib/mqtt';
 import TableSpinner from '@/components/ui/TableSpinner';
-import {combineAgentData} from '@/lib/agent-utils.js';
+import { combineAgentData } from '@/lib/agent-utils.js';
+import { useClientMount } from '@/hooks/useClientMount';
+import { useAgentRefresh } from '@/hooks/useAgentRefresh';
 
 export default function AgentsClientPage() {
-    const [agents, setAgents] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [deleteLoading, setDeleteLoading] = useState(null);
     const [registrationLoading, setRegistrationLoading] = useState(null);
-    const [isLoading, setIsLoading] = useState(false);
-    const {deleteAgent, agents: contextAgents, addAgent} = useApp();
-    const {logout} = useAuth();
     const pathname = usePathname();
-    const {stopLoading} = useLoading();
-    const {withLoading} = useAsyncLoading();
-    const [isMounted, setIsMounted] = useState(false);
+
+    // 使用自定义Hook处理客户端挂载
+    const isMounted = useClientMount();
+
+    // 使用自定义Hook处理代理数据
+    const { agents, isLoading, refreshAgents, deleteAgent, registerAgent } = useAgentRefresh([]);
 
     // MQTT集成
-    const {connected: mqttConnected, agentState} = useMqttClient();
+    const { connected: mqttConnected, agentState } = useMqttClient();
 
     // 跟踪上一次的MQTT代理数量
     const prevMqttAgentCount = useRef(0);
-
-    // 组件挂载处理
-    useEffect(() => {
-        setIsMounted(true);
-        // 停止全局加载当组件挂载时
-        const timer = setTimeout(() => {
-            stopLoading();
-        }, 300);
-
-        return () => clearTimeout(timer);
-    }, [stopLoading]);
-
-    // 合并代理数据（HTTP和MQTT）
-    const combinedAgents = useMemo(() => {
-        if (!isMounted) return [];
-
-        console.log('合并代理数据：',
-            `HTTP代理：${agents.length}个`,
-            `MQTT状态：${mqttConnected ? Object.keys(agentState).length + '个' : '未连接'}`
-        );
-
-        // 调用工具函数处理代理数据
-        return combineAgentData(agents, agentState, mqttConnected);
-    }, [agents, mqttConnected, agentState, isMounted]);
-
-    // 刷新代理数据
-    const refreshAgents = useCallback(async () => {
-        try {
-            setIsLoading(true);
-            console.log('刷新代理数据');
-            const response = await fetch('/api/agents');
-
-            if (response.status === 401) {
-                // 处理未授权响应
-                alert('会话已过期，请重新登录');
-                logout();
-                return;
-            }
-
-            if (!response.ok) {
-                throw new Error(`服务器返回错误: ${response.status}`);
-            }
-
-            const data = await response.json();
-            console.log('获取到新数据:', data.length);
-            setAgents(data);
-        } catch (error) {
-            console.error('刷新代理数据失败:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [logout]);
 
     // 初始数据加载
     useEffect(() => {
@@ -121,13 +66,18 @@ export default function AgentsClientPage() {
         }
     }, [pathname, refreshAgents, isMounted]);
 
-    // 上下文代理更新处理
-    useEffect(() => {
-        if (isMounted && contextAgents && contextAgents.length > 0) {
-            console.log('上下文agents变化，更新本地状态', contextAgents?.length);
-            setAgents(contextAgents);
-        }
-    }, [contextAgents, isMounted]);
+    // 合并代理数据（HTTP和MQTT）
+    const combinedAgents = useMemo(() => {
+        if (!isMounted) return [];
+
+        console.log('合并代理数据：',
+            `HTTP代理：${agents.length}个`,
+            `MQTT状态：${mqttConnected ? Object.keys(agentState).length + '个' : '未连接'}`
+        );
+
+        // 调用工具函数处理代理数据
+        return combineAgentData(agents, agentState, mqttConnected);
+    }, [agents, mqttConnected, agentState, isMounted]);
 
     // 过滤代理
     const filteredAgents = combinedAgents.filter(agent => {
@@ -148,34 +98,22 @@ export default function AgentsClientPage() {
 
     // 删除代理处理
     const handleDeleteAgent = async (agentId) => {
-        if (!confirm('确定要删除此代理吗？此操作不可撤销。')) {
-            return;
-        }
-
         try {
             setDeleteLoading(agentId);
-            await withLoading(async () => {
-                await deleteAgent(agentId);
-                // 更新本地状态删除代理
-                setAgents(prevAgents => prevAgents.filter(agent => agent._id !== agentId));
-            });
+            const result = await deleteAgent(agentId);
+
+            if (!result.success && !result.canceled) {
+                alert('删除代理失败，请重试');
+            }
         } catch (error) {
             console.error('删除代理失败:', error);
-
-            // 检查是否认证失败
-            if (error.message && error.message.includes('401')) {
-                alert('会话已过期，请重新登录');
-                logout();
-                return;
-            }
-
             alert('删除代理失败，请重试');
         } finally {
             setDeleteLoading(null);
         }
     };
 
-    // 添加一个函数处理注册MQTT代理
+    // 注册MQTT代理
     const handleRegisterAgent = async (agent) => {
         try {
             setRegistrationLoading(agent.uuid);
@@ -194,24 +132,13 @@ export default function AgentsClientPage() {
                 lastHeartbeat: agent.lastHeartbeat || new Date()
             };
 
-            await withLoading(async () => {
-                // 使用AppContext中的addAgent函数
-                await addAgent(agentData);
+            const result = await registerAgent(agentData);
 
-                // 刷新代理列表显示新注册的代理
-                await refreshAgents();
-            });
-
+            if (!result.success) {
+                alert('注册代理失败，请重试');
+            }
         } catch (error) {
             console.error('注册代理失败:', error);
-
-            // 检查是否认证失败
-            if (error.message && error.message.includes('401')) {
-                alert('会话已过期，请重新登录');
-                logout();
-                return;
-            }
-
             alert('注册代理失败，请重试');
         } finally {
             setRegistrationLoading(null);
