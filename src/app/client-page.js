@@ -1,6 +1,6 @@
 'use client';
 
-import {useCallback, useEffect, useMemo, useState} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {formatDistanceToNow} from 'date-fns';
 import {Eye, FileCheck, Globe, RefreshCw, Server, Zap} from 'lucide-react';
 import NavLink from '@/components/ui/NavLink';
@@ -18,15 +18,18 @@ export default function DashboardClientPage() {
     const [isLoading, setIsLoading] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const {agents: contextAgents, triggerRefresh} = useApp();
-    const {connected: mqttConnected, agentState, reconnect} = useMqttClient(); // Get MQTT status and agent data
+    const {connected: mqttConnected, agentState, reconnect} = useMqttClient(); // 获取MQTT状态和代理数据
     const {stopLoading} = useLoading();
     const [isMounted, setIsMounted] = useState(false);
     const [lastMqttUpdate, setLastMqttUpdate] = useState(null);
 
-    // Set client rendering complete flag on mount
+    // 跟踪上一次MQTT代理数量
+    const prevMqttAgentCount = useRef(0);
+
+    // 设置客户端渲染完成标志
     useEffect(() => {
         setIsMounted(true);
-        // Ensure component is fully mounted before stopping loading state
+        // 确保组件完全挂载后再停止加载状态
         const timer = setTimeout(() => {
             stopLoading();
         }, 300);
@@ -34,96 +37,109 @@ export default function DashboardClientPage() {
         return () => clearTimeout(timer);
     }, [stopLoading]);
 
-    // Refresh agent data (HTTP)
+    // 刷新代理数据 (HTTP)
     const refreshDashboardData = useCallback(async () => {
         try {
             setIsLoading(true);
-            console.log('Dashboard: Refreshing dashboard data');
+            console.log('Dashboard: 刷新仪表盘数据');
             const response = await fetch('/api/agents');
 
             if (!response.ok) {
-                throw new Error(`Server returned error: ${response.status}`);
+                throw new Error(`服务器返回错误: ${response.status}`);
             }
 
             const data = await response.json();
-            console.log('Dashboard: Got new HTTP data:', data.length);
+            console.log('Dashboard: 获取到新HTTP数据:', data.length);
             setHttpAgents(data);
         } catch (error) {
-            console.error('Dashboard: Data refresh failed:', error);
+            console.error('Dashboard: 数据刷新失败:', error);
         } finally {
             setIsLoading(false);
         }
     }, []);
 
-    // Refresh on mount
+    // 组件挂载时刷新
     useEffect(() => {
         if (isMounted) {
-            console.log('Dashboard: Component mounted, fetching latest data');
+            console.log('Dashboard: 组件挂载，获取最新数据');
             refreshDashboardData();
         }
     }, [refreshDashboardData, isMounted]);
 
-    // Update when context agents change
+    // 当上下文代理变化时更新
     useEffect(() => {
         if (isMounted && contextAgents && contextAgents.length > 0) {
-            console.log('Dashboard: Context agents changed, updating local state', contextAgents?.length);
+            console.log('Dashboard: 上下文代理变化，更新本地状态', contextAgents?.length);
             setHttpAgents(contextAgents);
         }
     }, [contextAgents, isMounted]);
 
-    // Monitor MQTT agent state changes
+    // 监控MQTT代理状态变化
     useEffect(() => {
         if (mqttConnected && Object.keys(agentState).length > 0) {
             setLastMqttUpdate(new Date());
-            console.log('Dashboard: MQTT agent state updated:', Object.keys(agentState).length, 'agents');
-        }
-    }, [mqttConnected, agentState]);
+            console.log('Dashboard: MQTT代理状态更新:', Object.keys(agentState).length, '个代理');
 
-    // Handle manual refresh button click
+            // 监控MQTT代理数量变化
+            const mqttAgentCount = Object.keys(agentState).length;
+            if (prevMqttAgentCount.current !== mqttAgentCount) {
+                console.log(`Dashboard: MQTT代理数量变化: ${prevMqttAgentCount.current} -> ${mqttAgentCount}，刷新数据`);
+                refreshDashboardData();
+                prevMqttAgentCount.current = mqttAgentCount;
+            }
+        }
+    }, [mqttConnected, agentState, refreshDashboardData]);
+
+    // 处理手动刷新按钮点击
     const handleManualRefresh = useCallback(async () => {
         setIsRefreshing(true);
         try {
             await triggerRefresh();
-            // If MQTT is connected, try to reconnect
+            // 如果MQTT已连接，尝试重连
             if (mqttConnected) {
                 reconnect();
             }
         } finally {
-            // Short delay before turning off refresh indicator
+            // 短暂延迟后关闭刷新指示器
             setTimeout(() => {
                 setIsRefreshing(false);
             }, 500);
         }
     }, [triggerRefresh, mqttConnected, reconnect]);
 
-    // Merge HTTP agent data and MQTT agent state
+    // 合并HTTP代理数据和MQTT代理状态
     const agents = useMemo(() => {
         if (!isMounted) return [];
 
+        console.log('仪表盘合并代理数据：',
+            `HTTP代理：${httpAgents.length}个`,
+            `MQTT状态：${Object.keys(agentState).length}个`,
+            `MQTT已连接：${mqttConnected ? '是' : '否'}`
+        );
+
         // 调用共用函数处理代理数据
-        // 仪表盘页面不显示仅MQTT的代理，所以第四个参数设为false
         return combineAgentData(httpAgents, agentState, mqttConnected);
     }, [httpAgents, mqttConnected, agentState, isMounted]);
 
-    // If component not mounted, return null and rely on global loading state
+    // 如果组件未挂载，返回null并依赖全局加载状态
     if (!isMounted) {
         return null;
     }
 
-    // Calculate statistics
+    // 计算统计信息
     const onlineAgents = agents.filter(agent => agent.online);
     const totalWebsites = agents.reduce((sum, agent) => sum + (agent.stats?.websites || 0), 0);
     const totalCertificates = agents.reduce((sum, agent) => sum + (agent.stats?.certificates || 0), 0);
 
-    // Get most recent 5 agents
+    // 获取最近的5个代理
     const recentAgents = agents.slice(0, 5);
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold text-gray-800">控制台仪表盘</h1>
+                <h1 className="text-2xl font-bold text-gray-800 dark:text-white">控制台仪表盘</h1>
 
-                {/* Manual refresh button */}
+                {/* 手动刷新按钮 */}
                 <Button
                     variant="secondary"
                     size="sm"
@@ -135,118 +151,112 @@ export default function DashboardClientPage() {
                 </Button>
             </div>
 
-            {/* MQTT status indicator (when connected) */}
+            {/* MQTT状态指示器 (已连接时) */}
             {mqttConnected && lastMqttUpdate && (
                 <div
-                    className="mb-4 p-2 bg-blue-50 border border-blue-100 rounded-md text-sm text-blue-700 flex items-center">
-                    <Zap className="w-4 h-4 mr-2 text-blue-500"/>
+                    className="mb-4 p-2 bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 rounded-md text-sm text-blue-700 dark:text-blue-300 flex items-center">
+                    <Zap className="w-4 h-4 mr-2 text-blue-500 dark:text-blue-400"/>
                     <span>MQTT实时监控已连接 - 最后更新: {formatDistanceToNow(lastMqttUpdate, {addSuffix: true})}</span>
                 </div>
             )}
 
-            {/* Status cards */}
+            {/* 状态卡片 */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <StatusCard
                     title="代理节点"
                     value={`${onlineAgents.length}/${agents.length}`}
                     description={mqttConnected ? 'MQTT实时监控' : '通过HTTP监控'}
-                    icon={<Server className="w-8 h-8 text-blue-500 dark-mode:text-blue-300"/>}
+                    icon={<Server className="w-8 h-8 text-blue-500 dark:text-blue-400"/>}
                     color="blue"
                 />
                 <StatusCard
                     title="网站"
                     value={totalWebsites}
                     description="托管网站总数"
-                    icon={<Globe className="w-8 h-8 text-green-500 dark-mode:text-green-300"/>}
+                    icon={<Globe className="w-8 h-8 text-green-500 dark:text-green-400"/>}
                     color="green"
                 />
                 <StatusCard
                     title="SSL证书"
                     value={totalCertificates}
                     description="有效证书数量"
-                    icon={<FileCheck className="w-8 h-8 text-purple-500 dark-mode:text-purple-300"/>}
+                    icon={<FileCheck className="w-8 h-8 text-purple-500 dark:text-purple-400"/>}
                     color="purple"
                 />
             </div>
 
-            {/* Recently active agents */}
-            <div className="bg-white rounded-lg shadow mb-8">
-                <div className="px-4 py-3 border-b border-gray-200 flex justify-between items-center">
-                    <h2 className="text-lg font-medium text-gray-800">最近活动的代理</h2>
+            {/* 最近活动的代理 */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-8">
+                <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                    <h2 className="text-lg font-medium text-gray-800 dark:text-white">最近活动的代理</h2>
                     {mqttConnected && (
-                        <span className="px-2 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-full">
+                        <span className="px-2 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium rounded-full">
                             MQTT实时 ({Object.keys(agentState).length})
                         </span>
                     )}
                 </div>
                 <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead className="bg-gray-50 dark:bg-gray-700">
                         <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">名称</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">IP地址</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">状态</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">版本</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hash</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">最后心跳</th>
-                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">名称</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">IP地址</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">状态</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">版本</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Hash</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">最后心跳</th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">操作</th>
                         </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                        {/* Loading state */}
+                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        {/* 加载状态 */}
                         {isLoading && <TableSpinner/>}
 
-                        {/* Agent data - only show when not loading and data exists */}
+                        {/* 代理数据 - 仅在不加载且数据存在时显示 */}
                         {!isLoading && recentAgents.length > 0 && recentAgents.map(agent => (
-                            <tr key={agent._id || agent.uuid} className={`hover:bg-gray-50 ${agent._mqttOnly ? 'bg-blue-50' : ''}`}>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <tr key={agent._id || agent.uuid}
+                                className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                                     {agent.hostname || '未命名代理'}
-                                    {agent._mqttOnly && (
-                                        <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700">
-                                            仅MQTT
-                                        </span>
-                                    )}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.ip}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{agent.ip}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                                     <span
                                         className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                                             agent.online
-                                                ? 'bg-green-100 text-green-800'
-                                                : 'bg-red-100 text-red-800'
+                                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                                                : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
                                         }`}>
                                       {agent.online ? '在线' : '离线'}
-                                        {/* Show real-time indicator if from MQTT */}
+                                        {/* 如果来自MQTT则显示实时指示器 */}
                                         {agent._fromMqtt && (
                                             <span className="ml-1 opacity-75">(实时)</span>
                                         )}
                                     </span>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.buildVersion || '未知'}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.commitId ? agent.commitId.substring(0, 8) : '未知'}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{agent.buildVersion || '未知'}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{agent.commitId ? agent.commitId.substring(0, 8) : '未知'}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                     {agent.lastHeartbeat
                                         ? formatDistanceToNow(new Date(agent.lastHeartbeat), {addSuffix: true})
                                         : '未知'}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                                    {!agent._mqttOnly && (
-                                        <NavLink
-                                            href={`/agents/${agent._id}`}
-                                            className="text-blue-600 hover:text-blue-900 inline-flex items-center"
-                                        >
-                                            <Eye className="w-4 h-4 mr-2"/>
-                                            详情
-                                        </NavLink>
-                                    )}
+                                    <NavLink
+                                        href={`/agents/${agent._id}`}
+                                        className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 inline-flex items-center"
+                                    >
+                                        <Eye className="w-4 h-4 mr-2"/>
+                                        详情
+                                    </NavLink>
                                 </td>
                             </tr>
                         ))}
 
-                        {/* No data state - only show when not loading and no data */}
+                        {/* 无数据状态 - 仅在不加载且无数据时显示 */}
                         {!isLoading && agents.length === 0 && (
                             <tr>
-                                <td colSpan="7" className="px-6 py-4 text-center text-sm text-gray-500">
+                                <td colSpan="7" className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
                                     暂无代理数据
                                 </td>
                             </tr>
@@ -254,49 +264,49 @@ export default function DashboardClientPage() {
                         </tbody>
                     </table>
                 </div>
-                <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 text-right">
+                <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-right">
                     <NavLink
                         href="/agents"
-                        className="text-sm font-medium text-blue-600 hover:text-blue-900"
+                        className="text-sm font-medium text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
                     >
                         查看所有代理 →
                     </NavLink>
                 </div>
             </div>
 
-            {/* System info and quick actions */}
+            {/* 系统信息和快速操作 */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-white rounded-lg shadow">
-                    <div className="px-4 py-3 border-b border-gray-200">
-                        <h2 className="text-lg font-medium text-gray-800">系统信息</h2>
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+                    <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                        <h2 className="text-lg font-medium text-gray-800 dark:text-white">系统信息</h2>
                     </div>
                     <div className="p-4">
                         <div className="space-y-3">
                             <div className="flex justify-between">
-                                <span className="text-sm text-gray-500">控制台版本</span>
-                                <span className="text-sm font-medium">v1.0.0</span>
+                                <span className="text-sm text-gray-500 dark:text-gray-400">控制台版本</span>
+                                <span className="text-sm font-medium dark:text-gray-300">v1.0.0</span>
                             </div>
                             <div className="flex justify-between">
-                                <span className="text-sm text-gray-500">最后更新</span>
-                                <span className="text-sm font-medium">{new Date().toLocaleDateString()}</span>
+                                <span className="text-sm text-gray-500 dark:text-gray-400">最后更新</span>
+                                <span className="text-sm font-medium dark:text-gray-300">{new Date().toLocaleDateString()}</span>
                             </div>
                             <div className="flex justify-between">
-                                <span className="text-sm text-gray-500">数据库状态</span>
-                                <span className="text-sm font-medium text-green-600">正常</span>
+                                <span className="text-sm text-gray-500 dark:text-gray-400">数据库状态</span>
+                                <span className="text-sm font-medium text-green-600 dark:text-green-400">正常</span>
                             </div>
-                            {/* MQTT connection status */}
+                            {/* MQTT连接状态 */}
                             <div className="flex justify-between">
-                                <span className="text-sm text-gray-500">MQTT状态</span>
+                                <span className="text-sm text-gray-500 dark:text-gray-400">MQTT状态</span>
                                 <span
-                                    className={`text-sm font-medium ${mqttConnected ? 'text-green-600' : 'text-gray-500'}`}>
+                                    className={`text-sm font-medium ${mqttConnected ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
                                     {mqttConnected ? '已连接' : '未连接'}
                                 </span>
                             </div>
-                            {/* Real-time agent count */}
+                            {/* 实时代理数量 */}
                             {mqttConnected && (
                                 <div className="flex justify-between">
-                                    <span className="text-sm text-gray-500">实时监控代理</span>
-                                    <span className="text-sm font-medium text-blue-600">
+                                    <span className="text-sm text-gray-500 dark:text-gray-400">实时监控代理</span>
+                                    <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
                                         {Object.keys(agentState).length}
                                     </span>
                                 </div>
@@ -305,9 +315,9 @@ export default function DashboardClientPage() {
                     </div>
                 </div>
 
-                <div className="bg-white rounded-lg shadow">
-                    <div className="px-4 py-3 border-b border-gray-200">
-                        <h2 className="text-lg font-medium text-gray-800">快速操作</h2>
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+                    <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                        <h2 className="text-lg font-medium text-gray-800 dark:text-white">快速操作</h2>
                     </div>
                     <div className="p-4">
                         <div className="grid grid-cols-2 gap-3">

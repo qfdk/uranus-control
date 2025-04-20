@@ -1,6 +1,6 @@
 'use client';
 
-import {useCallback, useEffect, useMemo, useState} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {formatDistanceToNow} from 'date-fns';
 import {Eye, Plus, PlusCircle, Trash2} from 'lucide-react';
 import Button from '@/components/ui/Button';
@@ -28,13 +28,16 @@ export default function AgentsClientPage() {
     const {withLoading} = useAsyncLoading();
     const [isMounted, setIsMounted] = useState(false);
 
-    // MQTT integration
+    // MQTT集成
     const {connected: mqttConnected, agentState} = useMqttClient();
 
-    // Component mount handler
+    // 跟踪上一次的MQTT代理数量
+    const prevMqttAgentCount = useRef(0);
+
+    // 组件挂载处理
     useEffect(() => {
         setIsMounted(true);
-        // Stop global loading when component is mounted
+        // 停止全局加载当组件挂载时
         const timer = setTimeout(() => {
             stopLoading();
         }, 300);
@@ -42,15 +45,20 @@ export default function AgentsClientPage() {
         return () => clearTimeout(timer);
     }, [stopLoading]);
 
-    // Agents data that combines HTTP and MQTT data
+    // 合并代理数据（HTTP和MQTT）
     const combinedAgents = useMemo(() => {
         if (!isMounted) return [];
 
-        // 调用共用函数处理代理数据
+        console.log('合并代理数据：',
+            `HTTP代理：${agents.length}个`,
+            `MQTT状态：${mqttConnected ? Object.keys(agentState).length + '个' : '未连接'}`
+        );
+
+        // 调用工具函数处理代理数据
         return combineAgentData(agents, agentState, mqttConnected);
     }, [agents, mqttConnected, agentState, isMounted]);
 
-    // Refresh agents data
+    // 刷新代理数据
     const refreshAgents = useCallback(async () => {
         try {
             setIsLoading(true);
@@ -58,7 +66,7 @@ export default function AgentsClientPage() {
             const response = await fetch('/api/agents');
 
             if (response.status === 401) {
-                // Handle unauthorized response
+                // 处理未授权响应
                 alert('会话已过期，请重新登录');
                 logout();
                 return;
@@ -78,7 +86,7 @@ export default function AgentsClientPage() {
         }
     }, [logout]);
 
-    // Initial data loading
+    // 初始数据加载
     useEffect(() => {
         if (isMounted) {
             // 初始加载
@@ -88,13 +96,27 @@ export default function AgentsClientPage() {
             const pollingInterval = setInterval(() => {
                 console.log('定时轮询刷新代理列表');
                 refreshAgents();
-            }, 5000); // 每5秒刷新一次
+            }, 30000); // 每30秒刷新一次
 
             return () => clearInterval(pollingInterval);
         }
     }, [isMounted, refreshAgents]);
 
-    // Path change handler
+    // 监控MQTT代理状态变化
+    useEffect(() => {
+        if (mqttConnected && agentState && isMounted) {
+            const mqttAgentCount = Object.keys(agentState).length;
+
+            // 如果代理数量发生变化，刷新代理列表
+            if (prevMqttAgentCount.current !== mqttAgentCount) {
+                console.log(`MQTT代理数量变化: ${prevMqttAgentCount.current} -> ${mqttAgentCount}，刷新数据`);
+                refreshAgents();
+                prevMqttAgentCount.current = mqttAgentCount;
+            }
+        }
+    }, [mqttConnected, agentState, refreshAgents, isMounted]);
+
+    // 路径变化处理
     useEffect(() => {
         if (isMounted && pathname === '/agents') {
             console.log('路径变化，刷新数据:', pathname);
@@ -102,7 +124,7 @@ export default function AgentsClientPage() {
         }
     }, [pathname, refreshAgents, isMounted]);
 
-    // Context agents update handler
+    // 上下文代理更新处理
     useEffect(() => {
         if (isMounted && contextAgents && contextAgents.length > 0) {
             console.log('上下文agents变化，更新本地状态', contextAgents?.length);
@@ -110,23 +132,24 @@ export default function AgentsClientPage() {
         }
     }, [contextAgents, isMounted]);
 
-    // Filter agents
+    // 过滤代理
     const filteredAgents = combinedAgents.filter(agent => {
-        // Status filter
+        // 状态过滤
         if (statusFilter === 'online' && !agent.online) return false;
         if (statusFilter === 'offline' && agent.online) return false;
 
-        // Search filter
+        // 搜索过滤
         if (searchTerm) {
             const search = searchTerm.toLowerCase();
             return (agent.hostname && agent.hostname.toLowerCase().includes(search)) ||
-                (agent.ip && agent.ip.toLowerCase().includes(search));
+                (agent.ip && agent.ip.toLowerCase().includes(search)) ||
+                (agent.uuid && agent.uuid.toLowerCase().includes(search));
         }
 
         return true;
     });
 
-    // Delete agent handler
+    // 删除代理处理
     const handleDeleteAgent = async (agentId) => {
         if (!confirm('确定要删除此代理吗？此操作不可撤销。')) {
             return;
@@ -136,13 +159,13 @@ export default function AgentsClientPage() {
             setDeleteLoading(agentId);
             await withLoading(async () => {
                 await deleteAgent(agentId);
-                // Update local state to remove deleted agent
+                // 更新本地状态删除代理
                 setAgents(prevAgents => prevAgents.filter(agent => agent._id !== agentId));
             });
         } catch (error) {
             console.error('删除代理失败:', error);
 
-            // Check if authentication failed
+            // 检查是否认证失败
             if (error.message && error.message.includes('401')) {
                 alert('会话已过期，请重新登录');
                 logout();
@@ -155,12 +178,12 @@ export default function AgentsClientPage() {
         }
     };
 
-    // Add this function to handle registering MQTT-only agents
+    // 添加一个函数处理注册MQTT代理
     const handleRegisterAgent = async (agent) => {
         try {
             setRegistrationLoading(agent.uuid);
 
-            // Prepare the agent data for registration
+            // 准备代理数据注册
             const agentData = {
                 uuid: agent.uuid,
                 hostname: agent.hostname || 'New Agent',
@@ -175,17 +198,17 @@ export default function AgentsClientPage() {
             };
 
             await withLoading(async () => {
-                // Use the addAgent function from AppContext
+                // 使用AppContext中的addAgent函数
                 await addAgent(agentData);
 
-                // Refresh the agents list to show the new registered agent
+                // 刷新代理列表显示新注册的代理
                 await refreshAgents();
             });
 
         } catch (error) {
             console.error('注册代理失败:', error);
 
-            // Check if authentication failed
+            // 检查是否认证失败
             if (error.message && error.message.includes('401')) {
                 alert('会话已过期，请重新登录');
                 logout();
@@ -206,7 +229,7 @@ export default function AgentsClientPage() {
         setStatusFilter(e.target.value);
     };
 
-    // If component is not mounted yet, rely on global loading state
+    // 如果组件未挂载，依赖全局加载状态
     if (!isMounted) {
         return null;
     }
@@ -214,20 +237,20 @@ export default function AgentsClientPage() {
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <header className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <h1 className="text-2xl font-bold text-gray-800">
+                <h1 className="text-2xl font-bold text-gray-800 dark:text-white">
                     代理管理
                     {mqttConnected && (
-                        <span className="ml-2 text-xs text-blue-500">(MQTT实时)</span>
+                        <span className="ml-2 text-xs text-blue-500 dark:text-blue-400">(MQTT实时)</span>
                     )}
                 </h1>
             </header>
 
-            {/* Search and filtering */}
-            <div className="mb-6 bg-white p-5 rounded-lg shadow-sm">
+            {/* 搜索和过滤 */}
+            <div className="mb-6 bg-white dark:bg-gray-800 p-5 rounded-lg shadow-sm">
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                    {/* Search field */}
+                    {/* 搜索字段 */}
                     <div className="md:col-span-4">
-                        <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="search" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                             搜索
                         </label>
                         <input
@@ -236,13 +259,13 @@ export default function AgentsClientPage() {
                             value={searchTerm}
                             onChange={handleSearchChange}
                             placeholder="搜索代理名称或IP地址..."
-                            className="w-full rounded-md border border-gray-300 shadow-sm px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            className="w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                         />
                     </div>
 
-                    {/* Status dropdown */}
+                    {/* 状态下拉菜单 */}
                     <div className="md:col-span-3">
-                        <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                             状态
                         </label>
                         <div className="relative">
@@ -250,14 +273,14 @@ export default function AgentsClientPage() {
                                 id="status"
                                 value={statusFilter}
                                 onChange={handleStatusChange}
-                                className="appearance-none w-full rounded-md border border-gray-300 shadow-sm px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white disabled:bg-gray-100 disabled:text-gray-500 pr-8"
+                                className="appearance-none w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white disabled:bg-gray-100 disabled:text-gray-500 pr-8"
                             >
                                 <option value="all">全部</option>
                                 <option value="online">在线</option>
                                 <option value="offline">离线</option>
                             </select>
                             <div
-                                className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                                className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-300">
                                 <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg"
                                      viewBox="0 0 20 20">
                                     <path
@@ -269,43 +292,43 @@ export default function AgentsClientPage() {
                 </div>
             </div>
 
-            {/* Agents list */}
-            <div className="bg-white rounded-lg shadow overflow-hidden">
+            {/* 代理列表 */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead className="bg-gray-50 dark:bg-gray-700">
                         <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">名称</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">IP地址</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">状态</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">版本</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hash</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">最后心跳</th>
-                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">名称</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">IP地址</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">状态</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">版本</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Hash</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">最后心跳</th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">操作</th>
                         </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                         {isLoading && <TableSpinner/>}
 
                         {!isLoading && filteredAgents.length > 0 && filteredAgents.map(agent => (
                             <tr key={agent._id || agent.uuid}
-                                className={`hover:bg-gray-50 ${agent._mqttOnly ? 'bg-blue-50' : ''}`}>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                className={`hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${agent._mqttOnly ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                                     {agent.hostname || '未命名代理'}
                                     {agent._mqttOnly && (
                                         <span
-                                            className="ml-2 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700">
+                                            className="ml-2 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
                                             仅MQTT
                                         </span>
                                     )}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.ip}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{agent.ip}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                                     <span
                                         className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                                             agent.online
-                                                ? 'bg-green-100 text-green-800'
-                                                : 'bg-red-100 text-red-800'
+                                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                                                : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
                                         }`}>
                                       {agent.online ? '在线' : '离线'}
                                         {/* Show real-time indicator if from MQTT */}
@@ -314,13 +337,13 @@ export default function AgentsClientPage() {
                                         )}
                                     </span>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                     {agent.buildVersion || '未知'}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                     {agent.commitId ? agent.commitId.substring(0, 8) : '未知'}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                     {agent.lastHeartbeat
                                         ? formatDistanceToNow(new Date(agent.lastHeartbeat), {addSuffix: true})
                                         : '未知'}
@@ -328,15 +351,15 @@ export default function AgentsClientPage() {
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
                                     <div className="flex justify-end space-x-4">
                                         {agent._needsRegistration ? (
-                                            // For MQTT-only agents, show register button
+                                            // 对于仅MQTT的代理，显示注册按钮
                                             <button
                                                 onClick={() => handleRegisterAgent(agent)}
                                                 disabled={registrationLoading === agent.uuid}
-                                                className="text-green-600 hover:text-green-900 inline-flex items-center"
+                                                className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 inline-flex items-center"
                                             >
                                                 {registrationLoading === agent.uuid ? (
                                                     <>
-                                                        <svg className="animate-spin h-4 w-4 mr-2 text-green-600"
+                                                        <svg className="animate-spin h-4 w-4 mr-2 text-green-600 dark:text-green-400"
                                                              xmlns="http://www.w3.org/2000/svg" fill="none"
                                                              viewBox="0 0 24 24">
                                                             <circle className="opacity-25" cx="12" cy="12" r="10"
@@ -354,11 +377,11 @@ export default function AgentsClientPage() {
                                                 )}
                                             </button>
                                         ) : (
-                                            // For regular agents, show normal actions
+                                            // 对于普通代理，显示常规操作
                                             <>
                                                 <NavLink
                                                     href={`/agents/${agent._id}`}
-                                                    className="text-blue-600 hover:text-blue-900 inline-flex items-center"
+                                                    className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 inline-flex items-center"
                                                 >
                                                     <Eye className="w-4 h-4 mr-2"/>
                                                     详情
@@ -366,11 +389,11 @@ export default function AgentsClientPage() {
                                                 <button
                                                     onClick={() => handleDeleteAgent(agent._id)}
                                                     disabled={deleteLoading === agent._id}
-                                                    className="text-red-600 hover:text-red-900 inline-flex items-center"
+                                                    className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 inline-flex items-center"
                                                 >
                                                     {deleteLoading === agent._id ? (
                                                         <>
-                                                            <svg className="animate-spin h-4 w-4 mr-2 text-red-600"
+                                                            <svg className="animate-spin h-4 w-4 mr-2 text-red-600 dark:text-red-400"
                                                                  xmlns="http://www.w3.org/2000/svg" fill="none"
                                                                  viewBox="0 0 24 24">
                                                                 <circle className="opacity-25" cx="12" cy="12" r="10"
@@ -396,7 +419,7 @@ export default function AgentsClientPage() {
 
                         {!isLoading && filteredAgents.length === 0 && (
                             <tr>
-                                <td colSpan="7" className="px-6 py-12 text-center text-sm text-gray-500">
+                                <td colSpan="7" className="px-6 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
                                     {agents.length === 0 ? (
                                         <div className="flex flex-col items-center">
                                             <p className="mb-2">暂无代理数据</p>
