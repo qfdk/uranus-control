@@ -1,5 +1,3 @@
-// 修改 src/components/ui/ResponsiveNavigation.jsx
-
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -88,7 +86,7 @@ export default function ResponsiveNavigation() {
             {isMobile && (
                 <button
                     type="button"
-                    className="ml-2 inline-flex items-center justify-center p-1.5 rounded-md text-gray-600 hover:text-blue-600 hover:bg-blue-50 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="ml-2 inline-flex items-center justify-center p-1.5 rounded-md text-gray-600 dark:text-gray-300 hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900/30 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     onClick={() => setIsOpen(!isOpen)}
                     aria-expanded={isOpen}
                 >
@@ -110,8 +108,8 @@ export default function ResponsiveNavigation() {
                             href={item.href}
                             className={`inline-flex items-center px-2.5 py-1.5 text-sm font-medium transition-all duration-200 rounded ${
                                 isPathActive(item.href)
-                                    ? 'bg-blue-50 text-blue-700'
-                                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50 dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-800'
                             }`}
                         >
                             <span className="flex items-center">
@@ -128,18 +126,18 @@ export default function ResponsiveNavigation() {
                 <>
                     {/* 半透明背景 */}
                     <div
-                        className="fixed inset-0 bg-black/30 backdrop-blur-sm z-10 transition-opacity"
+                        className="fixed inset-0 bg-black/30 dark:bg-black/50 backdrop-blur-sm z-10 transition-opacity"
                         onClick={() => setIsOpen(false)}
                         aria-hidden="true"
                     ></div>
 
                     {/* 侧边菜单 */}
-                    <div className="fixed inset-y-0 left-0 w-64 bg-white shadow-lg z-20 transform transition-transform duration-300 ease-in-out">
+                    <div className="fixed inset-y-0 left-0 w-64 bg-white dark:bg-gray-800 shadow-lg z-20 transform transition-transform duration-300 ease-in-out">
                         {/* 菜单标题 */}
-                        <div className="flex items-center justify-between p-4 border-b border-gray-200">
-                            <span className="font-medium text-gray-800">导航菜单</span>
+                        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+                            <span className="font-medium text-gray-800 dark:text-white">导航菜单</span>
                             <button
-                                className="text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-md p-1"
+                                className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-md p-1"
                                 onClick={() => setIsOpen(false)}
                             >
                                 <X className="h-5 w-5" />
@@ -154,8 +152,8 @@ export default function ResponsiveNavigation() {
                                     href={item.href}
                                     className={`flex items-center px-4 py-3 text-base font-medium border-l-4 transition-colors ${
                                         isPathActive(item.href)
-                                            ? 'border-blue-600 text-blue-700 bg-blue-50'
-                                            : 'border-transparent text-gray-700 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-900'
+                                            ? 'border-blue-600 text-blue-700 bg-blue-50 dark:border-blue-500 dark:text-blue-300 dark:bg-blue-900/30'
+                                            : 'border-transparent text-gray-700 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-900 dark:text-gray-200 dark:hover:bg-gray-700 dark:hover:border-gray-600 dark:hover:text-white'
                                     }`}
                                 >
                                     <div className="flex items-center">

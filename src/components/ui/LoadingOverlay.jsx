@@ -39,12 +39,12 @@ export default function LoadingOverlay() {
 
     return (
         <div
-            className={`fixed inset-0 bg-white bg-opacity-80 z-50 flex flex-col items-center justify-center transition-opacity duration-300 ${
+            className={`fixed inset-0 bg-white dark:bg-gray-900 bg-opacity-80 dark:bg-opacity-80 z-50 flex flex-col items-center justify-center transition-opacity duration-300 ${
                 isLoading ? 'opacity-100' : 'opacity-0'
             }`}
         >
-            <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-            <p className="mt-4 text-gray-600 font-medium">加载中...</p>
+            <div className="w-16 h-16 border-4 border-blue-600 dark:border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            <p className="mt-4 text-gray-600 dark:text-gray-300 font-medium">加载中...</p>
         </div>
     );
 }

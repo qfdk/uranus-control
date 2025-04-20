@@ -3,6 +3,65 @@
 :root {
     --background: #ffffff;
     --foreground: #171717;
+    --card-bg: #ffffff;
+    --card-border: #e5e7eb;
+    --input-bg: #ffffff;
+    --input-border: #d1d5db;
+    --primary-btn: #3b82f6;
+    --primary-btn-hover: #2563eb;
+    --secondary-btn: #f3f4f6;
+    --secondary-btn-hover: #e5e7eb;
+    --text-primary: #111827;
+    --text-secondary: #4b5563;
+    --text-muted: #6b7280;
+    --accent-blue: #3b82f6;
+    --accent-green: #10b981;
+    --accent-red: #ef4444;
+    --accent-yellow: #f59e0b;
+    --accent-purple: #8b5cf6;
+    --success-bg: #d1fae5;
+    --success-text: #047857;
+    --error-bg: #fee2e2;
+    --error-text: #b91c1c;
+    --warning-bg: #fffbeb;
+    --warning-text: #b45309;
+    --info-bg: #e0f2fe;
+    --info-text: #0369a1;
+    --header-bg: #ffffff;
+    --header-border: #e5e7eb;
+    --shadow-color: rgba(0, 0, 0, 0.1);
+}
+
+.dark-mode {
+    --background: #111827;
+    --foreground: #f9fafb;
+    --card-bg: #1f2937;
+    --card-border: #374151;
+    --input-bg: #1f2937;
+    --input-border: #4b5563;
+    --primary-btn: #3b82f6;
+    --primary-btn-hover: #2563eb;
+    --secondary-btn: #374151;
+    --secondary-btn-hover: #4b5563;
+    --text-primary: #f9fafb;
+    --text-secondary: #e5e7eb;
+    --text-muted: #9ca3af;
+    --accent-blue: #60a5fa;
+    --accent-green: #34d399;
+    --accent-red: #f87171;
+    --accent-yellow: #fbbf24;
+    --accent-purple: #a78bfa;
+    --success-bg: #064e3b;
+    --success-text: #34d399;
+    --error-bg: #7f1d1d;
+    --error-text: #f87171;
+    --warning-bg: #78350f;
+    --warning-text: #fbbf24;
+    --info-bg: #0c4a6e;
+    --info-text: #38bdf8;
+    --header-bg: #1f2937;
+    --header-border: #374151;
+    --shadow-color: rgba(0, 0, 0, 0.25);
 }
 
 @theme inline {
@@ -10,17 +69,10 @@
     --color-foreground: var(--foreground);
 }
 
-@media (prefers-color-scheme: dark) {
-    :root {
-        --background: #0a0a0a;
-        --foreground: #ededed;
-    }
-}
-
 body {
     background: var(--background);
     color: var(--foreground);
-    font-family: Arial, Helvetica, sans-serif;
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* 添加全局按钮和可点击元素的光标样式 */
@@ -42,10 +94,7 @@ input:disabled {
     cursor: not-allowed;
 }
 
-/*
-  旧的全局加载状态样式已被 LoadingOverlay 组件替代
-  可以保留这些样式用于兼容性，但不再需要直接操作 DOM 来添加类名
-*/
+/* 旧的全局加载状态样式已被 LoadingOverlay 组件替代 */
 body.loading-transition {
     overflow: hidden; /* 防止滚动 */
     position: relative;
@@ -60,6 +109,10 @@ body.loading-transition::after {
     height: 100%;
     background: rgba(255, 255, 255, 0.8);
     z-index: 9998;
+}
+
+.dark-mode body.loading-transition::after {
+    background: rgba(17, 24, 39, 0.8);
 }
 
 body.loading-transition::before {
@@ -116,4 +169,305 @@ body.loading-transition::before {
 
 .mobile-menu-backdrop {
     animation: fadeIn 0.2s ease forwards;
+}
+
+/* 暗模式下表格和卡片样式 */
+.dark-mode .bg-white {
+    background-color: var(--card-bg);
+}
+
+.dark-mode .bg-gray-50 {
+    background-color: #1a202c;
+}
+
+.dark-mode .bg-gray-100 {
+    background-color: #2d3748;
+}
+
+.dark-mode .text-gray-500 {
+    color: var(--text-muted);
+}
+
+.dark-mode .text-gray-600 {
+    color: var(--text-secondary);
+}
+
+.dark-mode .text-gray-700 {
+    color: var(--text-secondary);
+}
+
+.dark-mode .text-gray-800 {
+    color: var(--text-primary);
+}
+
+.dark-mode .text-gray-900 {
+    color: var(--text-primary);
+}
+
+.dark-mode .border-gray-200 {
+    border-color: var(--card-border);
+}
+
+.dark-mode .border-gray-300 {
+    border-color: var(--input-border);
+}
+
+.dark-mode .shadow {
+    box-shadow: 0 1px 3px 0 var(--shadow-color), 0 1px 2px -1px var(--shadow-color);
+}
+
+.dark-mode .shadow-sm {
+    box-shadow: 0 1px 2px 0 var(--shadow-color);
+}
+
+/* 输入框样式 */
+.dark-mode input,
+.dark-mode select,
+.dark-mode textarea {
+    background-color: var(--input-bg);
+    border-color: var(--input-border);
+    color: var(--text-primary);
+}
+
+.dark-mode input::placeholder,
+.dark-mode textarea::placeholder {
+    color: var(--text-muted);
+}
+
+/* 按钮样式 */
+.dark-mode button.bg-gray-100 {
+    background-color: var(--secondary-btn);
+}
+
+.dark-mode button.bg-gray-100:hover {
+    background-color: var(--secondary-btn-hover);
+}
+
+/* 确保过渡效果平滑 */
+.transition-colors,
+.hover\:bg-gray-50,
+.hover\:bg-gray-100,
+.hover\:bg-blue-50,
+input,
+select,
+button,
+.bg-white,
+.bg-gray-50,
+.border,
+.text-gray-500,
+.text-gray-600,
+.text-gray-700 {
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+/* 添加到src/app/globals.css文件 */
+
+/* StatusCard暗黑模式样式 */
+body.dark-mode .status-card {
+    /* 背景和边框调整 */
+    background-color: rgba(30, 41, 59, 0.7) !important; /* 基础深色背景 */
+    border-color: rgba(51, 65, 85, 0.5) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* 颜色特定样式 - 蓝色 */
+body.dark-mode .status-card.bg-blue-50 {
+    background-color: rgba(30, 58, 138, 0.15) !important;
+    border-color: rgba(59, 130, 246, 0.3) !important;
+}
+body.dark-mode .status-card.bg-blue-50 .text-blue-500 {
+    color: #93c5fd !important; /* 更亮的蓝色 */
+}
+
+/* 颜色特定样式 - 绿色 */
+body.dark-mode .status-card.bg-green-50 {
+    background-color: rgba(20, 83, 45, 0.15) !important;
+    border-color: rgba(34, 197, 94, 0.3) !important;
+}
+body.dark-mode .status-card.bg-green-50 .text-green-500 {
+    color: #86efac !important; /* 更亮的绿色 */
+}
+
+/* 颜色特定样式 - 紫色 */
+body.dark-mode .status-card.bg-purple-50 {
+    background-color: rgba(88, 28, 135, 0.15) !important;
+    border-color: rgba(168, 85, 247, 0.3) !important;
+}
+body.dark-mode .status-card.bg-purple-50 .text-purple-500 {
+    color: #d8b4fe !important; /* 更亮的紫色 */
+}
+
+/* 颜色特定样式 - 琥珀色 */
+body.dark-mode .status-card.bg-amber-50 {
+    background-color: rgba(120, 53, 15, 0.15) !important;
+    border-color: rgba(245, 158, 11, 0.3) !important;
+}
+body.dark-mode .status-card.bg-amber-50 .text-amber-500 {
+    color: #fcd34d !important; /* 更亮的琥珀色 */
+}
+
+/* 修复文本颜色 */
+body.dark-mode .status-card .text-gray-500 {
+    color: #d1d5db !important; /* 更亮的灰色以提高可读性 */
+}
+
+body.dark-mode .status-card .text-gray-800,
+body.dark-mode .status-card .font-bold {
+    color: #ffffff !important; /* 加粗文本使用白色 */
+}
+
+/* 图标背景优化 */
+body.dark-mode .status-card .bg-white {
+    background-color: rgba(30, 41, 59, 0.6) !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* 确保卡片值文本足够大且鲜明 */
+body.dark-mode .status-card .text-2xl {
+    font-weight: 700 !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* 移动端适配 */
+@media (max-width: 767px) {
+    body.dark-mode .status-card {
+        padding: 0.875rem !important;
+    }
+
+    body.dark-mode .status-card .text-2xl {
+        font-size: 1.25rem !important;
+    }
+
+    body.dark-mode .status-card .text-sm {
+        font-size: 0.8125rem !important;
+        font-weight: 500 !important;
+    }
+
+    body.dark-mode .status-card .bg-white {
+        padding: 0.625rem !important;
+    }
+}
+
+/* 为了防止图标在暗色模式下太暗，确保它们有足够的亮度 */
+body.dark-mode .status-card svg {
+    filter: brightness(1.2) !important;
+}
+/* 在线状态标签 */
+.status-online {
+    background-color: #dcfce7;
+    color: #166534;
+    border: 1px solid #86efac;
+    font-weight: 600;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    display: inline-flex;
+    align-items: center;
+}
+
+/* 离线状态标签 */
+.status-offline {
+    background-color: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fca5a5;
+    font-weight: 600;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    display: inline-flex;
+    align-items: center;
+}
+
+/* 暗黑模式下的状态标签调整 */
+body.dark-mode .status-online {
+    background-color: rgba(22, 101, 52, 0.3) !important;
+    color: #86efac !important;
+    border-color: rgba(134, 239, 172, 0.4) !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+body.dark-mode .status-offline {
+    background-color: rgba(153, 27, 27, 0.3) !important;
+    color: #fca5a5 !important;
+    border-color: rgba(252, 165, 165, 0.4) !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* 暗黑模式下表格中的状态标签 */
+body.dark-mode .bg-green-100 {
+    background-color: rgba(22, 101, 52, 0.3) !important;
+}
+
+body.dark-mode .text-green-800 {
+    color: #86efac !important;
+}
+
+body.dark-mode .bg-red-100 {
+    background-color: rgba(153, 27, 27, 0.3) !important;
+}
+
+body.dark-mode .text-red-800 {
+    color: #fca5a5 !important;
+}
+
+/* 暗黑模式下表格样式优化 */
+body.dark-mode table {
+    --tw-border-opacity: 0.2;
+}
+
+body.dark-mode table thead {
+    background-color: rgba(30, 41, 59, 0.8) !important;
+}
+
+body.dark-mode table tbody tr:hover {
+    background-color: rgba(30, 41, 59, 0.6) !important;
+}
+
+body.dark-mode table th {
+    color: #e2e8f0 !important;
+    font-weight: 600 !important;
+}
+
+body.dark-mode table td {
+    border-color: rgba(148, 163, 184, 0.2) !important;
+}
+
+/* 表格中的按钮在暗黑模式下的样式 */
+body.dark-mode table .text-blue-600 {
+    color: #93c5fd !important;
+}
+
+body.dark-mode table .text-red-600 {
+    color: #fca5a5 !important;
+}
+
+body.dark-mode table .hover\:text-blue-900:hover {
+    color: #bfdbfe !important;
+}
+
+body.dark-mode table .hover\:text-red-900:hover {
+    color: #fecaca !important;
+}
+
+/* 确保表格中背景蓝色区域在暗黑模式下不会太刺眼 */
+body.dark-mode .bg-blue-50 {
+    background-color: rgba(30, 58, 138, 0.2) !important;
+}
+
+/* 优化只在MQTT标签在暗黑模式下的显示 */
+body.dark-mode span.bg-blue-100.text-blue-700 {
+    background-color: rgba(30, 58, 138, 0.3) !important;
+    color: #93c5fd !important;
+    border: 1px solid rgba(147, 197, 253, 0.3);
+}
+
+/* 移动设备上状态标签优化 */
+@media (max-width: 767px) {
+    .status-online, .status-offline {
+        padding: 0.125rem 0.5rem;
+        font-size: 0.75rem;
+    }
+
+    /* 确保表格中的在线/离线状态文本非常清晰可见 */
+    body.dark-mode table .status-online,
+    body.dark-mode table .status-offline {
+        font-weight: 700 !important;
+    }
 }

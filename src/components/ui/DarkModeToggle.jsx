@@ -1,52 +1,45 @@
 'use client';
 
-// src/components/ui/DarkModeToggle.jsx
-import { useState, useEffect } from 'react';
-import { Moon, Sun } from 'lucide-react';
+import {useEffect, useState} from 'react';
+import {Moon, Sun} from 'lucide-react';
+import {initializeTheme, toggleTheme, watchSystemTheme} from '@/lib/theme-utils';
 
 export default function DarkModeToggle() {
     const [darkMode, setDarkMode] = useState(false);
+    const [mounted, setMounted] = useState(false);
 
-    // 组件挂载时检查当前模式
+    // 组件挂载时初始化
     useEffect(() => {
-        // 检查本地存储
-        const savedMode = localStorage.getItem('darkMode');
-
-        // 检查系统偏好
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-
-        // 如果有保存的设置，使用它，否则使用系统偏好
-        const initialMode = savedMode !== null ? savedMode === 'true' : prefersDark;
-
+        const initialMode = initializeTheme();
         setDarkMode(initialMode);
+        setMounted(true);
 
-        // 应用初始模式
-        if (initialMode) {
-            document.body.classList.add('dark-mode');
-        } else {
-            document.body.classList.remove('dark-mode');
-        }
+        // 监听系统主题变化，仅当用户没有手动设置时
+        return watchSystemTheme((isDark) => {
+            // 只有当本地没有保存设置时，才跟随系统变化
+            if (localStorage.getItem('darkMode') === null) {
+                setDarkMode(isDark);
+                if (isDark) {
+                    document.body.classList.add('dark-mode');
+                } else {
+                    document.body.classList.remove('dark-mode');
+                }
+            }
+        });
     }, []);
 
     // 切换暗黑/明亮模式
-    const toggleDarkMode = () => {
-        const newMode = !darkMode;
+    const handleToggle = () => {
+        const newMode = toggleTheme(darkMode);
         setDarkMode(newMode);
-
-        // 保存到本地存储
-        localStorage.setItem('darkMode', String(newMode));
-
-        // 应用到body
-        if (newMode) {
-            document.body.classList.add('dark-mode');
-        } else {
-            document.body.classList.remove('dark-mode');
-        }
     };
+
+    // 如果组件尚未挂载，不渲染任何内容以避免水合错误
+    if (!mounted) return null;
 
     return (
         <button
-            onClick={toggleDarkMode}
+            onClick={handleToggle}
             className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
             title={darkMode ? '切换到明亮模式' : '切换到夜间模式'}
             aria-label={darkMode ? '切换到明亮模式' : '切换到夜间模式'}

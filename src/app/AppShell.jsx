@@ -68,16 +68,16 @@ export default function AppShell({ children }) {
     // 如果用户已登录，则显示带导航的布局
     if (isAuthenticated) {
         return (
-            <div className="min-h-screen bg-gray-100">
-                <header className="bg-white shadow-sm sticky top-0 z-20">
+            <div className="min-h-screen bg-gray-100 dark:bg-gray-900 transition-colors duration-300">
+                <header className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-20 transition-colors duration-300">
                     <div className="max-w-7xl mx-auto nav-container">
                         <div className="flex justify-between items-center h-14 px-2 sm:px-4 lg:px-6">
                             {/* Logo 部分 */}
                             <div className="flex flex-1 items-center">
                                 <div className="flex-shrink-0 flex items-center">
                                     <Link href="/" className="flex items-center group">
-                                        <span className="text-lg md:text-xl font-bold text-gray-900 group-hover:text-blue-600 transition-colors">Οὐρανός</span>
-                                        <span className="ml-1 text-xs md:text-sm text-gray-600 group-hover:text-blue-500 transition-colors">控制台</span>
+                                        <span className="text-lg md:text-xl font-bold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">Οὐρανός</span>
+                                        <span className="ml-1 text-xs md:text-sm text-gray-600 dark:text-gray-300 group-hover:text-blue-500 dark:group-hover:text-blue-300 transition-colors">控制台</span>
                                     </Link>
                                 </div>
                                 {/* 响应式导航组件 */}
@@ -92,7 +92,7 @@ export default function AppShell({ children }) {
                     </div>
                 </header>
 
-                <main className="pb-16">
+                <main className="pb-16 transition-colors duration-300">
                     {children}
                 </main>
             </div>

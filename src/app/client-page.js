@@ -150,21 +150,21 @@ export default function DashboardClientPage() {
                     title="代理节点"
                     value={`${onlineAgents.length}/${agents.length}`}
                     description={mqttConnected ? 'MQTT实时监控' : '通过HTTP监控'}
-                    icon={<Server className="w-8 h-8 text-blue-500"/>}
+                    icon={<Server className="w-8 h-8 text-blue-500 dark-mode:text-blue-300"/>}
                     color="blue"
                 />
                 <StatusCard
                     title="网站"
                     value={totalWebsites}
                     description="托管网站总数"
-                    icon={<Globe className="w-8 h-8 text-green-500"/>}
+                    icon={<Globe className="w-8 h-8 text-green-500 dark-mode:text-green-300"/>}
                     color="green"
                 />
                 <StatusCard
                     title="SSL证书"
                     value={totalCertificates}
                     description="有效证书数量"
-                    icon={<FileCheck className="w-8 h-8 text-purple-500"/>}
+                    icon={<FileCheck className="w-8 h-8 text-purple-500 dark-mode:text-purple-300"/>}
                     color="purple"
                 />
             </div>
@@ -199,7 +199,7 @@ export default function DashboardClientPage() {
                         {/* Agent data - only show when not loading and data exists */}
                         {!isLoading && recentAgents.length > 0 && recentAgents.map(agent => (
                             <tr key={agent._id || agent.uuid} className={`hover:bg-gray-50 ${agent._mqttOnly ? 'bg-blue-50' : ''}`}>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                     {agent.hostname || '未命名代理'}
                                     {agent._mqttOnly && (
                                         <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700">

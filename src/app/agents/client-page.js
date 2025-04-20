@@ -290,7 +290,7 @@ export default function AgentsClientPage() {
                         {!isLoading && filteredAgents.length > 0 && filteredAgents.map(agent => (
                             <tr key={agent._id || agent.uuid}
                                 className={`hover:bg-gray-50 ${agent._mqttOnly ? 'bg-blue-50' : ''}`}>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                     {agent.hostname || '未命名代理'}
                                     {agent._mqttOnly && (
                                         <span
