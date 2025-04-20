@@ -1,28 +1,26 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+    --background: #ffffff;
+    --foreground: #171717;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+    :root {
+        --background: #0a0a0a;
+        --foreground: #ededed;
+    }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: Arial, Helvetica, sans-serif;
 }
 
 /* 添加全局按钮和可点击元素的光标样式 */
@@ -34,14 +32,14 @@ input[type="submit"],
 input[type="button"],
 input[type="reset"],
 .cursor-pointer {
-  cursor: pointer;
+    cursor: pointer;
 }
 
 /* 禁用状态的按钮使用not-allowed光标 */
 button:disabled,
 [role="button"]:disabled,
 input:disabled {
-  cursor: not-allowed;
+    cursor: not-allowed;
 }
 
 /*
@@ -49,40 +47,44 @@ input:disabled {
   可以保留这些样式用于兼容性，但不再需要直接操作 DOM 来添加类名
 */
 body.loading-transition {
-  overflow: hidden; /* 防止滚动 */
-  position: relative;
+    overflow: hidden; /* 防止滚动 */
+    position: relative;
 }
 
 body.loading-transition::after {
-  content: '';
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(255, 255, 255, 0.8);
-  z-index: 9998;
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.8);
+    z-index: 9998;
 }
 
 body.loading-transition::before {
-  content: '';
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  margin-top: -24px;
-  margin-left: -24px;
-  width: 48px;
-  height: 48px;
-  border: 4px solid rgba(59, 130, 246, 0.3);
-  border-top-color: #3b82f6;
-  border-radius: 50%;
-  animation: loader-spin 1s linear infinite;
-  z-index: 9999;
+    content: '';
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    margin-top: -24px;
+    margin-left: -24px;
+    width: 48px;
+    height: 48px;
+    border: 4px solid rgba(59, 130, 246, 0.3);
+    border-top-color: #3b82f6;
+    border-radius: 50%;
+    animation: loader-spin 1s linear infinite;
+    z-index: 9999;
 }
 
 @keyframes loader-spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
 }
 
 /* 侧边菜单滑入动画 */
@@ -114,448 +116,4 @@ body.loading-transition::before {
 
 .mobile-menu-backdrop {
     animation: fadeIn 0.2s ease forwards;
-}
-
-/* 移动端适配样式 */
-@media (max-width: 640px) {
-    /* 调整内容边距，确保在小屏幕上有足够空间 */
-    .container,
-    .max-w-7xl {
-        padding-left: 1rem;
-        padding-right: 1rem;
-    }
-
-    /* 调整表格在移动端的显示 */
-    table {
-        display: block;
-        overflow-x: auto;
-        white-space: nowrap;
-        -webkit-overflow-scrolling: touch;
-    }
-
-    /* 确保内容不会超出屏幕 */
-    .overflow-hidden-mobile {
-        overflow: hidden;
-    }
-
-    /* 增加触摸区域大小 */
-    button,
-    [role="button"],
-    a.nav-link {
-        min-height: 44px;
-        min-width: 44px;
-    }
-}
-
-/* 当侧边菜单打开时锁定主内容滚动 */
-body.menu-open {
-    overflow: hidden;
-    position: fixed;
-    width: 100%;
-    height: 100%;
-}
-/* 添加到src/app/globals.css文件 */
-
-/* 提高所有灰色文本的对比度 */
-.text-gray-500 {
-    color: #575757 !important; /* 加深灰色 */
-}
-
-.text-gray-400 {
-    color: #666666 !important;
-}
-
-.text-gray-600 {
-    color: #444444 !important;
-}
-
-/* 加强表格文本的对比度 */
-th.text-gray-500 {
-    color: #444444 !important;
-    font-weight: 600 !important;
-}
-
-td.text-gray-500 {
-    color: #4a4a4a !important;
-}
-
-/* 状态标签增强可读性 */
-.text-green-800 {
-    color: #166534 !important; /* 加深绿色文本 */
-}
-
-.text-red-800 {
-    color: #991b1b !important; /* 加深红色文本 */
-}
-
-.text-blue-600, .text-blue-700 {
-    color: #1d4ed8 !important; /* 加深蓝色文本 */
-}
-
-/* 暗色模式支持 */
-@media (prefers-color-scheme: dark) {
-    :root {
-        --background: #121212;
-        --foreground: #ffffff;
-    }
-
-    body {
-        background-color: var(--background);
-        color: var(--foreground);
-    }
-
-    .bg-white {
-        background-color: #222222 !important;
-    }
-
-    .bg-gray-50, .bg-gray-100 {
-        background-color: #333333 !important;
-    }
-
-    .border-gray-200, .border-gray-300 {
-        border-color: #444444 !important;
-    }
-
-    .text-gray-800, .text-gray-900 {
-        color: #e0e0e0 !important;
-    }
-
-    .text-gray-700 {
-        color: #d0d0d0 !important;
-    }
-
-    .text-gray-600 {
-        color: #c0c0c0 !important;
-    }
-
-    .text-gray-500 {
-        color: #b0b0b0 !important;
-    }
-
-    .shadow, .shadow-sm, .shadow-md, .shadow-lg {
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5) !important;
-    }
-
-    /* 修复表格在暗色模式下的显示 */
-    thead.bg-gray-50 {
-        background-color: #2a2a2a !important;
-    }
-
-    tr.hover\:bg-gray-50:hover {
-        background-color: #2d2d2d !important;
-    }
-
-    /* 状态标签在暗色模式下的优化 */
-    .bg-green-100 {
-        background-color: #132818 !important;
-    }
-
-    .bg-red-100 {
-        background-color: #281313 !important;
-    }
-
-    .bg-blue-100 {
-        background-color: #172442 !important;
-    }
-}
-
-/* 手动切换暗黑模式的类 */
-body.dark-mode {
-    background-color: #121212;
-    color: #ffffff;
-}
-
-body.dark-mode .bg-white {
-    background-color: #222222 !important;
-}
-
-body.dark-mode .bg-gray-50,
-body.dark-mode .bg-gray-100 {
-    background-color: #333333 !important;
-}
-
-body.dark-mode .border-gray-200,
-body.dark-mode .border-gray-300 {
-    border-color: #444444 !important;
-}
-
-body.dark-mode .text-gray-800,
-body.dark-mode .text-gray-900 {
-    color: #e0e0e0 !important;
-}
-
-body.dark-mode .text-gray-700 {
-    color: #d0d0d0 !important;
-}
-
-body.dark-mode .text-gray-600 {
-    color: #c0c0c0 !important;
-}
-
-body.dark-mode .text-gray-500 {
-    color: #b0b0b0 !important;
-}
-
-body.dark-mode .shadow,
-body.dark-mode .shadow-sm,
-body.dark-mode .shadow-md,
-body.dark-mode .shadow-lg {
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5) !important;
-}
-
-/* 深色模式下的表格样式 */
-body.dark-mode thead.bg-gray-50 {
-    background-color: #2a2a2a !important;
-}
-
-body.dark-mode tr.hover\:bg-gray-50:hover {
-    background-color: #2d2d2d !important;
-}
-
-/* 深色模式下的状态标签 */
-body.dark-mode .bg-green-100 {
-    background-color: #132818 !important;
-}
-
-body.dark-mode .bg-red-100 {
-    background-color: #281313 !important;
-}
-
-body.dark-mode .bg-blue-100 {
-    background-color: #172442 !important;
-}
-/* 通用高对比度模式 - 无论白天还是黑夜 */
-.high-contrast {
-    /* 增强所有灰色文本 */
-    --high-contrast-gray-400: #555555;
-    --high-contrast-gray-500: #444444;
-    --high-contrast-gray-600: #333333;
-}
-
-/* 添加高对比度文本类 */
-.text-hc {
-    font-weight: 500 !important;
-    text-shadow: 0 0 1px rgba(0,0,0,0.1);
-}
-
-/* 通用状态标签增强 */
-.status-label {
-    font-weight: 600;
-    padding: 0.25rem 0.75rem;
-    border-radius: 9999px;
-    display: inline-flex;
-    align-items: center;
-}
-
-.status-online {
-    background-color: #dcfce7;
-    color: #166534;
-    border: 1px solid #86efac;
-}
-
-.status-offline {
-    background-color: #fee2e2;
-    color: #991b1b;
-    border: 1px solid #fca5a5;
-}
-
-/* 表格专用的高对比度模式 */
-table.high-contrast th {
-    font-weight: 600;
-    color: #333333 !important;
-}
-
-table.high-contrast td {
-    color: #444444 !important;
-}
-
-/* 对于特别重要的数据，使用此类 */
-.data-highlight {
-    font-weight: 600;
-    color: #2563eb !important; /* 蓝色 */
-}
-
-/* 调整用户菜单样式确保在黑暗模式中可见 */
-body.dark-mode .bg-blue-50 {
-    background-color: #1e3a8a !important;
-}
-
-body.dark-mode .text-blue-600,
-body.dark-mode .text-blue-700 {
-    color: #93c5fd !important;
-}
-
-/* 提高移动端表格字体大小 */
-@media (max-width: 767px) {
-    table td, table th {
-        font-size: 0.9375rem !important;
-    }
-
-    /* 移动端状态标签优化 */
-    .status-label {
-        white-space: nowrap;
-        font-size: 0.8125rem;
-    }
-
-    /* 在低分辨率屏幕上增加触摸目标大小 */
-    td a, td button {
-        padding: 0.5rem 0.25rem;
-        display: inline-flex;
-        align-items: center;
-    }
-}
-
-/* 为了解决夜间灰色文字低对比度问题，添加自动对比度调整 */
-@media (prefers-color-scheme: dark), (max-width: 767px) {
-    .text-gray-400, .text-gray-500, .text-gray-600 {
-        color: #bdbdbd !important;
-    }
-
-    /* 确保表格标题有足够对比度 */
-    th.text-xs {
-        font-size: 0.8125rem !important;
-        font-weight: 600 !important;
-    }
-}
-
-/* 顶部导航栏的响应式优化 */
-.nav-container {
-    transition: padding 0.3s ease;
-}
-
-/* 小屏幕导航栏优化 */
-@media (max-width: 767px) {
-    /* 减少菜单项内边距 */
-    .nav-link {
-        padding: 0.5rem 0.75rem !important;
-    }
-
-    /* 减少顶部导航栏的高度 */
-    header .h-16 {
-        height: 3.5rem !important;
-    }
-
-    /* 减少导航栏内边距 */
-    header .px-4 {
-        padding-left: 0.5rem !important;
-        padding-right: 0.5rem !important;
-    }
-
-    /* 提高用户菜单图标的触摸区域 */
-    .user-menu-button {
-        min-height: 2.5rem;
-        min-width: 2.5rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    /* 确保菜单下拉项足够大 */
-    .user-menu-item {
-        padding: 0.75rem 1rem !important;
-        font-size: 0.9375rem !important;
-    }
-}
-
-/* 优化按钮内边距，防止小屏幕上的突然变化 */
-@media (max-width: 767px) {
-    button,
-    [role="button"] {
-        padding: 0.375rem 0.75rem !important;
-    }
-
-    /* 用户菜单图标按钮特殊处理 */
-    button.p-2,
-    button.p-1.5 {
-    padding: 0.375rem !important;
-}
-
-    /* 导航栏 Logo 优化 */
-    header .flex-shrink-0 {
-        margin-right: 0.25rem !important;
-    }
-
-    /* 菜单间距调整 */
-    .space-x-4 > * + * {
-        margin-left: 0.5rem !important;
-    }
-
-    .space-x-6 > * + * {
-        margin-left: 0.75rem !important;
-    }
-
-    /* 优化按钮图标和文本的间距 */
-    button svg + span,
-    a svg + span,
-    [role="button"] svg + span {
-        margin-left: 0.25rem !important;
-    }
-}
-
-/* 中等尺寸屏幕 */
-@media (min-width: 768px) and (max-width: 1023px) {
-    /* 优化导航项内边距 */
-    .nav-link {
-        padding: 0.5rem 0.75rem !important;
-    }
-}
-
-/* 深色模式下导航栏优化 */
-body.dark-mode header {
-    background-color: #222222 !important;
-    border-bottom: 1px solid #333333 !important;
-}
-
-/* 控制按钮文本的溢出 */
-button, a, [role="button"] {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-/* 确保用户菜单总是位于正确位置 */
-.user-menu {
-    position: relative;
-}
-
-/* 圆角一致性 */
-.rounded-full {
-    border-radius: 9999px !important;
-}
-
-/* 确保点击区域足够大 */
-button.p-1, button.p-2, a.p-1, a.p-2 {
-    min-width: 2rem;
-    min-height: 2rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-/* 改进状态指示点的大小 */
-@media (max-width: 639px) {
-    .w-2.h-2 {
-        width: 0.375rem !important;
-        height: 0.375rem !important;
-    }
-}
-
-/* 小尺寸设备上的特殊优化 */
-@media (max-width: 375px) {
-    /* 更小的内边距 */
-    header .px-2 {
-        padding-left: 0.25rem !important;
-        padding-right: 0.25rem !important;
-    }
-
-    /* 减小图标大小 */
-    .h-5.w-5 {
-        height: 1rem !important;
-        width: 1rem !important;
-    }
-
-    /* 减小文本大小 */
-    .text-sm {
-        font-size: 0.75rem !important;
-    }
 }
