@@ -1,31 +1,29 @@
 'use client';
 
-import {useEffect, useState} from 'react';
-import {useRouter} from 'next/navigation';
-import {Eye, EyeOff, Lock, User} from 'lucide-react';
-import {useAuth} from '@/app/contexts/AuthContext';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Eye, EyeOff, Lock, User } from 'lucide-react';
+import { useAuth } from '@/app/contexts/AuthContext';
 
 export default function LoginPage() {
     const router = useRouter();
-    const {login} = useAuth();
+    const { login } = useAuth();
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
     const [showPassword, setShowPassword] = useState(false);
-    // 添加渲染标志来避免 hydration 不匹配
-    const [isMounted, setIsMounted] = useState(false);
     const [formData, setFormData] = useState({
         username: '',
         password: '',
         remember: false
     });
 
-    // 使用 useEffect 确保组件只在客户端渲染后才显示
+    // 使用 useEffect 来处理客户端逻辑，但不会影响初始渲染
     useEffect(() => {
-        setIsMounted(true);
+        // 客户端逻辑可以放在这里
     }, []);
 
     const handleChange = (e) => {
-        const {name, value, type, checked} = e.target;
+        const { name, value, type, checked } = e.target;
         setFormData({
             ...formData,
             [name]: type === 'checkbox' ? checked : value
@@ -41,7 +39,7 @@ export default function LoginPage() {
             // 调用登录API
             const response = await fetch('/api/auth/login', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(formData)
             });
 
@@ -66,18 +64,8 @@ export default function LoginPage() {
         }
     };
 
-    // 如果组件未加载，返回加载占位符
-    if (!isMounted) {
-        return (
-            <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-                <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-            </div>
-        );
-    }
-
     return (
         <div className="min-h-screen bg-gray-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-
             <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
                 <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
                     <div className="sm:mx-auto sm:w-full sm:max-w-md">
