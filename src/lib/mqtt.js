@@ -43,28 +43,6 @@ const getMqttConfig = () => {
     };
 };
 
-// MQTT配置
-const MQTT_CONFIG = getMqttConfig();
-
-// MQTT选项
-const getMqttOptions = () => {
-    const clientId = `${MQTT_CONFIG.CLIENT_PREFIX}-${uuidv4()}`;
-
-    return {
-        clientId,
-        clean: true,
-        reconnectPeriod: MQTT_CONFIG.RECONNECT_PERIOD,
-        connectTimeout: MQTT_CONFIG.CONNECT_TIMEOUT,
-        keepalive: MQTT_CONFIG.KEEPALIVE,
-        will: {
-            topic: 'uranus/clients/status',
-            payload: JSON.stringify({clientId, status: 'offline'}),
-            qos: 1,
-            retain: false
-        }
-    };
-};
-
 // MQTT topics
 const TOPICS = {
     HEARTBEAT: 'uranus/heartbeat',
@@ -86,13 +64,21 @@ export function useMqttClient() {
     const agentStateRef = useRef({});
     const pendingCommands = useRef(new Map());
     const reconnectCountRef = useRef(0);
-    const clientIdRef = useRef(`${MQTT_CONFIG.CLIENT_PREFIX}-${uuidv4()}`);
+    const clientIdRef = useRef(null);
     const isInitializedRef = useRef(false);
     const connectionCheckTimerRef = useRef(null);
     const lastUpdateTimestampRef = useRef(Date.now());
     const currentAgentUUID = useRef(null);
     const updateThrottlesRef = useRef(new Map());
     const UPDATE_INTERVAL = 10000;
+
+    // 初始化clientId
+    useEffect(() => {
+        if (!clientIdRef.current) {
+            const config = getMqttConfig();
+            clientIdRef.current = `${config.CLIENT_PREFIX}-${uuidv4()}`;
+        }
+    }, []);
 
     // 设置当前查看的代理UUID并订阅其响应主题
     const setCurrentAgent = useCallback((uuid) => {
@@ -231,7 +217,21 @@ export function useMqttClient() {
     const connect = useCallback(() => {
         // 获取最新MQTT配置
         const config = getMqttConfig();
-        const mqttOptions = getMqttOptions();
+
+        // MQTT选项
+        const mqttOptions = {
+            clientId: clientIdRef.current,
+            clean: true,
+            reconnectPeriod: config.RECONNECT_PERIOD,
+            connectTimeout: config.CONNECT_TIMEOUT,
+            keepalive: config.KEEPALIVE,
+            will: {
+                topic: 'uranus/clients/status',
+                payload: JSON.stringify({clientId: clientIdRef.current, status: 'offline'}),
+                qos: 1,
+                retain: false
+            }
+        };
 
         if (client) {
             // If client instance exists but not connected, try to reconnect

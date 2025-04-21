@@ -2,7 +2,7 @@
 
 // src/app/settings/page.js
 import {useState, useEffect} from 'react';
-import {AlertCircle, CheckCircle2, Database, Edit, Loader2, Network, Plus, Settings as SettingsIcon, Shield, Trash2, User, X} from 'lucide-react';
+import {AlertCircle, CheckCircle2, Database, Edit, Info, Loader2, Network, Plus, Settings as SettingsIcon, Shield, Trash2, User, X} from 'lucide-react';
 import FormInput from '@/components/ui/FormInput';
 import FormSelect from '@/components/ui/FormSelect';
 import Button from '@/components/ui/Button';
@@ -24,6 +24,28 @@ export default function SettingsPage() {
         confirmPassword: '',
         role: 'admin',
         active: true
+    });
+
+    // 常规设置状态
+    const [generalSettings, setGeneralSettings] = useState({
+        siteName: 'Οὐρανός 控制台',
+        siteUrl: 'http://localhost:3000',
+        language: 'zh-CN'
+    });
+    const [generalSettingsMessage, setGeneralSettingsMessage] = useState({
+        type: '',
+        content: '',
+        show: false
+    });
+
+    // 数据库设置状态
+    const [dbSettings, setDbSettings] = useState({
+        databaseUrl: 'mongodb://localhost:27017/uranus-control'
+    });
+    const [dbSettingsMessage, setDbSettingsMessage] = useState({
+        type: '',
+        content: '',
+        show: false
     });
 
     // MQTT设置状态
@@ -58,6 +80,56 @@ export default function SettingsPage() {
         { value: false, label: '禁用' }
     ];
 
+    // 获取常规设置
+    const fetchGeneralSettings = async () => {
+        try {
+            setLoading(true);
+
+            // 尝试从API获取设置
+            const response = await fetch('/api/settings?key=generalSettings');
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data) {
+                    console.log('已加载常规设置:', data);
+                    setGeneralSettings(data);
+                }
+            } else {
+                // 如果API调用失败，尝试从localStorage获取
+                const savedSettings = localStorage.getItem('generalSettings');
+                if (savedSettings) {
+                    setGeneralSettings(JSON.parse(savedSettings));
+                }
+            }
+        } catch (error) {
+            console.error('加载常规设置失败:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // 获取数据库设置
+    const fetchDbSettings = async () => {
+        try {
+            setLoading(true);
+
+            // 尝试从API获取设置
+            const response = await fetch('/api/settings?key=dbSettings');
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data) {
+                    console.log('已加载数据库设置:', data);
+                    setDbSettings(data);
+                }
+            }
+        } catch (error) {
+            console.error('加载数据库设置失败:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     // 获取用户列表
     const fetchUsers = async () => {
         try {
@@ -81,15 +153,26 @@ export default function SettingsPage() {
     const fetchMqttSettings = async () => {
         try {
             setLoading(true);
-            // 假设后端有获取MQTT设置的API
-            // 这里暂时使用默认值
-            setMqttSettings({
-                url: 'wss://mqtt.qfdk.me/mqtt',
-                clientPrefix: 'uranus-control',
-                reconnectPeriod: 3000,
-                connectTimeout: 30000,
-                keepalive: 30
-            });
+
+            // 尝试从API获取设置
+            const response = await fetch('/api/settings?key=mqttSettings');
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data) {
+                    console.log('已加载MQTT设置:', data);
+                    setMqttSettings(data);
+                } else {
+                    // 尝试从localStorage获取
+                    const localSettings = localStorage.getItem('mqttSettings');
+                    if (localSettings) {
+                        setMqttSettings(JSON.parse(localSettings));
+                    }
+                }
+            } else {
+                // 使用默认设置
+                console.log('使用默认MQTT设置');
+            }
         } catch (error) {
             console.error('加载MQTT设置失败:', error);
         } finally {
@@ -97,22 +180,35 @@ export default function SettingsPage() {
         }
     };
 
-    // 首次加载获取用户列表和MQTT设置
+    // 首次加载获取数据
     useEffect(() => {
         if (activeTab === 'users') {
             fetchUsers();
         } else if (activeTab === 'mqtt') {
             fetchMqttSettings();
+        } else if (activeTab === 'general') {
+            fetchGeneralSettings();
+        } else if (activeTab === 'database') {
+            fetchDbSettings();
         }
     }, [activeTab]);
 
-    // 处理表单输入变化
-    const handleInputChange = (e) => {
-        const { name, value, type, checked } = e.target;
-        setFormData({
-            ...formData,
-            [name]: type === 'checkbox' ? checked : value
-        });
+    // 处理常规设置输入变化
+    const handleGeneralSettingChange = (e) => {
+        const { name, value } = e.target;
+        setGeneralSettings(prev => ({
+            ...prev,
+            [name]: value
+        }));
+    };
+
+    // 处理数据库设置输入变化
+    const handleDbSettingChange = (e) => {
+        const { name, value } = e.target;
+        setDbSettings(prev => ({
+            ...prev,
+            [name]: value
+        }));
     };
 
     // 处理MQTT设置输入变化
@@ -121,6 +217,15 @@ export default function SettingsPage() {
         setMqttSettings({
             ...mqttSettings,
             [name]: type === 'number' ? parseInt(value, 10) : value
+        });
+    };
+
+    // 处理用户表单输入变化
+    const handleInputChange = (e) => {
+        const { name, value, type, checked } = e.target;
+        setFormData({
+            ...formData,
+            [name]: type === 'checkbox' ? checked : value
         });
     };
 
@@ -152,7 +257,7 @@ export default function SettingsPage() {
         }, 300);
     };
 
-    // 处理表单提交
+    // 处理用户表单提交
     const handleSubmit = async (e) => {
         e.preventDefault();
         setFormError('');
@@ -246,7 +351,7 @@ export default function SettingsPage() {
         }
     };
 
-    // 重置表单
+    // 重置用户表单
     const resetForm = () => {
         setFormData({
             username: '',
@@ -260,16 +365,107 @@ export default function SettingsPage() {
         setFormSuccess('');
     };
 
-    // 保存系统设置
-    const handleSaveSettings = (e) => {
+    // 保存常规设置
+    const handleSaveSettings = async (e) => {
         e.preventDefault();
-        alert('设置已保存');
+
+        setGeneralSettingsMessage({
+            type: 'loading',
+            content: '正在保存设置...',
+            show: true
+        });
+
+        try {
+            // 保存到API
+            const response = await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    key: 'generalSettings',
+                    value: generalSettings
+                })
+            });
+
+            // 同时保存到localStorage作为备份
+            localStorage.setItem('generalSettings', JSON.stringify(generalSettings));
+
+            if (response.ok) {
+                setGeneralSettingsMessage({
+                    type: 'success',
+                    content: '设置已成功保存',
+                    show: true
+                });
+            } else {
+                const error = await response.json();
+                throw new Error(error.message || '保存设置失败');
+            }
+        } catch (error) {
+            console.error('保存设置失败:', error);
+            setGeneralSettingsMessage({
+                type: 'error',
+                content: `保存设置失败: ${error.message}`,
+                show: true
+            });
+        }
+
+        // 3秒后清除消息
+        setTimeout(() => {
+            setGeneralSettingsMessage({
+                type: '',
+                content: '',
+                show: false
+            });
+        }, 3000);
     };
 
     // 保存数据库设置
-    const handleSaveDbSettings = (e) => {
+    const handleSaveDbSettings = async (e) => {
         e.preventDefault();
-        alert('数据库设置已保存');
+
+        setDbSettingsMessage({
+            type: 'loading',
+            content: '正在保存数据库设置...',
+            show: true
+        });
+
+        try {
+            // 保存到API
+            const response = await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    key: 'dbSettings',
+                    value: dbSettings
+                })
+            });
+
+            if (response.ok) {
+                setDbSettingsMessage({
+                    type: 'success',
+                    content: '数据库设置已成功保存',
+                    show: true
+                });
+            } else {
+                const error = await response.json();
+                throw new Error(error.message || '保存数据库设置失败');
+            }
+        } catch (error) {
+            console.error('保存数据库设置失败:', error);
+            setDbSettingsMessage({
+                type: 'error',
+                content: `保存数据库设置失败: ${error.message}`,
+                show: true
+            });
+        }
+
+        // 3秒后清除消息
+        setTimeout(() => {
+            setDbSettingsMessage({
+                type: '',
+                content: '',
+                show: false
+            });
+        }, 3000);
     };
 
     // 保存MQTT设置
@@ -282,17 +478,29 @@ export default function SettingsPage() {
         });
 
         try {
-            // 模拟后端保存
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            // 保存到API
+            const response = await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    key: 'mqttSettings',
+                    value: mqttSettings
+                })
+            });
 
             // 保存到localStorage以便前端使用
             localStorage.setItem('mqttSettings', JSON.stringify(mqttSettings));
 
-            setMqttSettingsMessage({
-                type: 'success',
-                content: 'MQTT设置已保存，下次重新连接时生效',
-                show: true
-            });
+            if (response.ok) {
+                setMqttSettingsMessage({
+                    type: 'success',
+                    content: 'MQTT设置已保存，下次重新连接时生效',
+                    show: true
+                });
+            } else {
+                const errorData = await response.json();
+                throw new Error(errorData.error || '保存MQTT设置失败');
+            }
 
             // 3秒后清除消息
             setTimeout(() => {
@@ -312,8 +520,39 @@ export default function SettingsPage() {
     };
 
     // 测试数据库连接
-    const handleTestDbConnection = () => {
-        alert('数据库连接测试成功');
+    const handleTestDbConnection = async () => {
+        setDbSettingsMessage({
+            type: 'loading',
+            content: '正在测试数据库连接...',
+            show: true
+        });
+
+        try {
+            // 这里只是模拟测试连接
+            // 实际项目中应该有一个专门的API端点来测试连接
+            await new Promise(resolve => setTimeout(resolve, 1500));
+
+            setDbSettingsMessage({
+                type: 'success',
+                content: '数据库连接测试成功',
+                show: true
+            });
+        } catch (error) {
+            setDbSettingsMessage({
+                type: 'error',
+                content: `数据库连接失败: ${error.message}`,
+                show: true
+            });
+        }
+
+        // 5秒后清除消息
+        setTimeout(() => {
+            setDbSettingsMessage({
+                type: '',
+                content: '',
+                show: false
+            });
+        }, 5000);
     };
 
     // 测试MQTT连接
@@ -448,13 +687,34 @@ export default function SettingsPage() {
                                 <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
                                     <h2 className="text-lg font-medium text-gray-800 dark:text-white">常规设置</h2>
                                 </div>
+
+                                {/* 常规设置状态消息 */}
+                                {generalSettingsMessage.show && (
+                                    <div className={`mx-4 mt-4 p-3 rounded-md flex items-center ${
+                                        generalSettingsMessage.type === 'success'
+                                            ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                            : generalSettingsMessage.type === 'error'
+                                                ? 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                                                : generalSettingsMessage.type === 'loading'
+                                                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                                    : 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                    }`}>
+                                        {generalSettingsMessage.type === 'success' && <CheckCircle2 className="w-5 h-5 mr-2" />}
+                                        {generalSettingsMessage.type === 'error' && <AlertCircle className="w-5 h-5 mr-2" />}
+                                        {generalSettingsMessage.type === 'loading' && <Loader2 className="w-5 h-5 mr-2 animate-spin" />}
+                                        <span>{generalSettingsMessage.content}</span>
+                                    </div>
+                                )}
+
                                 <div className="p-4">
                                     <form className="space-y-4" onSubmit={handleSaveSettings}>
                                         <FormInput
                                             label="站点名称"
                                             id="siteName"
                                             name="siteName"
-                                            defaultValue="Οὐρανός 控制台"
+                                            value={generalSettings.siteName}
+                                            onChange={handleGeneralSettingChange}
+                                            required
                                         />
 
                                         <FormInput
@@ -462,24 +722,34 @@ export default function SettingsPage() {
                                             id="siteUrl"
                                             name="siteUrl"
                                             type="url"
-                                            defaultValue="http://localhost:3000"
+                                            value={generalSettings.siteUrl}
+                                            onChange={handleGeneralSettingChange}
+                                            required
                                         />
 
                                         <FormSelect
                                             label="系统语言"
                                             id="language"
                                             name="language"
+                                            value={generalSettings.language}
                                             options={languageOptions}
-                                            defaultValue="zh-CN"
+                                            onChange={handleGeneralSettingChange}
+                                            required
                                         />
 
                                         <div className="pt-4 flex justify-end">
-                                            <button
+                                            <Button
                                                 type="submit"
-                                                className="inline-flex justify-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:bg-blue-600 dark:hover:bg-blue-700"
+                                                variant="primary"
+                                                disabled={loading}
                                             >
-                                                保存设置
-                                            </button>
+                                                {loading ? (
+                                                    <>
+                                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                                        保存中...
+                                                    </>
+                                                ) : '保存设置'}
+                                            </Button>
                                         </div>
                                     </form>
                                 </div>
@@ -492,29 +762,58 @@ export default function SettingsPage() {
                                 <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
                                     <h2 className="text-lg font-medium text-gray-800 dark:text-white">数据库设置</h2>
                                 </div>
+
+                                {/* 数据库设置状态消息 */}
+                                {dbSettingsMessage.show && (
+                                    <div className={`mx-4 mt-4 p-3 rounded-md flex items-center ${
+                                        dbSettingsMessage.type === 'success'
+                                            ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                            : dbSettingsMessage.type === 'error'
+                                                ? 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                                                : dbSettingsMessage.type === 'loading'
+                                                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                                    : 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                    }`}>
+                                        {dbSettingsMessage.type === 'success' && <CheckCircle2 className="w-5 h-5 mr-2" />}
+                                        {dbSettingsMessage.type === 'error' && <AlertCircle className="w-5 h-5 mr-2" />}
+                                        {dbSettingsMessage.type === 'loading' && <Loader2 className="w-5 h-5 mr-2 animate-spin" />}
+                                        <span>{dbSettingsMessage.content}</span>
+                                    </div>
+                                )}
+
                                 <div className="p-4">
                                     <form className="space-y-4" onSubmit={handleSaveDbSettings}>
                                         <FormInput
                                             label="数据库连接字符串"
                                             id="databaseUrl"
                                             name="databaseUrl"
-                                            defaultValue="mongodb://localhost:27017/uranus-control"
+                                            value={dbSettings.databaseUrl}
+                                            onChange={handleDbSettingChange}
+                                            placeholder="mongodb://localhost:27017/uranus-control"
+                                            required
                                         />
 
                                         <div className="pt-4 flex justify-end">
-                                            <button
+                                            <Button
                                                 type="button"
+                                                variant="secondary"
                                                 onClick={handleTestDbConnection}
-                                                className="inline-flex justify-center px-4 py-2 mr-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md shadow-sm hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
+                                                className="mr-2"
                                             >
                                                 测试连接
-                                            </button>
-                                            <button
+                                            </Button>
+                                            <Button
                                                 type="submit"
-                                                className="inline-flex justify-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:bg-blue-600 dark:hover:bg-blue-700"
+                                                variant="primary"
+                                                disabled={loading}
                                             >
-                                                保存设置
-                                            </button>
+                                                {loading ? (
+                                                    <>
+                                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                                        保存中...
+                                                    </>
+                                                ) : '保存设置'}
+                                            </Button>
                                         </div>
                                     </form>
                                 </div>

@@ -1,5 +1,5 @@
 // src/app/api/settings/route.js
-import {NextResponse} from 'next/server';
+import { NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import mongoose from 'mongoose';
 
@@ -9,9 +9,9 @@ try {
     Settings = mongoose.model('Settings');
 } catch (error) {
     const SettingsSchema = new mongoose.Schema({
-        key: {type: String, required: true, unique: true},
-        value: {type: mongoose.Schema.Types.Mixed, required: true}
-    }, {timestamps: true});
+        key: { type: String, required: true, unique: true },
+        value: { type: mongoose.Schema.Types.Mixed, required: true },
+    }, { timestamps: true });
 
     Settings = mongoose.model('Settings', SettingsSchema);
 }
@@ -29,7 +29,7 @@ export async function GET(request) {
 
         if (key) {
             // 获取单个设置
-            const setting = await Settings.findOne({key});
+            const setting = await Settings.findOne({ key });
             response = setting ? setting.value : null;
         } else {
             // 获取所有设置
@@ -43,7 +43,7 @@ export async function GET(request) {
         return NextResponse.json(response);
     } catch (error) {
         console.error('获取设置失败:', error);
-        return NextResponse.json({error: error.message}, {status: 500});
+        return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
 
@@ -56,16 +56,16 @@ export async function POST(request) {
 
         if (!data.key || data.value === undefined) {
             return NextResponse.json(
-                {error: '请提供key和value字段'},
-                {status: 400}
+                { error: '请提供key和value字段' },
+                { status: 400 }
             );
         }
 
         // 使用upsert操作 - 如果存在则更新，不存在则创建
         const result = await Settings.findOneAndUpdate(
-            {key: data.key},
-            {value: data.value},
-            {upsert: true, new: true}
+            { key: data.key },
+            { value: data.value },
+            { upsert: true, new: true }
         );
 
         return NextResponse.json({
@@ -75,7 +75,7 @@ export async function POST(request) {
         });
     } catch (error) {
         console.error('保存设置失败:', error);
-        return NextResponse.json({error: error.message}, {status: 500});
+        return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
 
@@ -89,17 +89,17 @@ export async function DELETE(request) {
 
         if (!key) {
             return NextResponse.json(
-                {error: '请提供要删除的设置key'},
-                {status: 400}
+                { error: '请提供要删除的设置key' },
+                { status: 400 }
             );
         }
 
-        const result = await Settings.deleteOne({key});
+        const result = await Settings.deleteOne({ key });
 
         if (result.deletedCount === 0) {
             return NextResponse.json(
-                {error: '未找到指定的设置'},
-                {status: 404}
+                { error: '未找到指定的设置' },
+                { status: 404 }
             );
         }
 
@@ -109,6 +109,6 @@ export async function DELETE(request) {
         });
     } catch (error) {
         console.error('删除设置失败:', error);
-        return NextResponse.json({error: error.message}, {status: 500});
+        return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
