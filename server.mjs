@@ -110,7 +110,7 @@ async function startServer() {
 
                             // 更新数据库中的代理
                             try {
-                                const updatedAgent = await Agent.findOneAndUpdate(
+                                await Agent.findOneAndUpdate(
                                     {uuid},
                                     {
                                         ...payload,
@@ -122,29 +122,6 @@ async function startServer() {
                             } catch (dbError) {
                                 console.error(`在数据库中更新代理 ${uuid} 时出错:`, dbError);
                             }
-                        }
-                    }
-                }
-
-                // 处理状态消息
-                else if (topic === TOPICS.STATUS) {
-                    if (payload.uuid) {
-                        const uuid = payload.uuid;
-                        try {
-                            const updatedAgent = await Agent.findOneAndUpdate(
-                                {uuid},
-                                {
-                                    online: payload.status === 'online',
-                                    ...(payload.status === 'online' ? {lastHeartbeat: new Date()} : {})
-                                },
-                                {upsert: false, new: true}
-                            );
-
-                            if (updatedAgent) {
-                                console.log(`已将代理 ${uuid}(${updatedAgent.hostname}) 的状态更新为 ${payload.status}`);
-                            }
-                        } catch (dbError) {
-                            console.error(`更新代理 ${uuid} 的状态时出错:`, dbError);
                         }
                     }
                 }
