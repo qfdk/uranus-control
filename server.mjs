@@ -107,7 +107,6 @@ async function startServer() {
 
                         if (now - lastUpdate >= UPDATE_INTERVAL) {
                             updateThrottles.set(uuid, now);
-                            const currentTime = new Date();
 
                             // 更新数据库中的代理
                             try {
@@ -116,11 +115,10 @@ async function startServer() {
                                     {
                                         ...payload,
                                         online: true,
-                                        lastHeartbeat: currentTime // 明确设置为当前时间
+                                        lastHeartbeat: new Date() // 明确设置为当前时间
                                     },
                                     {upsert: true, new: true}
                                 );
-                                console.log(`已在数据库中更新代理 ${uuid} (${updatedAgent.hostname}) 的心跳`);
                             } catch (dbError) {
                                 console.error(`在数据库中更新代理 ${uuid} 时出错:`, dbError);
                             }
@@ -137,7 +135,7 @@ async function startServer() {
                                 {uuid},
                                 {
                                     online: payload.status === 'online',
-                                    ...(payload.status === 'online' ? { lastHeartbeat: new Date() } : {})
+                                    ...(payload.status === 'online' ? {lastHeartbeat: new Date()} : {})
                                 },
                                 {upsert: false, new: true}
                             );
