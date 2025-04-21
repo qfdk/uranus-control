@@ -40,7 +40,7 @@ export async function POST(request) {
             {upsert: true, new: true, runValidators: true}
         );
 
-        console.log(`已更新代理 ${data.uuid} 的心跳时间}`);
+        console.log(`已更新代理 ${data.uuid} 的心跳}`);
         return NextResponse.json(agent);
     } catch (error) {
         console.error('更新代理心跳失败:', error);

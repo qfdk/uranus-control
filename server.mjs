@@ -120,7 +120,7 @@ async function startServer() {
                                     },
                                     {upsert: true, new: true}
                                 );
-                                console.log(`已在数据库中更新代理 ${uuid} (${updatedAgent.hostname}) 的心跳时间: ${currentTime}`);
+                                console.log(`已在数据库中更新代理 ${uuid} (${updatedAgent.hostname}) 的心跳`);
                             } catch (dbError) {
                                 console.error(`在数据库中更新代理 ${uuid} 时出错:`, dbError);
                             }
