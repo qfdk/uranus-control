@@ -46,6 +46,9 @@ export function useMqttClient() {
     const connectionCheckTimerRef = useRef(null);
     const lastUpdateTimestampRef = useRef(Date.now());
     const currentAgentUUID = useRef(null);
+    // 新增：限流处理，防止过多HTTP请求
+    const updateThrottlesRef = useRef(new Map());
+    const UPDATE_INTERVAL = 10000; // 对同一个代理最少10秒更新一次数据库
 
     // 设置当前查看的代理UUID并订阅其响应主题
     const setCurrentAgent = useCallback((uuid) => {
@@ -61,6 +64,39 @@ export function useMqttClient() {
             console.log(`已订阅代理响应主题: ${responseTopic}`);
         }
     }, [client]);
+
+    // 新增：更新代理状态到数据库
+    const updateAgentToDatabase = useCallback(async (agentData) => {
+        if (!agentData || !agentData.uuid) return;
+
+        try {
+            const uuid = agentData.uuid;
+            // 实现限流以避免数据库过载
+            const now = Date.now();
+            const lastUpdate = updateThrottlesRef.current.get(uuid) || 0;
+
+            if (now - lastUpdate >= UPDATE_INTERVAL) {
+                updateThrottlesRef.current.set(uuid, now);
+
+                console.log(`更新代理 ${uuid} 状态到数据库`);
+                const response = await fetch('/api/agents', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ...agentData,
+                        online: true,
+                        lastHeartbeat: agentData.lastHeartbeat || new Date()
+                    })
+                });
+
+                if (!response.ok) {
+                    console.error(`更新代理 ${uuid} 状态失败:`, await response.text());
+                }
+            }
+        } catch (error) {
+            console.error('更新代理状态到数据库失败:', error);
+        }
+    }, []);
 
     // Handle received messages
     const handleMessage = useCallback((topic, message) => {
@@ -103,6 +139,12 @@ export function useMqttClient() {
                         return prevState;
                     });
 
+                    // 新增：当收到心跳消息时，直接更新到数据库
+                    updateAgentToDatabase({
+                        ...payload,
+                        lastHeartbeat: timestamp
+                    });
+
                     // Ensure subscribed to this agent's response topic
                     if (client && client.connected) {
                         const responseTopic = `${TOPICS.RESPONSE}${uuid}`;
@@ -140,7 +182,7 @@ export function useMqttClient() {
         } catch (err) {
             console.error('Error parsing MQTT message:', err, message.toString());
         }
-    }, [client]);
+    }, [client, updateAgentToDatabase]);
 
     // Connect to MQTT server
     const connect = useCallback(() => {
@@ -482,6 +524,34 @@ export function useMqttClient() {
         return sendCommand(uuid, 'upgrade');
     }, [sendCommand]);
 
+    // 新增：手动更新所有代理状态到数据库
+    const syncAllAgentsToDatabase = useCallback(async () => {
+        try {
+            const agentsToSync = Object.entries(agentStateRef.current).map(([uuid, agent]) => ({
+                uuid,
+                ...agent,
+                online: true,
+                lastHeartbeat: agent.lastHeartbeat || new Date()
+            }));
+
+            if (agentsToSync.length === 0) {
+                console.log('没有需要同步的代理状态');
+                return;
+            }
+
+            console.log(`手动同步 ${agentsToSync.length} 个代理状态到数据库`);
+
+            // 逐个更新代理状态
+            for (const agent of agentsToSync) {
+                await updateAgentToDatabase(agent);
+            }
+
+            console.log('所有代理状态同步完成');
+        } catch (error) {
+            console.error('同步代理状态失败:', error);
+        }
+    }, [updateAgentToDatabase]);
+
     return {
         connected,
         error,
@@ -502,7 +572,9 @@ export function useMqttClient() {
         startNginx,
         upgradeAgent,
         // 添加设置当前代理函数
-        setCurrentAgent
+        setCurrentAgent,
+        // 添加手动同步函数
+        syncAllAgents: syncAllAgentsToDatabase
     };
 }
 

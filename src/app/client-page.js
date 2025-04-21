@@ -34,7 +34,7 @@ export default function DashboardClientPage() {
     const isLoading = localLoading || agentsLoading;
 
     // MQTT集成
-    const {connected: mqttConnected, agentState, reconnect} = useMqttClient();
+    const {connected: mqttConnected, agentState, reconnect, syncAllAgents} = useMqttClient();
 
     // 跟踪上一次MQTT代理数量
     const prevMqttAgentCount = useRef(0);
@@ -77,6 +77,18 @@ export default function DashboardClientPage() {
     const handleManualRefresh = useCallback(async () => {
         setIsLoading(true);
         try {
+            // 如果MQTT已连接，先同步MQTT状态到数据库
+            if (mqttConnected) {
+                try {
+                    // 调用新增的同步函数
+                    await syncAllAgents();
+                    console.log('MQTT状态已同步到数据库');
+                } catch (error) {
+                    console.error('MQTT状态同步失败:', error);
+                }
+            }
+
+            // 然后刷新代理数据
             await refreshAgents(true);
 
             // 如果MQTT已连接，尝试重连
@@ -89,8 +101,8 @@ export default function DashboardClientPage() {
                 setIsLoading(false);
             }, 500);
         }
-    }, [refreshAgents, mqttConnected, reconnect]);
-    
+    }, [refreshAgents, mqttConnected, reconnect, syncAllAgents]);
+
     // 合并代理数据（HTTP和MQTT）
     const combinedAgents = useMemo(() => {
         if (!isMounted) return [];
