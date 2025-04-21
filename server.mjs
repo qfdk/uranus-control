@@ -107,20 +107,20 @@ async function startServer() {
 
                         if (now - lastUpdate >= UPDATE_INTERVAL) {
                             updateThrottles.set(uuid, now);
+                            const currentTime = new Date();
 
                             // 更新数据库中的代理
                             try {
-                                // const updatedAgent =
-                                await Agent.findOneAndUpdate(
+                                const updatedAgent = await Agent.findOneAndUpdate(
                                     {uuid},
                                     {
                                         ...payload,
                                         online: true,
-                                        lastHeartbeat: new Date()
+                                        lastHeartbeat: currentTime // 明确设置为当前时间
                                     },
                                     {upsert: true, new: true}
                                 );
-                                // console.log(`已在数据库中更新代理 ${uuid} (${updatedAgent.hostname})`);
+                                console.log(`已在数据库中更新代理 ${uuid} (${updatedAgent.hostname}) 的心跳时间: ${currentTime}`);
                             } catch (dbError) {
                                 console.error(`在数据库中更新代理 ${uuid} 时出错:`, dbError);
                             }
@@ -136,9 +136,10 @@ async function startServer() {
                             const updatedAgent = await Agent.findOneAndUpdate(
                                 {uuid},
                                 {
-                                    online: payload.status === 'online'
+                                    online: payload.status === 'online',
+                                    ...(payload.status === 'online' ? { lastHeartbeat: new Date() } : {})
                                 },
-                                {upsert: false, new: false}
+                                {upsert: false, new: true}
                             );
 
                             if (updatedAgent) {

@@ -23,18 +23,27 @@ export async function POST(request) {
 
     try {
         const data = await request.json();
+
+        // 确保心跳时间被强制更新为当前时间
+        const currentTime = new Date();
+
         // 处理心跳更新或新代理注册
         const agent = await Agent.findOneAndUpdate(
             {uuid: data.uuid},
             {
-                ...data,
-                online: true
+                $set: {
+                    ...data,
+                    online: true,
+                    lastHeartbeat: currentTime // 显式设置最新时间戳
+                }
             },
-            {upsert: true, new: true}
+            {upsert: true, new: true, runValidators: true}
         );
 
+        console.log(`已更新代理 ${data.uuid} 的心跳时间: ${currentTime.toISOString()}`);
         return NextResponse.json(agent);
     } catch (error) {
+        console.error('更新代理心跳失败:', error);
         return NextResponse.json({error: error.message}, {status: 500});
     }
 }
