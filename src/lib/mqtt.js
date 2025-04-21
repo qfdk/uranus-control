@@ -4,20 +4,65 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import mqtt from 'mqtt';
 import {v4 as uuidv4} from 'uuid';
 
-// MQTT configuration
-const MQTT_BROKER = 'wss://mqtt.qfdk.me/mqtt'; // WebSocket connection
-const MQTT_OPTIONS = {
-    clientId: `uranus-control-${uuidv4()}`,
-    clean: true,
-    reconnectPeriod: 3000, // Reduced reconnect interval to 3 seconds
-    connectTimeout: 30 * 1000, // 30 second connection timeout
-    keepalive: 30, // Add keepalive option, 30 seconds
-    will: {  // Last will message, sent when client disconnects unexpectedly
-        topic: 'uranus/clients/status',
-        payload: JSON.stringify({clientId: `uranus-control-${uuidv4()}`, status: 'offline'}),
-        qos: 1,
-        retain: false
+// 获取MQTT配置
+const getMqttConfig = () => {
+    if (typeof window === 'undefined') {
+        return {
+            MQTT_BROKER: 'wss://mqtt.qfdk.me/mqtt',
+            CLIENT_PREFIX: 'uranus-control',
+            RECONNECT_PERIOD: 3000,
+            CONNECT_TIMEOUT: 30000,
+            KEEPALIVE: 30
+        };
     }
+
+    // 尝试从localStorage获取配置
+    try {
+        const savedConfig = localStorage.getItem('mqttSettings');
+        if (savedConfig) {
+            const config = JSON.parse(savedConfig);
+            return {
+                MQTT_BROKER: config.url || 'wss://mqtt.qfdk.me/mqtt',
+                CLIENT_PREFIX: config.clientPrefix || 'uranus-control',
+                RECONNECT_PERIOD: config.reconnectPeriod || 3000,
+                CONNECT_TIMEOUT: config.connectTimeout || 30000,
+                KEEPALIVE: config.keepalive || 30
+            };
+        }
+    } catch (error) {
+        console.error('读取MQTT配置失败:', error);
+    }
+
+    // 默认配置
+    return {
+        MQTT_BROKER: 'wss://mqtt.qfdk.me/mqtt',
+        CLIENT_PREFIX: 'uranus-control',
+        RECONNECT_PERIOD: 3000,
+        CONNECT_TIMEOUT: 30000,
+        KEEPALIVE: 30
+    };
+};
+
+// MQTT配置
+const MQTT_CONFIG = getMqttConfig();
+
+// MQTT选项
+const getMqttOptions = () => {
+    const clientId = `${MQTT_CONFIG.CLIENT_PREFIX}-${uuidv4()}`;
+
+    return {
+        clientId,
+        clean: true,
+        reconnectPeriod: MQTT_CONFIG.RECONNECT_PERIOD,
+        connectTimeout: MQTT_CONFIG.CONNECT_TIMEOUT,
+        keepalive: MQTT_CONFIG.KEEPALIVE,
+        will: {
+            topic: 'uranus/clients/status',
+            payload: JSON.stringify({clientId, status: 'offline'}),
+            qos: 1,
+            retain: false
+        }
+    };
 };
 
 // MQTT topics
@@ -38,17 +83,16 @@ export function useMqttClient() {
     const [connected, setConnected] = useState(false);
     const [error, setError] = useState(null);
     const [agentState, setAgentState] = useState({});
-    const agentStateRef = useRef({}); // For accessing latest state in callbacks
-    const pendingCommands = useRef(new Map()); // Store pending commands
-    const reconnectCountRef = useRef(0); // Track reconnection attempts
-    const clientIdRef = useRef(`uranus-control-${uuidv4()}`); // Fixed client ID to avoid generating new ID on each reconnect
+    const agentStateRef = useRef({});
+    const pendingCommands = useRef(new Map());
+    const reconnectCountRef = useRef(0);
+    const clientIdRef = useRef(`${MQTT_CONFIG.CLIENT_PREFIX}-${uuidv4()}`);
     const isInitializedRef = useRef(false);
     const connectionCheckTimerRef = useRef(null);
     const lastUpdateTimestampRef = useRef(Date.now());
     const currentAgentUUID = useRef(null);
-    // 新增：限流处理，防止过多HTTP请求
     const updateThrottlesRef = useRef(new Map());
-    const UPDATE_INTERVAL = 10000; // 对同一个代理最少10秒更新一次数据库
+    const UPDATE_INTERVAL = 10000;
 
     // 设置当前查看的代理UUID并订阅其响应主题
     const setCurrentAgent = useCallback((uuid) => {
@@ -65,7 +109,7 @@ export function useMqttClient() {
         }
     }, [client]);
 
-    // 新增：更新代理状态到数据库
+    // 更新代理状态到数据库
     const updateAgentToDatabase = useCallback(async (agentData) => {
         if (!agentData || !agentData.uuid) return;
 
@@ -106,7 +150,6 @@ export function useMqttClient() {
             // Throttle logging to avoid console spam
             const now = Date.now();
             if (now - lastUpdateTimestampRef.current > 1000) {
-                // console.log(`MQTT message received on topic ${topic}`, payload);
                 lastUpdateTimestampRef.current = now;
             }
 
@@ -139,7 +182,7 @@ export function useMqttClient() {
                         return prevState;
                     });
 
-                    // 新增：当收到心跳消息时，直接更新到数据库
+                    // 当收到心跳消息时，直接更新到数据库
                     updateAgentToDatabase({
                         ...payload,
                         lastHeartbeat: timestamp
@@ -186,6 +229,10 @@ export function useMqttClient() {
 
     // Connect to MQTT server
     const connect = useCallback(() => {
+        // 获取最新MQTT配置
+        const config = getMqttConfig();
+        const mqttOptions = getMqttOptions();
+
         if (client) {
             // If client instance exists but not connected, try to reconnect
             if (!client.connected) {
@@ -204,18 +251,12 @@ export function useMqttClient() {
         }
 
         try {
-            console.log(`Connecting to MQTT server... (Attempt: ${reconnectCountRef.current + 1})`);
+            console.log(`正在连接到MQTT服务器(${config.MQTT_BROKER})... (尝试: ${reconnectCountRef.current + 1})`);
 
-            // Use fixed clientId
-            const mqttOptions = {
-                ...MQTT_OPTIONS,
-                clientId: clientIdRef.current
-            };
-
-            const mqttClient = mqtt.connect(MQTT_BROKER, mqttOptions);
+            const mqttClient = mqtt.connect(config.MQTT_BROKER, mqttOptions);
 
             mqttClient.on('connect', () => {
-                console.log('MQTT connection successful');
+                console.log('MQTT连接成功');
                 setConnected(true);
                 setError(null);
                 reconnectCountRef.current = 0; // Reset reconnect counter
@@ -502,6 +543,21 @@ export function useMqttClient() {
             window.removeEventListener('offline', handleOffline);
         };
     }, [client, connect]);
+
+    // 监听MQTT配置变化
+    useEffect(() => {
+        const handleStorageChange = (event) => {
+            if (event.key === 'mqttSettings') {
+                console.log('MQTT配置已更新，下次重新连接时将使用新配置');
+            }
+        };
+
+        window.addEventListener('storage', handleStorageChange);
+
+        return () => {
+            window.removeEventListener('storage', handleStorageChange);
+        };
+    }, []);
 
     // 添加Nginx命令函数
     const reloadNginx = useCallback((uuid) => {
