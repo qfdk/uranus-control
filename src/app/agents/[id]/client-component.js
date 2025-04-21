@@ -281,7 +281,7 @@ export default function AgentDetail({agent: initialAgent}) {
             {/* 命令执行状态 */}
             {agent.online && activeTab === 'info' && <StatusMessage
                 type={commandMessage.type}
-                message={commandMessage.content}
+                content={commandMessage.content}
                 show={commandMessage.show}
                 onClose={clearMessage}
                 className="mt-3 mb-4"
@@ -409,56 +409,46 @@ export default function AgentDetail({agent: initialAgent}) {
                                     <h2 className="text-lg font-medium text-gray-800 dark:text-white">Nginx服务控制</h2>
                                 </div>
 
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                    <div className="flex flex-col">
-                                        <Button
-                                            variant="primary"
-                                            onClick={reloadNginx}
-                                            disabled={isExecuting}
-                                            className="flex justify-center items-center h-full"
-                                        >
-                                            <RotateCw
-                                                className={`w-4 h-4 mr-1.5 ${isExecuting ? 'animate-spin' : ''}`}/>
-                                            重载配置
-                                        </Button>
-                                    </div>
+                                <div className="flex flex-wrap gap-2">
+                                    <button
+                                        onClick={reloadNginx}
+                                        disabled={isExecuting}
+                                        className="flex items-center px-3 py-1.5 rounded text-white bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 transition-colors"
+                                        title="重载Nginx配置"
+                                    >
+                                        <RotateCw className={`w-4 h-4 ${isExecuting ? 'animate-spin' : ''}`}/>
+                                        <span className="ml-2 text-sm">重载</span>
+                                    </button>
 
-                                    <div className="flex flex-col">
-                                        <Button
-                                            variant="success"
-                                            onClick={restartNginx}
-                                            disabled={isExecuting}
-                                            className="flex justify-center items-center h-full"
-                                        >
-                                            <RefreshCw
-                                                className={`w-4 h-4 mr-1.5 ${isExecuting ? 'animate-spin' : ''}`}/>
-                                            重启服务
-                                        </Button>
-                                    </div>
+                                    <button
+                                        onClick={restartNginx}
+                                        disabled={isExecuting}
+                                        className="flex items-center px-3 py-1.5 rounded text-white bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700 transition-colors"
+                                        title="重启Nginx服务"
+                                    >
+                                        <RefreshCw className={`w-4 h-4 ${isExecuting ? 'animate-spin' : ''}`}/>
+                                        <span className="ml-2 text-sm">重启</span>
+                                    </button>
 
-                                    <div className="flex flex-col">
-                                        <Button
-                                            variant="danger"
-                                            onClick={stopNginx}
-                                            disabled={isExecuting}
-                                            className="flex justify-center items-center h-full"
-                                        >
-                                            <Square className="w-4 h-4 mr-1.5"/>
-                                            停止服务
-                                        </Button>
-                                    </div>
+                                    <button
+                                        onClick={stopNginx}
+                                        disabled={isExecuting}
+                                        className="flex items-center px-3 py-1.5 rounded text-white bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 transition-colors"
+                                        title="停止Nginx服务"
+                                    >
+                                        <Square className="w-4 h-4"/>
+                                        <span className="ml-2 text-sm">停止</span>
+                                    </button>
 
-                                    <div className="flex flex-col">
-                                        <Button
-                                            variant="warning"
-                                            onClick={startNginx}
-                                            disabled={isExecuting}
-                                            className="flex justify-center items-center h-full"
-                                        >
-                                            <Play className="w-4 h-4 mr-1.5"/>
-                                            启动服务
-                                        </Button>
-                                    </div>
+                                    <button
+                                        onClick={startNginx}
+                                        disabled={isExecuting}
+                                        className="flex items-center px-3 py-1.5 rounded text-white bg-purple-500 hover:bg-purple-600 dark:bg-purple-600 dark:hover:bg-purple-700 transition-colors"
+                                        title="启动Nginx服务"
+                                    >
+                                        <Play className="w-4 h-4"/>
+                                        <span className="ml-2 text-sm">启动</span>
+                                    </button>
                                 </div>
                             </div>
                         </div>
