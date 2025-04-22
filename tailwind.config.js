@@ -5,12 +5,10 @@ module.exports = {
         './src/components/**/*.{js,ts,jsx,tsx,mdx}',
         './src/app/**/*.{js,ts,jsx,tsx,mdx}'
     ],
-    darkMode: 'class', // 使用 class 策略进行暗色模式控制
+    darkMode: 'class',
     theme: {
         extend: {
-            colors: {
-                // 可以在这里扩展颜色
-            },
+            colors: {},
             animation: {
                 fadeIn: 'fadeIn 0.2s ease-in-out'
             },
@@ -23,4 +21,4 @@ module.exports = {
         }
     },
     plugins: []
-};
+}
