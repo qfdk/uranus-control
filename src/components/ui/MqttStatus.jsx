@@ -1,12 +1,12 @@
 'use client';
 
 import {useEffect, useRef, useState} from 'react';
-import {useMqttClient} from '@/lib/mqtt';
 import {Info, Loader2, RefreshCw, Settings, Wifi, WifiOff} from 'lucide-react';
 import Switch from '@/components/ui/Switch.jsx';
+import useMqttStore from '@/store/mqttStore';
 
 export default function MqttStatus() {
-    const {connected, error, reconnect, agentState} = useMqttClient();
+    const { connected, error, connect: reconnect } = useMqttStore();
     const [isMqttEnabled, setIsMqttEnabled] = useState(true);
     const [isClient, setIsClient] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
@@ -136,10 +136,7 @@ export default function MqttStatus() {
                     </p>
                     {connected && (
                         <div className="mt-2 text-xs">
-                            <div className="font-medium text-green-700 dark:text-green-400">实时监控中的代理：</div>
-                            <div className="text-gray-600 dark:text-gray-400 mt-1">
-                                {Object.keys(agentState).length}个代理连接
-                            </div>
+                            <div className="font-medium text-green-700 dark:text-green-400">实时监控中</div>
                         </div>
                     )}
                 </div>
@@ -228,16 +225,6 @@ export default function MqttStatus() {
                                 {connected ? '实时监控中' : (localMqttEnabled ? '尝试连接中...' : '已禁用')}
                             </span>
                         </div>
-
-                        {/* 连接时显示代理数 */}
-                        {connected && Object.keys(agentState).length > 0 && (
-                            <div className="mb-3 p-2 bg-blue-50 dark:bg-blue-900/30 rounded text-xs text-blue-600 dark:text-blue-300 border border-blue-100 dark:border-blue-800">
-                                <div className="flex justify-between items-center">
-                                    <span>实时监控代理数：</span>
-                                    <span className="font-medium">{Object.keys(agentState).length}</span>
-                                </div>
-                            </div>
-                        )}
 
                         {/* 显示上次操作信息 */}
                         {lastActionRef.current && (

@@ -21,23 +21,17 @@ import {
 import Button from '@/components/ui/Button';
 import StatusMessage from '@/components/ui/StatusMessage';
 import {useRouter} from 'next/navigation';
-import {useMqttClient} from '@/lib/mqtt';
 import {useAsyncLoading} from '@/lib/loading-hooks';
 import {useClientMount} from '@/hooks/useClientMount';
-import {useNginxCommands} from '@/hooks/useNginxCommands';
-import {useAgentRefresh} from '@/hooks/useAgentRefresh';
-import {combineSingleAgentData} from '@/lib/agent-utils';
 import TerminalComponent from '@/components/ui/Terminal';
+import useAgentStore from '@/store/agentStore';
+import useMqttStore from '@/store/mqttStore';
 
 export default function AgentDetail({agent: initialAgent}) {
     const router = useRouter();
     const {withLoading} = useAsyncLoading();
-    const {deleteAgent, upgradeAgent} = useAgentRefresh([]);
-    const {
-        connected: mqttConnected,
-        agentState,
-        setCurrentAgent
-    } = useMqttClient();
+    const {connected: mqttConnected, setCurrentAgent} = useMqttStore();
+    const {deleteAgent, upgradeAgent} = useAgentStore();
 
     const [activeTab, setActiveTab] = useState('info');
     const [renderKey, setRenderKey] = useState(0);
@@ -49,30 +43,23 @@ export default function AgentDetail({agent: initialAgent}) {
         show: false
     });
     const [agent, setAgent] = useState(initialAgent);
+    const [commandMessage, setCommandMessage] = useState({
+        type: '',
+        content: '',
+        show: false
+    });
+    const [isExecuting, setIsExecuting] = useState(false);
     const statusTimeoutRef = useRef(null);
 
     // 使用自定义Hook处理客户端挂载
     const isMounted = useClientMount();
 
-    // 使用改进的Nginx命令Hook
-    const {
-        commandMessage,
-        isExecuting,
-        clearMessage,
-        reloadNginx,
-        restartNginx,
-        stopNginx,
-        startNginx
-    } = useNginxCommands(agent);
-
-    // 合并MQTT代理数据
+    // 合并MQTT代理数据 - 这部分可以用store的getCombinedAgents替代，但需要修改
     useEffect(() => {
-        if (mqttConnected && agent && agent.uuid && agentState[agent.uuid]) {
-            const updatedAgent = combineSingleAgentData(agent, agentState, mqttConnected);
-            setAgent(updatedAgent);
-            console.log('代理数据已用MQTT信息更新');
+        if (agent && agent.uuid) {
+            setCurrentAgent(agent.uuid);
         }
-    }, [agent, mqttConnected, agent?.uuid, agentState]);
+    }, [agent?.uuid, setCurrentAgent]);
 
     // 自动清除状态消息
     useEffect(() => {
@@ -207,6 +194,71 @@ export default function AgentDetail({agent: initialAgent}) {
             show: false
         });
     };
+
+    // 清除命令消息
+    const clearMessage = () => {
+        setCommandMessage({
+            type: '',
+            content: '',
+            show: false
+        });
+    };
+
+    // Nginx命令
+    const executeCommand = async (command) => {
+        if (isExecuting || !agent?.online) return;
+
+        clearMessage();
+        setIsExecuting(true);
+
+        // 命令名称映射
+        const commandNames = {
+            'reload': '重载配置',
+            'restart': '重启服务',
+            'stop': '停止服务',
+            'start': '启动服务'
+        };
+
+        try {
+            setCommandMessage({
+                type: 'loading',
+                content: `正在${commandNames[command] || command}...`,
+                show: true
+            });
+
+            const response = await fetch(`/api/agents/${agent._id}/command`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({command})
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || `HTTP错误: ${response.status}`);
+            }
+
+            setCommandMessage({
+                type: 'success',
+                content: `${commandNames[command] || command}成功: ${data.message || '操作已完成'}`,
+                show: true
+            });
+        } catch (error) {
+            console.error(`${command}命令执行失败:`, error);
+            setCommandMessage({
+                type: 'error',
+                content: `${commandNames[command] || command}失败: ${error.message}`,
+                show: true
+            });
+        } finally {
+            setIsExecuting(false);
+        }
+    };
+
+    const reloadNginx = () => executeCommand('reload');
+    const restartNginx = () => executeCommand('restart');
+    const stopNginx = () => executeCommand('stop');
+    const startNginx = () => executeCommand('start');
 
     if (!isMounted) {
         return null;

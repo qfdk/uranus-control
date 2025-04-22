@@ -9,7 +9,7 @@ import {initializeTheme, toggleTheme} from '@/lib/theme-utils';
 
 export default function UserMenu() {
     const [isOpen, setIsOpen] = useState(false);
-    const {user, logout} = useAuth();
+    const {logout} = useAuth();
     const [isMounted, setIsMounted] = useState(false);
     const menuRef = useRef(null);
     const {navigateWithLoading} = useLoadingNavigation();
@@ -88,7 +88,7 @@ export default function UserMenu() {
     return (
         <div className="flex items-center gap-1 md:gap-3">
             {/* 桌面端显示MQTT状态 */}
-            {!isMobile && <MqttStatus />}
+            {!isMobile && <MqttStatus/>}
 
             {/* 暗黑模式快速切换按钮 (小屏幕) */}
             {isMobile && (
@@ -99,9 +99,9 @@ export default function UserMenu() {
                     aria-label={darkMode ? '切换到明亮模式' : '切换到夜间模式'}
                 >
                     {darkMode ? (
-                        <Sun className="h-5 w-5 text-amber-500" />
+                        <Sun className="h-5 w-5 text-amber-500"/>
                     ) : (
-                        <Moon className="h-5 w-5 text-blue-700 dark:text-blue-400" />
+                        <Moon className="h-5 w-5 text-blue-700 dark:text-blue-400"/>
                     )}
                 </button>
             )}
@@ -115,7 +115,8 @@ export default function UserMenu() {
                     aria-haspopup="true"
                 >
                     <span className="sr-only">打开用户菜单</span>
-                    <div className="flex items-center bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-800/50 transition-colors rounded-full p-1.5">
+                    <div
+                        className="flex items-center bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-800/50 transition-colors rounded-full p-1.5">
                         <User className="h-5 w-5 text-blue-600 dark:text-blue-400"/>
                         <ChevronDown
                             className={`ml-0.5 h-4 w-4 text-blue-500 dark:text-blue-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''} ${isMobile ? 'hidden' : 'block'}`}/>

@@ -1,17 +1,16 @@
 'use client';
 
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {useCallback, useEffect, useState, useRef} from 'react';
 import {formatDistanceToNow} from 'date-fns';
-import {Eye, FileCheck, Globe, RefreshCw, Server, Zap} from 'lucide-react';
+import {Eye, Plus, RefreshCw, Server, Zap} from 'lucide-react';
 import NavLink from '@/components/ui/NavLink';
 import StatusCard from '@/components/ui/StatusCard';
 import QuickActionButton from '@/components/ui/QuickActionButton';
-import {useMqttClient} from '@/lib/mqtt';
 import TableSpinner from '@/components/ui/TableSpinner';
 import Button from '@/components/ui/Button';
-import {combineAgentData} from '@/lib/agent-utils.js';
 import {useClientMount} from '@/hooks/useClientMount';
-import {useAgentRefresh} from '@/hooks/useAgentRefresh';
+import useAgentStore from '@/store/agentStore';
+import useMqttStore from '@/store/mqttStore';
 
 export default function DashboardClientPage() {
     const [lastMqttUpdate, setLastMqttUpdate] = useState(null);
@@ -26,95 +25,70 @@ export default function DashboardClientPage() {
     // 使用自定义Hook处理客户端挂载
     const isMounted = useClientMount();
 
-    // 使用自定义Hook处理代理数据
-    const {agents, isLoading: agentsLoading, setIsLoading, refreshAgents, upgradeAgent} = useAgentRefresh([]);
-    // 添加本地loading状态，合并远程和本地状态
-    const [localLoading, setLocalLoading] = useState(true);
-    // 计算最终loading状态
-    const isLoading = localLoading || agentsLoading;
+    // 使用Zustand store
+    const {
+        agents,
+        isLoading,
+        fetchAgents,
+        upgradeAgent,
+        getCombinedAgents,
+        mqttConnected
+    } = useAgentStore();
 
-    // MQTT集成
-    const {connected: mqttConnected, agentState, reconnect, syncAllAgents} = useMqttClient();
+    // MQTT store
+    const { connect: connectMqtt } = useMqttStore();
 
-    // 跟踪上一次MQTT代理数量
-    const prevMqttAgentCount = useRef(0);
+    // 本地loading状态
+    const [localLoading, setLocalLoading] = useState(false);
+    const initialLoadRef = useRef(false);
 
-    // 监控MQTT代理状态变化
+    // 初始数据加载
     useEffect(() => {
-        if (mqttConnected && Object.keys(agentState).length > 0 && isMounted) {
-            const mqttAgentCount = Object.keys(agentState).length;
-            const httpAgentCount = agents.length;
-
-            setLastMqttUpdate(new Date());
-            console.log('仪表盘合并代理数据：',
-                `MQTT代理：${mqttAgentCount}个`,
-                `HTTP代理：${httpAgentCount}个`);
-
-            // 只有当MQTT代理数量超过HTTP代理数量时才刷新（表示有新代理加入）
-            if (mqttAgentCount > httpAgentCount && prevMqttAgentCount.current !== mqttAgentCount) {
-                console.log(`仪表盘：发现新代理，MQTT=${mqttAgentCount}, HTTP=${httpAgentCount}，执行刷新`);
-                refreshAgents();
-            }
-
-            // 总是更新计数器
-            prevMqttAgentCount.current = mqttAgentCount;
-        }
-    }, [mqttConnected, agentState, refreshAgents, isMounted, agents.length]);
-
-    useEffect(() => {
-        if (isMounted) {
-            // 初始加载
-            refreshAgents().finally(() => {
-                // 延迟关闭本地loading状态，确保渲染顺序正确
-                setTimeout(() => {
-                    setLocalLoading(false);
-                }, 300);
+        if (isMounted && !initialLoadRef.current) {
+            initialLoadRef.current = true;
+            fetchAgents().finally(() => {
+                setLocalLoading(false);
             });
         }
-    }, [isMounted, refreshAgents]);
+    }, [isMounted, fetchAgents]);
+
+    // 组件挂载时连接MQTT
+    useEffect(() => {
+        if (isMounted) {
+            // 设置最后更新时间为当前时间
+            setLastMqttUpdate(new Date());
+
+            // 延迟初始化MQTT，避免与数据加载冲突
+            const timer = setTimeout(() => {
+                connectMqtt();
+            }, 1000);
+
+            return () => clearTimeout(timer);
+        }
+    }, [isMounted, connectMqtt]);
+
+    // 更新MQTT时间戳
+    useEffect(() => {
+        if (mqttConnected) {
+            setLastMqttUpdate(new Date());
+        }
+    }, [mqttConnected]);
 
     // 处理手动刷新按钮点击
     const handleManualRefresh = useCallback(async () => {
-        setIsLoading(true);
+        setLocalLoading(true);
         try {
-            // 如果MQTT已连接，先同步MQTT状态到数据库
-            if (mqttConnected) {
-                try {
-                    // 调用新增的同步函数
-                    await syncAllAgents();
-                    console.log('MQTT状态已同步到数据库');
-                } catch (error) {
-                    console.error('MQTT状态同步失败:', error);
-                }
-            }
-
-            // 然后刷新代理数据
-            await refreshAgents(true);
-
-            // 如果MQTT已连接，尝试重连
-            if (mqttConnected) {
-                reconnect();
-            }
+            await fetchAgents(true);
         } finally {
             // 短暂延迟后关闭刷新指示器
             setTimeout(() => {
-                setIsLoading(false);
+                setLocalLoading(false);
             }, 500);
         }
-    }, [setIsLoading, refreshAgents, mqttConnected, reconnect, syncAllAgents]);
+    }, [fetchAgents]);
 
-    // 合并代理数据（HTTP和MQTT）
-    const combinedAgents = useMemo(() => {
-        if (!isMounted) return [];
-
-        console.log('仪表盘合并代理数据：',
-            `HTTP代理：${agents.length}个`,
-            `MQTT状态：${mqttConnected ? Object.keys(agentState).length + '个' : '未连接'}`
-        );
-
-        // 调用共用函数处理代理数据
-        return combineAgentData(agents, agentState, mqttConnected);
-    }, [agents, mqttConnected, agentState, isMounted]);
+    // 获取合并的代理数据 (包含MQTT状态)
+    const combinedAgents = getCombinedAgents();
 
     // 更新所有代理的处理函数
     const handleUpgradeAllAgents = useCallback(async () => {
@@ -183,7 +157,7 @@ export default function DashboardClientPage() {
         }
 
         // 所有代理升级完成，刷新数据
-        await refreshAgents(true);
+        await fetchAgents(true);
 
         // 设置最终状态
         setUpgradeStatus({
@@ -194,8 +168,7 @@ export default function DashboardClientPage() {
             message: `升级完成: ${successCount}成功, ${failedCount}失败`
         });
 
-    }, [combinedAgents, upgradeAgent, refreshAgents]);
-
+    }, [combinedAgents, upgradeAgent, fetchAgents]);
 
     // 如果组件未挂载，返回null并依赖全局加载状态
     if (!isMounted) {
@@ -205,9 +178,6 @@ export default function DashboardClientPage() {
     // 计算统计信息
     const totalWebsites = combinedAgents.reduce((sum, agent) => sum + (agent.stats?.websites || 0), 0);
     const totalCertificates = combinedAgents.reduce((sum, agent) => sum + (agent.stats?.certificates || 0), 0);
-
-    // 获取MQTT活跃代理数量
-    const mqttAgentCount = mqttConnected ? Object.keys(agentState).length : 0;
 
     // 获取最近的5个代理
     const recentAgents = combinedAgents.slice(0, 5);
@@ -222,10 +192,10 @@ export default function DashboardClientPage() {
                     variant="secondary"
                     size="sm"
                     onClick={handleManualRefresh}
-                    disabled={isLoading}
+                    disabled={isLoading || localLoading}
                 >
-                    <RefreshCw className={`w-4 h-4 mr-1 ${isLoading ? 'animate-spin' : ''}`}/>
-                    {isLoading ? '刷新中...' : '刷新数据'}
+                    <RefreshCw className={`w-4 h-4 mr-1 ${(isLoading || localLoading) ? 'animate-spin' : ''}`}/>
+                    {(isLoading || localLoading) ? '刷新中...' : '刷新数据'}
                 </Button>
             </div>
 
@@ -267,7 +237,7 @@ export default function DashboardClientPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <StatusCard
                     title="代理节点"
-                    value={`${mqttAgentCount}/${agents.length}`}
+                    value={`${combinedAgents.filter(agent => agent.online).length}/${agents.length}`}
                     description={mqttConnected ? 'MQTT实时监控' : '通过HTTP监控'}
                     icon={<Server className="w-8 h-8 text-blue-500 dark:text-blue-400"/>}
                     color="blue"
@@ -276,14 +246,18 @@ export default function DashboardClientPage() {
                     title="网站"
                     value={totalWebsites}
                     description="托管网站总数"
-                    icon={<Globe className="w-8 h-8 text-green-500 dark:text-green-400"/>}
+                    icon={<svg className="w-8 h-8 text-green-500 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+                    </svg>}
                     color="green"
                 />
                 <StatusCard
                     title="SSL证书"
                     value={totalCertificates}
                     description="有效证书数量"
-                    icon={<FileCheck className="w-8 h-8 text-purple-500 dark:text-purple-400"/>}
+                    icon={<svg className="w-8 h-8 text-purple-500 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                    </svg>}
                     color="purple"
                 />
             </div>
@@ -296,8 +270,8 @@ export default function DashboardClientPage() {
                     {mqttConnected && (
                         <span
                             className="px-2 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium rounded-full">
-                            MQTT实时 ({Object.keys(agentState).length})
-                        </span>
+              MQTT实时
+            </span>
                     )}
                 </div>
                 <div className="overflow-x-auto">
@@ -315,10 +289,10 @@ export default function DashboardClientPage() {
                         </thead>
                         <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                         {/* 加载状态 */}
-                        {isLoading && <TableSpinner message="加载代理数据中..."/>}
+                        {(isLoading || localLoading) && <TableSpinner message="加载代理数据中..."/>}
 
                         {/* 代理数据 - 仅在不加载且数据存在时显示 */}
-                        {!isLoading && recentAgents.length > 0 && recentAgents.map(agent => (
+                        {!isLoading && !localLoading && recentAgents.length > 0 && recentAgents.map(agent => (
                             <tr key={agent._id || agent.uuid}
                                 className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
@@ -326,18 +300,18 @@ export default function DashboardClientPage() {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{agent.ip}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                    <span
-                                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                            agent.online
-                                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                                                : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                                        }`}>
-                                      {agent.online ? '在线' : '离线'}
-                                        {/* 如果来自MQTT则显示实时指示器 */}
-                                        {agent._fromMqtt && (
-                                            <span className="ml-1 opacity-75">(实时)</span>
-                                        )}
-                                    </span>
+                  <span
+                      className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          agent.online
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                              : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                      }`}>
+                    {agent.online ? '在线' : '离线'}
+                      {/* 如果来自MQTT则显示实时指示器 */}
+                      {agent._fromMqtt && (
+                          <span className="ml-1 opacity-75">(实时)</span>
+                      )}
+                  </span>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{agent.buildVersion || '未知'}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{agent.commitId ? agent.commitId.substring(0, 8) : '未知'}</td>
@@ -359,7 +333,7 @@ export default function DashboardClientPage() {
                         ))}
 
                         {/* 无数据状态 */}
-                        {!isLoading && recentAgents.length === 0 && (
+                        {!isLoading && !localLoading && recentAgents.length === 0 && (
                             <tr>
                                 <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
                                     暂无代理数据
@@ -406,18 +380,9 @@ export default function DashboardClientPage() {
                                 <span className="text-sm text-gray-500 dark:text-gray-400">MQTT状态</span>
                                 <span
                                     className={`text-sm font-medium ${mqttConnected ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
-                                    {mqttConnected ? '已连接' : '未连接'}
-                                </span>
+                  {mqttConnected ? '已连接' : '未连接'}
+                </span>
                             </div>
-                            {/* 实时代理数量 */}
-                            {mqttConnected && (
-                                <div className="flex justify-between">
-                                    <span className="text-sm text-gray-500 dark:text-gray-400">实时监控代理</span>
-                                    <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
-                                        {Object.keys(agentState).length}
-                                    </span>
-                                </div>
-                            )}
                         </div>
                     </div>
                 </div>

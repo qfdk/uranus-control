@@ -1,9 +1,8 @@
-// server.js - Next.js自定义服务器与MQTT集成
+// server.mjs - Next.js自定义服务器与MQTT集成
 import {createServer} from 'http';
 import {parse} from 'url';
 import next from 'next';
 import mqtt from 'mqtt';
-// 导入现有的数据库连接和模型
 import connectDB from './src/lib/mongodb.js';
 import Agent from './src/models/agent.js';
 
@@ -18,28 +17,19 @@ const handle = app.getRequestHandler();
 
 // MQTT配置
 const MQTT_BROKER = process.env.MQTT_BROKER || 'wss://mqtt.qfdk.me/mqtt';
-const CLIENT_ID = `uranus-control-server`;
+const CLIENT_ID = `uranus-control-server-${Date.now()}`;
 const MQTT_OPTIONS = {
     clientId: CLIENT_ID,
     clean: true,
     reconnectPeriod: 5000,
     connectTimeout: 30 * 1000,
-    keepalive: 60,
-    will: {
-        topic: 'uranus/clients/status',
-        payload: JSON.stringify({clientId: CLIENT_ID, status: 'offline', serverProcess: true}),
-        qos: 1,
-        retain: false
-    }
+    keepalive: 60
 };
 
 // MQTT主题
 const TOPICS = {
     HEARTBEAT: 'uranus/heartbeat',
-    STATUS: 'uranus/status',
-    COMMAND: 'uranus/command/',
-    RESPONSE: 'uranus/response/',
-    CLIENT_HEARTBEAT: 'uranus/clients/heartbeat'
+    STATUS: 'uranus/status'
 };
 
 // 数据库更新限流（按代理）
@@ -60,24 +50,9 @@ async function startServer() {
         mqttClient.on('connect', () => {
             console.log('MQTT连接成功');
 
-            // 订阅主题
-            mqttClient.subscribe(TOPICS.HEARTBEAT, {qos: 1});
-            mqttClient.subscribe(TOPICS.STATUS, {qos: 1});
-
-            // 宣告服务器在线
-            mqttClient.publish('uranus/clients/status', JSON.stringify({
-                clientId: CLIENT_ID,
-                status: 'online',
-                serverProcess: true,
-                timestamp: Date.now()
-            }), {qos: 1});
-
-            // 请求所有代理的状态
-            mqttClient.publish('uranus/request_status', JSON.stringify({
-                clientId: CLIENT_ID,
-                serverProcess: true,
-                timestamp: Date.now()
-            }), {qos: 1});
+            // 只订阅心跳和状态主题
+            mqttClient.subscribe(TOPICS.HEARTBEAT, {qos: 0});
+            mqttClient.subscribe(TOPICS.STATUS, {qos: 0});
         });
 
         mqttClient.on('error', (error) => {
@@ -88,7 +63,7 @@ async function startServer() {
             console.log('MQTT正在重新连接...');
         });
 
-        mqttClient.on('close', () => {
+        mqttClient.on('close', (packet) => {
             console.log('MQTT连接已关闭');
         });
 
@@ -173,18 +148,10 @@ async function startServer() {
         function gracefulShutdown() {
             console.log('收到关闭信号，正在关闭连接...');
 
-            // 通过MQTT发送离线状态
             if (mqttClient.connected) {
-                mqttClient.publish('uranus/clients/status', JSON.stringify({
-                    clientId: CLIENT_ID,
-                    status: 'offline',
-                    serverProcess: true,
-                    timestamp: Date.now()
-                }), {qos: 1}, () => {
-                    mqttClient.end(true, () => {
-                        console.log('MQTT连接已关闭');
-                        process.exit(0);
-                    });
+                mqttClient.end(true, () => {
+                    console.log('MQTT连接已关闭');
+                    process.exit(0);
                 });
             } else {
                 process.exit(0);

@@ -3,10 +3,10 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Send, RotateCcw, Copy, CheckCheck } from 'lucide-react';
-import { useMqttClient } from '@/lib/mqtt';
+import useMqttStore from '@/store/mqttStore';
 
 export default function Terminal({ agentId, agentUuid, isOnline = true }) {
-    const { connected: mqttConnected, sendCommand } = useMqttClient();
+    const { connected: mqttConnected, sendCommand } = useMqttStore();
     const [command, setCommand] = useState('');
     const [history, setHistory] = useState([]);
     const [loading, setLoading] = useState(false);

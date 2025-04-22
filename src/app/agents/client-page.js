@@ -1,16 +1,16 @@
+// src/app/agents/client-page.js
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { Eye, Plus, PlusCircle, Trash2 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import NavLink from '@/components/ui/NavLink';
 import { usePathname } from 'next/navigation';
-import { useMqttClient } from '@/lib/mqtt';
 import TableSpinner from '@/components/ui/TableSpinner';
-import { combineAgentData } from '@/lib/agent-utils.js';
 import { useClientMount } from '@/hooks/useClientMount';
-import { useAgentRefresh } from '@/hooks/useAgentRefresh';
+import useAgentStore from '@/store/agentStore';
+import useMqttStore from '@/store/mqttStore';
 
 export default function AgentsClientPage() {
     const [searchTerm, setSearchTerm] = useState('');
@@ -19,65 +19,35 @@ export default function AgentsClientPage() {
     const [registrationLoading, setRegistrationLoading] = useState(null);
     const pathname = usePathname();
 
+    // 使用全局状态
+    const {
+        agents,
+        isLoading,
+        fetchAgents,
+        deleteAgent,
+        registerAgent,
+        getCombinedAgents
+    } = useAgentStore();
+
+    // MQTT状态
+    const {
+        connected: mqttConnected,
+        getAgentState
+    } = useMqttStore();
+
     // 使用自定义Hook处理客户端挂载
     const isMounted = useClientMount();
 
-    // 使用自定义Hook处理代理数据
-    const { agents, isLoading, refreshAgents, deleteAgent, registerAgent } = useAgentRefresh([]);
-
-    // MQTT集成
-    const { connected: mqttConnected, agentState } = useMqttClient();
-
-    // 跟踪上一次的MQTT代理数量
-    const prevMqttAgentCount = useRef(0);
-
     // 初始数据加载
     useEffect(() => {
-        if (isMounted) {
-            // 初始加载
-            refreshAgents();
-        }
-    }, [isMounted, refreshAgents]);
-
-    // 监控MQTT代理状态变化
-    useEffect(() => {
-        if (mqttConnected && agentState && isMounted) {
-            const mqttAgentCount = Object.keys(agentState).length;
-            const httpAgentCount = agents.length;
-
-            console.log(`MQTT状态更新: MQTT代理=${mqttAgentCount}个, HTTP代理=${httpAgentCount}个`);
-
-            // 只有当MQTT代理数量大于HTTP代理数量时才刷新（表示有新代理）
-            if (mqttAgentCount > httpAgentCount && prevMqttAgentCount.current !== mqttAgentCount) {
-                console.log(`发现新代理: MQTT=${mqttAgentCount}, HTTP=${httpAgentCount}, 执行刷新`);
-                refreshAgents();
-            }
-
-            // 无论如何都更新上一次的计数
-            prevMqttAgentCount.current = mqttAgentCount;
-        }
-    }, [mqttConnected, agentState, refreshAgents, isMounted, agents.length]);
-
-    // 路径变化处理
-    useEffect(() => {
         if (isMounted && pathname === '/agents') {
-            console.log('路径变化，刷新数据:', pathname);
-            refreshAgents();
+            console.log('代理页面：加载数据');
+            fetchAgents();
         }
-    }, [pathname, refreshAgents, isMounted]);
+    }, [isMounted, pathname, fetchAgents]);
 
-    // 合并代理数据（HTTP和MQTT）
-    const combinedAgents = useMemo(() => {
-        if (!isMounted) return [];
-
-        console.log('合并代理数据：',
-            `HTTP代理：${agents.length}个`,
-            `MQTT状态：${mqttConnected ? Object.keys(agentState).length + '个' : '未连接'}`
-        );
-
-        // 调用工具函数处理代理数据
-        return combineAgentData(agents, agentState, mqttConnected);
-    }, [agents, mqttConnected, agentState, isMounted]);
+    // 获取合并后的代理数据（HTTP+MQTT）
+    const combinedAgents = getCombinedAgents();
 
     // 过滤代理
     const filteredAgents = combinedAgents.filter(agent => {
@@ -234,8 +204,10 @@ export default function AgentsClientPage() {
                         </tr>
                         </thead>
                         <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                        {isLoading && <TableSpinner/>}
+                        {/* 加载状态 */}
+                        {isLoading && <TableSpinner message="加载代理数据中..."/>}
 
+                        {/* 代理数据 - 仅在不加载且数据存在时显示 */}
                         {!isLoading && filteredAgents.length > 0 && filteredAgents.map(agent => (
                             <tr key={agent._id || agent.uuid}
                                 className={`hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${agent._mqttOnly ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
@@ -244,24 +216,24 @@ export default function AgentsClientPage() {
                                     {agent._mqttOnly && (
                                         <span
                                             className="ml-2 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
-                                            仅MQTT
-                                        </span>
+                        仅MQTT
+                      </span>
                                     )}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{agent.ip}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                    <span
-                                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                            agent.online
-                                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                                                : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                                        }`}>
-                                      {agent.online ? '在线' : '离线'}
-                                        {/* Show real-time indicator if from MQTT */}
-                                        {agent._fromMqtt && (
-                                            <span className="ml-1 opacity-75">(实时)</span>
-                                        )}
-                                    </span>
+                    <span
+                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            agent.online
+                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                                : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                        }`}>
+                      {agent.online ? '在线' : '离线'}
+                        {/* Show real-time indicator if from MQTT */}
+                        {agent._fromMqtt && (
+                            <span className="ml-1 opacity-75">(实时)</span>
+                        )}
+                    </span>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                     {agent.buildVersion || '未知'}
@@ -345,6 +317,7 @@ export default function AgentsClientPage() {
                             </tr>
                         ))}
 
+                        {/* 无数据状态 */}
                         {!isLoading && filteredAgents.length === 0 && (
                             <tr>
                                 <td colSpan="7"
