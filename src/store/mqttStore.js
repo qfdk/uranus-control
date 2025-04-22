@@ -1,14 +1,14 @@
 // src/store/mqttStore.js
-import { create } from 'zustand';
+import {create} from 'zustand';
 import mqtt from 'mqtt';
-import { v4 as uuidv4 } from 'uuid';
+import {v4 as uuidv4} from 'uuid';
 import useAgentStore from './agentStore';
 
 // 节流函数
 const throttle = (func, limit) => {
     let lastFunc;
     let lastRan;
-    return function() {
+    return function () {
         const context = this;
         const args = arguments;
         if (!lastRan) {
@@ -16,7 +16,7 @@ const throttle = (func, limit) => {
             lastRan = Date.now();
         } else {
             clearTimeout(lastFunc);
-            lastFunc = setTimeout(function() {
+            lastFunc = setTimeout(function () {
                 if ((Date.now() - lastRan) >= limit) {
                     func.apply(context, args);
                     lastRan = Date.now();
@@ -81,10 +81,10 @@ const useMqttStore = create((set, get) => {
     let mqttClient = null;
     let cleanupInterval = null;
 
-    // 节流更新到AgentStore
+    // 节流更新到AgentStore，降低到300ms提高响应速度
     const updateAgentStoreThrottled = throttle((state) => {
         useAgentStore.getState().updateMqttAgentState({...state});
-    }, 1000);
+    }, 300);
 
     return {
         // 状态
@@ -103,7 +103,7 @@ const useMqttStore = create((set, get) => {
             }
 
             const config = getMqttConfig();
-            set({ isInitialized: true });
+            set({isInitialized: true});
 
             try {
                 console.log(`正在连接到MQTT服务器(${config.MQTT_BROKER})...`);
@@ -122,30 +122,30 @@ const useMqttStore = create((set, get) => {
 
                 mqttClient.on('connect', () => {
                     console.log('MQTT连接成功');
-                    set({ connected: true, error: null, reconnectCount: 0 });
+                    set({connected: true, error: null, reconnectCount: 0});
 
                     // 通知agent store MQTT已连接
                     useAgentStore.getState().setMqttConnected(true);
 
                     // 只订阅必要主题 - 仅需监听
-                    mqttClient.subscribe(TOPICS.HEARTBEAT, { qos: 0 });
-                    mqttClient.subscribe(TOPICS.STATUS, { qos: 0 });
+                    mqttClient.subscribe(TOPICS.HEARTBEAT, {qos: 0});
+                    mqttClient.subscribe(TOPICS.STATUS, {qos: 0});
 
                     // 如果有当前查看的代理，订阅其响应主题
                     const currentAgentUUID = get().currentAgent;
                     if (currentAgentUUID) {
-                        mqttClient.subscribe(`${TOPICS.RESPONSE}${currentAgentUUID}`, { qos: 0 });
+                        mqttClient.subscribe(`${TOPICS.RESPONSE}${currentAgentUUID}`, {qos: 0});
                     }
                 });
 
                 mqttClient.on('error', (err) => {
                     console.error('MQTT连接错误:', err);
-                    set({ error: err.message });
+                    set({error: err.message});
                 });
 
                 mqttClient.on('close', () => {
                     console.log('MQTT连接关闭');
-                    set({ connected: false });
+                    set({connected: false});
                     useAgentStore.getState().setMqttConnected(false);
                 });
 
@@ -154,7 +154,7 @@ const useMqttStore = create((set, get) => {
                 });
 
                 mqttClient.on('reconnect', () => {
-                    set(state => ({ reconnectCount: state.reconnectCount + 1 }));
+                    set(state => ({reconnectCount: state.reconnectCount + 1}));
                     console.log(`MQTT正在重新连接... (尝试: ${get().reconnectCount})`);
                 });
 
@@ -187,7 +187,7 @@ const useMqttStore = create((set, get) => {
 
                             // 检查是否有对应的待处理命令
                             if (pendingCommands.has(requestId)) {
-                                const { resolve, reject, timeoutId } = pendingCommands.get(requestId);
+                                const {resolve, reject, timeoutId} = pendingCommands.get(requestId);
 
                                 // 清除超时
                                 if (timeoutId) {
@@ -214,7 +214,7 @@ const useMqttStore = create((set, get) => {
                 if (cleanupInterval) clearInterval(cleanupInterval);
                 cleanupInterval = setInterval(() => {
                     const now = Date.now();
-                    pendingCommands.forEach(({ timestamp, timeoutId }, requestId) => {
+                    pendingCommands.forEach(({timestamp, timeoutId}, requestId) => {
                         // 清理超过30秒的命令
                         if (now - timestamp > 30000) {
                             if (timeoutId) {
@@ -226,7 +226,7 @@ const useMqttStore = create((set, get) => {
                 }, 10000);
             } catch (err) {
                 console.error('MQTT连接失败:', err);
-                set({ error: err.message });
+                set({error: err.message});
             }
         },
 
@@ -234,7 +234,7 @@ const useMqttStore = create((set, get) => {
         disconnect: () => {
             if (mqttClient && mqttClient.connected) {
                 mqttClient.end();
-                set({ connected: false, isInitialized: false });
+                set({connected: false, isInitialized: false});
                 useAgentStore.getState().setMqttConnected(false);
 
                 // 清理定时器
@@ -250,9 +250,9 @@ const useMqttStore = create((set, get) => {
 
             if (mqttClient && mqttClient.connected) {
                 // 订阅该代理的响应主题
-                mqttClient.subscribe(`${TOPICS.RESPONSE}${uuid}`, { qos: 0 });
+                mqttClient.subscribe(`${TOPICS.RESPONSE}${uuid}`, {qos: 0});
             }
-            set({ currentAgent: uuid });
+            set({currentAgent: uuid});
         },
 
         // 发送命令到代理
@@ -270,7 +270,7 @@ const useMqttStore = create((set, get) => {
 
                 // 确保订阅了代理的响应主题
                 const responseTopic = `${TOPICS.RESPONSE}${uuid}`;
-                mqttClient.subscribe(responseTopic, { qos: 0 }, (err) => {
+                mqttClient.subscribe(responseTopic, {qos: 0}, (err) => {
                     if (err) {
                         reject(new Error(`订阅响应主题失败: ${err.message}`));
                         return;
@@ -309,7 +309,7 @@ const useMqttStore = create((set, get) => {
                     const commandTopic = `${TOPICS.COMMAND}${uuid}`;
                     console.log(`发送命令到 ${commandTopic}:`, commandMessage);
 
-                    mqttClient.publish(commandTopic, JSON.stringify(commandMessage), { qos: 0 }, (err) => {
+                    mqttClient.publish(commandTopic, JSON.stringify(commandMessage), {qos: 0}, (err) => {
                         if (err) {
                             clearTimeout(timeoutId);
                             pendingCommands.delete(requestId);

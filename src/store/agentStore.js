@@ -1,6 +1,6 @@
 // src/store/agentStore.js
-import { create } from 'zustand';
-import { combineAgentData } from '@/lib/agent-utils';
+import {create} from 'zustand';
+import {combineAgentData} from '@/lib/agent-utils';
 
 // 创建agent全局状态管理
 const useAgentStore = create((set, get) => ({
@@ -16,7 +16,7 @@ const useAgentStore = create((set, get) => ({
     setMqttConnected: (connected) => set((state) => {
         // 只有当状态实际变化时才更新
         if (state.mqttConnected !== connected) {
-            return { mqttConnected: connected };
+            return {mqttConnected: connected};
         }
         return {};
     }),
@@ -28,8 +28,11 @@ const useAgentStore = create((set, get) => ({
     }),
 
     // 获取所有代理
-    fetchAgents: async () => {
-        set({ isLoading: true, error: null });
+    fetchAgents: async (force = false) => {
+        // 如果已经在加载且不是强制刷新，则跳过
+        if (get().isLoading && !force) return {success: true, data: get().agents};
+
+        set({isLoading: true, error: null});
 
         try {
             const response = await fetch('/api/agents');
@@ -49,20 +52,20 @@ const useAgentStore = create((set, get) => ({
                 lastUpdated: new Date()
             });
 
-            return { success: true, data };
+            return {success: true, data};
         } catch (error) {
             console.error('获取代理数据失败:', error);
             set({
                 error: error.message,
                 isLoading: false
             });
-            return { success: false, error };
+            return {success: false, error};
         }
     },
 
     // 删除代理
     deleteAgent: async (agentId) => {
-        if (!agentId) return { success: false, error: 'Invalid agent ID' };
+        if (!agentId) return {success: false, error: 'Invalid agent ID'};
 
         try {
             const response = await fetch(`/api/agents/${agentId}`, {
@@ -78,23 +81,23 @@ const useAgentStore = create((set, get) => ({
                 agents: state.agents.filter(agent => agent._id !== agentId)
             }));
 
-            return { success: true };
+            return {success: true};
         } catch (error) {
             console.error('删除代理失败:', error);
-            return { success: false, error };
+            return {success: false, error};
         }
     },
 
     // 注册新代理
     registerAgent: async (agentData) => {
         if (!agentData || !agentData.uuid) {
-            return { success: false, error: 'Invalid agent data' };
+            return {success: false, error: 'Invalid agent data'};
         }
 
         try {
             const response = await fetch('/api/agents', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(agentData)
             });
 
@@ -109,21 +112,21 @@ const useAgentStore = create((set, get) => ({
                 agents: [...state.agents, newAgent]
             }));
 
-            return { success: true, agent: newAgent };
+            return {success: true, agent: newAgent};
         } catch (error) {
             console.error('注册代理失败:', error);
-            return { success: false, error };
+            return {success: false, error};
         }
     },
 
     // 升级代理
     upgradeAgent: async (agentId) => {
-        if (!agentId) return { success: false, error: 'Invalid agent ID' };
+        if (!agentId) return {success: false, error: 'Invalid agent ID'};
 
         try {
             const response = await fetch(`/api/agents/${agentId}/upgrade`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                headers: {'Content-Type': 'application/json'}
             });
 
             if (!response.ok) {
@@ -134,13 +137,13 @@ const useAgentStore = create((set, get) => ({
             return await response.json();
         } catch (error) {
             console.error('升级代理失败:', error);
-            return { success: false, error };
+            return {success: false, error};
         }
     },
 
     // 获取单个代理
     getAgent: async (agentId) => {
-        if (!agentId) return { success: false, error: 'Invalid agent ID' };
+        if (!agentId) return {success: false, error: 'Invalid agent ID'};
 
         try {
             const response = await fetch(`/api/agents/${agentId}`);
@@ -150,24 +153,24 @@ const useAgentStore = create((set, get) => ({
             }
 
             const data = await response.json();
-            return { success: true, agent: data };
+            return {success: true, agent: data};
         } catch (error) {
             console.error('获取代理数据失败:', error);
-            return { success: false, error };
+            return {success: false, error};
         }
     },
 
     // 将命令发送到代理
     sendCommand: async (agentId, command) => {
         if (!agentId || !command) {
-            return { success: false, error: 'Invalid agent ID or command' };
+            return {success: false, error: 'Invalid agent ID or command'};
         }
 
         try {
             const response = await fetch(`/api/agents/${agentId}/command`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ command })
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({command})
             });
 
             if (!response.ok) {
@@ -177,19 +180,19 @@ const useAgentStore = create((set, get) => ({
             return await response.json();
         } catch (error) {
             console.error('发送命令失败:', error);
-            return { success: false, error };
+            return {success: false, error};
         }
     },
 
     // 获取合并的代理数据 (HTTP + MQTT)
     getCombinedAgents: () => {
-        const { agents, mqttAgentState, mqttConnected } = get();
+        const {agents, mqttAgentState, mqttConnected} = get();
         return combineAgentData(agents, mqttAgentState, mqttConnected);
     },
 
     // 根据ID获取合并的单个代理数据
     getAgentById: (agentId) => {
-        const { agents } = get();
+        const {agents} = get();
         return agents.find(agent => agent._id === agentId);
     }
 }));

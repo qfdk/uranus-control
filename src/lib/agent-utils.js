@@ -10,30 +10,52 @@
  * @returns {Array} 合并后的代理数据列表
  */
 export function combineAgentData(httpAgents, mqttAgentState, mqttConnected) {
-    // 如果没有HTTP代理数据，返回空数组
-    if (!httpAgents || httpAgents.length === 0) {
-        return [];
+    // 克隆HTTP代理列表作为基础结果
+    const resultAgents = httpAgents ? [...httpAgents].map(agent => ({...agent})) : [];
+
+    // 只有当MQTT已连接时才处理MQTT状态
+    if (mqttConnected && mqttAgentState) {
+        // 更新现有代理的MQTT状态
+        resultAgents.forEach(agent => {
+            if (agent.uuid && mqttAgentState[agent.uuid]) {
+                agent.online = mqttAgentState[agent.uuid].online;
+                agent.lastHeartbeat = mqttAgentState[agent.uuid].lastHeartbeat || agent.lastHeartbeat;
+                agent.ip = agent.ip || mqttAgentState[agent.uuid].ip;
+                agent.hostname = agent.hostname || mqttAgentState[agent.uuid].hostname;
+                agent.buildVersion = agent.buildVersion || mqttAgentState[agent.uuid].buildVersion;
+                agent.buildTime = agent.buildTime || mqttAgentState[agent.uuid].buildTime;
+                agent.commitId = agent.commitId || mqttAgentState[agent.uuid].commitId;
+                agent.os = agent.os || mqttAgentState[agent.uuid].os;
+                agent.memory = agent.memory || mqttAgentState[agent.uuid].memory;
+                agent._fromMqtt = true;
+            } else {
+                agent._fromMqtt = false;
+            }
+        });
+
+        // 添加只存在于MQTT中的新代理
+        const httpAgentUuids = new Set(resultAgents.map(a => a.uuid));
+
+        Object.entries(mqttAgentState).forEach(([uuid, mqttAgent]) => {
+            if (!httpAgentUuids.has(uuid)) {
+                resultAgents.push({
+                    uuid,
+                    hostname: mqttAgent.hostname || uuid.substring(0, 8),
+                    ip: mqttAgent.ip || '',
+                    online: mqttAgent.online || false,
+                    lastHeartbeat: mqttAgent.lastHeartbeat,
+                    buildVersion: mqttAgent.buildVersion,
+                    buildTime: mqttAgent.buildTime,
+                    commitId: mqttAgent.commitId,
+                    os: mqttAgent.os,
+                    memory: mqttAgent.memory,
+                    _mqttOnly: true,  // 标记为仅MQTT发现的代理
+                    _fromMqtt: true
+                    // 移除 _needsRegistration 标记，因为服务器端会自动注册
+                });
+            }
+        });
     }
-
-    // 处理结果数组
-    const resultAgents = httpAgents.map(agent => {
-        // 基础是MongoDB的代理数据
-        const resultAgent = {...agent};
-
-        // 如果MQTT已连接且该代理在MQTT状态中存在
-        if (mqttConnected && agent.uuid && mqttAgentState && mqttAgentState[agent.uuid]) {
-            // 从MQTT获取最新的在线状态
-            resultAgent.online = mqttAgentState[agent.uuid].online;
-            resultAgent.lastHeartbeat = mqttAgentState[agent.uuid].lastHeartbeat || agent.lastHeartbeat;
-            resultAgent._fromMqtt = true; // 标记数据来源包含MQTT
-        } else {
-            // 如果MQTT状态中没有此代理，则认为代理离线
-            // 保留MongoDB中的online状态
-            resultAgent._fromMqtt = false;
-        }
-
-        return resultAgent;
-    });
 
     // 排序结果 - 在线代理优先，然后按主机名
     return resultAgents.sort((a, b) => {

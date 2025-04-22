@@ -1,6 +1,6 @@
 'use client';
 
-import {useEffect, useRef, useState} from 'react';
+import {useEffect, useRef, useState, useCallback} from 'react';
 import {formatDistanceToNow} from 'date-fns';
 import Link from 'next/link';
 import {
@@ -54,12 +54,31 @@ export default function AgentDetail({agent: initialAgent}) {
     // 使用自定义Hook处理客户端挂载
     const isMounted = useClientMount();
 
-    // 合并MQTT代理数据 - 这部分可以用store的getCombinedAgents替代，但需要修改
+    // 合并MQTT代理数据
     useEffect(() => {
         if (agent && agent.uuid) {
             setCurrentAgent(agent.uuid);
         }
     }, [agent?.uuid, setCurrentAgent]);
+
+    // 监听MQTT实时状态更新
+    useEffect(() => {
+        if (!agent?.uuid || !mqttConnected) return;
+
+        // 从MQTT状态获取最新信息
+        const agentState = useMqttStore.getState().getAgentState();
+        if (agentState && agentState[agent.uuid]) {
+            const mqttAgentData = agentState[agent.uuid];
+
+            // 更新关键状态
+            setAgent(prev => ({
+                ...prev,
+                online: mqttAgentData.online,
+                lastHeartbeat: mqttAgentData.lastHeartbeat || prev.lastHeartbeat,
+                _fromMqtt: true
+            }));
+        }
+    }, [agent?.uuid, mqttConnected]);
 
     // 自动清除状态消息
     useEffect(() => {
@@ -77,6 +96,37 @@ export default function AgentDetail({agent: initialAgent}) {
             setCurrentAgent(agent.uuid);
         }
     }, [activeTab, agent?.uuid, setCurrentAgent]);
+
+    // 刷新代理数据
+    const refreshAgentData = useCallback(async () => {
+        if (!agent?._id) return;
+
+        try {
+            const refreshResponse = await fetch(`/api/agents/${agent._id}`);
+            if (refreshResponse.ok) {
+                const updatedAgent = await refreshResponse.json();
+                setAgent(prev => ({
+                    ...updatedAgent,
+                    _fromMqtt: prev._fromMqtt
+                }));
+            }
+        } catch (error) {
+            console.error('刷新代理状态失败:', error);
+        }
+    }, [agent?._id]);
+
+    // 处理标签切换
+    const handleTabChange = (tab) => {
+        if (tab === 'terminal' && agent?.uuid) {
+            setCurrentAgent(agent.uuid);
+        }
+        setActiveTab(tab);
+
+        // 切换到信息标签时刷新代理数据
+        if (tab === 'info') {
+            refreshAgentData();
+        }
+    };
 
     // 处理删除代理
     const handleDeleteAgent = async () => {
@@ -164,13 +214,7 @@ export default function AgentDetail({agent: initialAgent}) {
             // 升级可能需要一些时间，设置延迟刷新
             statusTimeoutRef.current = setTimeout(async () => {
                 try {
-                    const refreshResponse = await fetch(`/api/agents/${agent._id}`);
-                    if (refreshResponse.ok) {
-                        const updatedAgent = await refreshResponse.json();
-                        setAgent(updatedAgent);
-                    }
-                } catch (error) {
-                    console.error('刷新代理状态失败:', error);
+                    await refreshAgentData();
                 } finally {
                     setIsUpgrading(false);
                 }
@@ -342,7 +386,7 @@ export default function AgentDetail({agent: initialAgent}) {
             {/* 选项卡导航 */}
             <div className="flex border-b border-gray-200 dark:border-gray-700 mb-6">
                 <button
-                    onClick={() => setActiveTab('info')}
+                    onClick={() => handleTabChange('info')}
                     className={`py-3 px-6 text-sm font-medium border-b-2 -mb-px flex items-center ${
                         activeTab === 'info'
                             ? 'border-blue-500 text-blue-600 dark:text-blue-400 dark:border-blue-400'
@@ -353,7 +397,7 @@ export default function AgentDetail({agent: initialAgent}) {
                     信息详情
                 </button>
                 <button
-                    onClick={() => setActiveTab('terminal')}
+                    onClick={() => handleTabChange('terminal')}
                     className={`py-3 px-6 text-sm font-medium border-b-2 -mb-px flex items-center ${
                         activeTab === 'terminal'
                             ? 'border-blue-500 text-blue-600 dark:text-blue-400 dark:border-blue-400'
@@ -530,7 +574,7 @@ export default function AgentDetail({agent: initialAgent}) {
                                 </p>
                                 <Button
                                     variant="primary"
-                                    onClick={() => setActiveTab('info')}
+                                    onClick={() => handleTabChange('info')}
                                 >
                                     返回信息页面
                                 </Button>

@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
-import { Eye, Plus, PlusCircle, Trash2 } from 'lucide-react';
+import { Eye, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import NavLink from '@/components/ui/NavLink';
 import { usePathname } from 'next/navigation';
@@ -16,7 +16,7 @@ export default function AgentsClientPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [deleteLoading, setDeleteLoading] = useState(null);
-    const [registrationLoading, setRegistrationLoading] = useState(null);
+    const [refreshLoading, setRefreshLoading] = useState(false);
     const pathname = usePathname();
 
     // 使用全局状态
@@ -25,7 +25,6 @@ export default function AgentsClientPage() {
         isLoading,
         fetchAgents,
         deleteAgent,
-        registerAgent,
         getCombinedAgents
     } = useAgentStore();
 
@@ -45,6 +44,19 @@ export default function AgentsClientPage() {
             fetchAgents();
         }
     }, [isMounted, pathname, fetchAgents]);
+
+    // 定期刷新代理状态 - 即使有MQTT也确保HTTP数据同步
+    useEffect(() => {
+        if (!isMounted) return;
+
+        // 每60秒刷新一次HTTP数据
+        const intervalId = setInterval(() => {
+            console.log('定期刷新代理数据');
+            fetchAgents(true);
+        }, 60000);
+
+        return () => clearInterval(intervalId);
+    }, [isMounted, fetchAgents]);
 
     // 获取合并后的代理数据（HTTP+MQTT）
     const combinedAgents = getCombinedAgents();
@@ -68,6 +80,10 @@ export default function AgentsClientPage() {
 
     // 删除代理处理
     const handleDeleteAgent = async (agentId) => {
+        if (!confirm('确定要删除此代理吗？此操作不可撤销。')) {
+            return { success: false, canceled: true };
+        }
+
         try {
             setDeleteLoading(agentId);
             const result = await deleteAgent(agentId);
@@ -75,43 +91,26 @@ export default function AgentsClientPage() {
             if (!result.success && !result.canceled) {
                 alert('删除代理失败，请重试');
             }
+
+            return result;
         } catch (error) {
             console.error('删除代理失败:', error);
             alert('删除代理失败，请重试');
+            return { success: false, error };
         } finally {
             setDeleteLoading(null);
         }
     };
 
-    // 注册MQTT代理
-    const handleRegisterAgent = async (agent) => {
+    // 强制刷新所有代理
+    const handleRefreshAgents = async () => {
         try {
-            setRegistrationLoading(agent.uuid);
-
-            // 准备代理数据注册
-            const agentData = {
-                uuid: agent.uuid,
-                hostname: agent.hostname || 'New Agent',
-                ip: agent.ip || '',
-                online: agent.online || false,
-                buildVersion: agent.buildVersion || '',
-                buildTime: agent.buildTime || '',
-                commitId: agent.commitId || '',
-                os: agent.os || '',
-                memory: agent.memory || '',
-                lastHeartbeat: agent.lastHeartbeat || new Date()
-            };
-
-            const result = await registerAgent(agentData);
-
-            if (!result.success) {
-                alert('注册代理失败，请重试');
-            }
+            setRefreshLoading(true);
+            await fetchAgents(true);
         } catch (error) {
-            console.error('注册代理失败:', error);
-            alert('注册代理失败，请重试');
+            console.error('刷新代理数据失败:', error);
         } finally {
-            setRegistrationLoading(null);
+            setRefreshLoading(false);
         }
     };
 
@@ -137,6 +136,15 @@ export default function AgentsClientPage() {
                         <span className="ml-2 text-xs text-blue-500 dark:text-blue-400">(MQTT实时)</span>
                     )}
                 </h1>
+                <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleRefreshAgents}
+                    disabled={refreshLoading}
+                >
+                    <RefreshCw className={`w-4 h-4 mr-1 ${refreshLoading ? 'animate-spin' : ''}`}/>
+                    {refreshLoading ? '刷新中...' : '刷新列表'}
+                </Button>
             </header>
 
             {/* 搜索和过滤 */}
@@ -216,24 +224,24 @@ export default function AgentsClientPage() {
                                     {agent._mqttOnly && (
                                         <span
                                             className="ml-2 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
-                        仅MQTT
-                      </span>
+                                            新发现
+                                         </span>
                                     )}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{agent.ip}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <span
-                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            agent.online
-                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                                : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                        }`}>
-                      {agent.online ? '在线' : '离线'}
-                        {/* Show real-time indicator if from MQTT */}
-                        {agent._fromMqtt && (
-                            <span className="ml-1 opacity-75">(实时)</span>
-                        )}
-                    </span>
+                                    <span
+                                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                            agent.online
+                                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                                                : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                                        }`}>
+                                      {agent.online ? '在线' : '离线'}
+                                        {/* Show real-time indicator if from MQTT */}
+                                        {agent._fromMqtt && (
+                                            <span className="ml-1 opacity-75">(实时)</span>
+                                        )}
+                                    </span>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                     {agent.buildVersion || '未知'}
@@ -248,35 +256,8 @@ export default function AgentsClientPage() {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
                                     <div className="flex justify-end space-x-4">
-                                        {agent._needsRegistration ? (
-                                            // 对于仅MQTT的代理，显示注册按钮
-                                            <button
-                                                onClick={() => handleRegisterAgent(agent)}
-                                                disabled={registrationLoading === agent.uuid}
-                                                className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 inline-flex items-center"
-                                            >
-                                                {registrationLoading === agent.uuid ? (
-                                                    <>
-                                                        <svg
-                                                            className="animate-spin h-4 w-4 mr-2 text-green-600 dark:text-green-400"
-                                                            xmlns="http://www.w3.org/2000/svg" fill="none"
-                                                            viewBox="0 0 24 24">
-                                                            <circle className="opacity-25" cx="12" cy="12" r="10"
-                                                                    stroke="currentColor" strokeWidth="4"></circle>
-                                                            <path className="opacity-75" fill="currentColor"
-                                                                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                                        </svg>
-                                                        注册中...
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <PlusCircle className="w-4 h-4 mr-2"/>
-                                                        注册代理
-                                                    </>
-                                                )}
-                                            </button>
-                                        ) : (
-                                            // 对于普通代理，显示常规操作
+                                        {agent._id ? (
+                                            // 对于已注册的代理，显示详情和删除按钮
                                             <>
                                                 <NavLink
                                                     href={`/agents/${agent._id}`}
@@ -311,6 +292,12 @@ export default function AgentsClientPage() {
                                                     )}
                                                 </button>
                                             </>
+                                        ) : (
+                                            // 对于MQTT发现但尚未获取到_id的代理，显示刷新按钮
+                                            <span className="text-gray-500 dark:text-gray-400 inline-flex items-center">
+                                                <RefreshCw className="w-4 h-4 mr-2"/>
+                                                处理中...
+                                            </span>
                                         )}
                                     </div>
                                 </td>
