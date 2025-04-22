@@ -162,7 +162,24 @@ const useMqttStore = create((set, get) => {
                     try {
                         const payload = JSON.parse(message.toString());
 
-                        if (topic === TOPICS.HEARTBEAT) {
+                        if (topic === TOPICS.STATUS) {
+                            // 处理状态消息（包括遗嘱消息）
+                            if (payload.uuid && payload.status) {
+                                console.log(`收到代理状态更新: ${payload.uuid}, 状态: ${payload.status}`);
+
+                                // 更新代理状态
+                                if (payload.status === "offline") {
+                                    agentState[payload.uuid] = {
+                                        ...agentState[payload.uuid],
+                                        online: false,
+                                        lastUpdate: new Date()
+                                    };
+
+                                    // 立即更新状态，不使用节流
+                                    useAgentStore.getState().updateMqttAgentState({...agentState});
+                                }
+                            }
+                        } else if (topic === TOPICS.HEARTBEAT) {
                             // 处理心跳消息
                             if (payload.uuid) {
                                 const uuid = payload.uuid;
@@ -179,6 +196,41 @@ const useMqttStore = create((set, get) => {
 
                                 // 使用节流函数更新agent store中的MQTT状态
                                 updateAgentStoreThrottled({...agentState});
+
+                                // 检查是否为新代理，自动注册
+                                const httpAgents = useAgentStore.getState().agents;
+                                const existingAgent = httpAgents.find(a => a.uuid === uuid);
+
+                                if (!existingAgent && !agentState[uuid]._registering) {
+                                    // 标记为正在注册中
+                                    agentState[uuid]._registering = true;
+                                    console.log(`自动注册新发现的代理: ${uuid}`);
+
+                                    // 注册新代理
+                                    useAgentStore.getState().registerAgent({
+                                        uuid,
+                                        hostname: payload.hostname || uuid.substring(0, 8),
+                                        ip: payload.ip || '',
+                                        buildVersion: payload.buildVersion,
+                                        buildTime: payload.buildTime,
+                                        commitId: payload.commitId,
+                                        os: payload.os,
+                                        memory: payload.memory
+                                    }).then(result => {
+                                        if (result.success) {
+                                            // 注册成功，更新本地状态
+                                            console.log(`代理注册成功: ${uuid}`);
+                                            delete agentState[uuid]._registering;
+
+                                            // 注册成功后刷新HTTP数据
+                                            useAgentStore.getState().fetchAgents(true);
+                                        } else {
+                                            // 注册失败，清除标记
+                                            console.error(`代理注册失败: ${uuid}`, result.error);
+                                            delete agentState[uuid]._registering;
+                                        }
+                                    });
+                                }
                             }
                         } else if (topic.startsWith(TOPICS.RESPONSE)) {
                             console.log(`收到MQTT响应: ${topic}`, payload);

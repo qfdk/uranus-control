@@ -28,6 +28,11 @@ export function combineAgentData(httpAgents, mqttAgentState, mqttConnected) {
                 agent.os = agent.os || mqttAgentState[agent.uuid].os;
                 agent.memory = agent.memory || mqttAgentState[agent.uuid].memory;
                 agent._fromMqtt = true;
+
+                // 复制MQTT代理的注册状态
+                if (mqttAgentState[agent.uuid]._registering) {
+                    agent._registering = true;
+                }
             } else {
                 agent._fromMqtt = false;
             }
@@ -50,8 +55,8 @@ export function combineAgentData(httpAgents, mqttAgentState, mqttConnected) {
                     os: mqttAgent.os,
                     memory: mqttAgent.memory,
                     _mqttOnly: true,  // 标记为仅MQTT发现的代理
-                    _fromMqtt: true
-                    // 移除 _needsRegistration 标记，因为服务器端会自动注册
+                    _fromMqtt: true,
+                    _registering: mqttAgent._registering // 复制注册状态
                 });
             }
         });

@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
-import { Eye, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Eye, RefreshCw, Trash2 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import NavLink from '@/components/ui/NavLink';
 import { usePathname } from 'next/navigation';
@@ -44,19 +44,6 @@ export default function AgentsClientPage() {
             fetchAgents();
         }
     }, [isMounted, pathname, fetchAgents]);
-
-    // 定期刷新代理状态 - 即使有MQTT也确保HTTP数据同步
-    useEffect(() => {
-        if (!isMounted) return;
-
-        // 每60秒刷新一次HTTP数据
-        const intervalId = setInterval(() => {
-            console.log('定期刷新代理数据');
-            fetchAgents(true);
-        }, 60000);
-
-        return () => clearInterval(intervalId);
-    }, [isMounted, fetchAgents]);
 
     // 获取合并后的代理数据（HTTP+MQTT）
     const combinedAgents = getCombinedAgents();
@@ -221,11 +208,17 @@ export default function AgentsClientPage() {
                                 className={`hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${agent._mqttOnly ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                                     {agent.hostname || '未命名代理'}
-                                    {agent._mqttOnly && (
+                                    {agent._mqttOnly && agent._registering && (
+                                        <span
+                                            className="ml-2 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
+                                            同步中...
+                                        </span>
+                                    )}
+                                    {agent._mqttOnly && !agent._registering && !agent._id && (
                                         <span
                                             className="ml-2 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
                                             新发现
-                                         </span>
+                                        </span>
                                     )}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{agent.ip}</td>
@@ -293,10 +286,19 @@ export default function AgentsClientPage() {
                                                 </button>
                                             </>
                                         ) : (
-                                            // 对于MQTT发现但尚未获取到_id的代理，显示刷新按钮
+                                            // 对于正在注册中或新发现的代理
                                             <span className="text-gray-500 dark:text-gray-400 inline-flex items-center">
-                                                <RefreshCw className="w-4 h-4 mr-2"/>
-                                                处理中...
+                                                {agent._registering ? (
+                                                    <>
+                                                        <RefreshCw className="w-4 h-4 mr-2 animate-spin"/>
+                                                        同步中...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <RefreshCw className="w-4 h-4 mr-2"/>
+                                                        自动注册中...
+                                                    </>
+                                                )}
                                             </span>
                                         )}
                                     </div>
@@ -312,16 +314,9 @@ export default function AgentsClientPage() {
                                     {agents.length === 0 ? (
                                         <div className="flex flex-col items-center">
                                             <p className="mb-2">暂无代理数据</p>
-                                            <Button
-                                                variant="primary"
-                                                size="sm"
-                                                onClick={() => {
-                                                    // 可以在这里添加添加代理的逻辑
-                                                }}
-                                            >
-                                                <Plus className="w-4 h-4 mr-1"/>
-                                                添加第一个代理
-                                            </Button>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                                                代理将在上线时自动注册
+                                            </p>
                                         </div>
                                     ) : (
                                         <div className="flex flex-col items-center">

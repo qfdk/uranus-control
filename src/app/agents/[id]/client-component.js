@@ -1,6 +1,6 @@
 'use client';
 
-import {useEffect, useRef, useState, useCallback} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import {formatDistanceToNow} from 'date-fns';
 import Link from 'next/link';
 import {
@@ -270,6 +270,27 @@ export default function AgentDetail({agent: initialAgent}) {
                 show: true
             });
 
+            // 优先使用MQTT发送命令
+            if (mqttConnected) {
+                const mqttCommand = {
+                    'reload': () => useMqttStore.getState().reloadNginx(agent.uuid),
+                    'restart': () => useMqttStore.getState().restartNginx(agent.uuid),
+                    'stop': () => useMqttStore.getState().stopNginx(agent.uuid),
+                    'start': () => useMqttStore.getState().startNginx(agent.uuid)
+                };
+
+                if (mqttCommand[command]) {
+                    const result = await mqttCommand[command]();
+                    setCommandMessage({
+                        type: 'success',
+                        content: `${commandNames[command] || command}成功: ${result.message || '操作已完成'}`,
+                        show: true
+                    });
+                    return;
+                }
+            }
+
+            // 回退到HTTP API
             const response = await fetch(`/api/agents/${agent._id}/command`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
