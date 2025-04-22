@@ -101,7 +101,7 @@ export default function DashboardClientPage() {
                 setIsLoading(false);
             }, 500);
         }
-    }, [refreshAgents, mqttConnected, reconnect, syncAllAgents]);
+    }, [setIsLoading, refreshAgents, mqttConnected, reconnect, syncAllAgents]);
 
     // 合并代理数据（HTTP和MQTT）
     const combinedAgents = useMemo(() => {

@@ -72,7 +72,7 @@ export default function AgentDetail({agent: initialAgent}) {
             setAgent(updatedAgent);
             console.log('代理数据已用MQTT信息更新');
         }
-    }, [mqttConnected, agent?.uuid, agentState]);
+    }, [agent, mqttConnected, agent?.uuid, agentState]);
 
     // 自动清除状态消息
     useEffect(() => {
