@@ -78,6 +78,10 @@ const useMqttStore = create((set, get) => {
     const clientId = `${getMqttConfig().CLIENT_PREFIX}-${uuidv4()}-${Date.now()}`;
     const pendingCommands = new Map();
     const agentState = {};
+    // 管理代理状态的集合
+    const tempBlockedAgents = new Set(); // 存储收到遗嘱后临时禁止注册的代理UUID
+    const deletedAgents = new Set();     // 存储已删除的代理UUID
+
     let mqttClient = null;
     let cleanupInterval = null;
 
@@ -85,6 +89,49 @@ const useMqttStore = create((set, get) => {
     const updateAgentStoreThrottled = throttle((state) => {
         useAgentStore.getState().updateMqttAgentState({...state});
     }, 300);
+
+    // 检查代理是否已在MongoDB中注册
+    const isAgentRegistered = (uuid) => {
+        const httpAgents = useAgentStore.getState().agents;
+        return httpAgents.some(agent => agent.uuid === uuid);
+    };
+
+    // 清理未注册的代理状态
+    const cleanupUnregisteredAgents = () => {
+        const httpAgents = useAgentStore.getState().agents;
+        const registeredUuids = new Set(httpAgents.map(agent => agent.uuid));
+
+        // 从agentState中移除未注册的代理
+        Object.keys(agentState).forEach(uuid => {
+            // 保留正在注册中的代理
+            if (!registeredUuids.has(uuid) && !agentState[uuid]._registering) {
+                console.log(`清理未注册的代理状态: ${uuid}`);
+                delete agentState[uuid];
+            }
+        });
+
+        // 更新agent store
+        updateAgentStoreThrottled({...agentState});
+    };
+
+    // 添加标记代理已删除的方法
+    const markAgentDeleted = (uuid) => {
+        if (uuid) {
+            console.log(`标记代理已删除: ${uuid}`);
+
+            // 添加到已删除集合
+            deletedAgents.add(uuid);
+
+            // 从临时禁止集合中移除，允许下次重新注册
+            tempBlockedAgents.delete(uuid);
+
+            // 清理状态
+            if (agentState[uuid]) {
+                delete agentState[uuid];
+                updateAgentStoreThrottled({...agentState});
+            }
+        }
+    };
 
     return {
         // 状态
@@ -136,6 +183,9 @@ const useMqttStore = create((set, get) => {
                     if (currentAgentUUID) {
                         mqttClient.subscribe(`${TOPICS.RESPONSE}${currentAgentUUID}`, {qos: 0});
                     }
+
+                    // 连接成功后清理未注册代理
+                    setTimeout(cleanupUnregisteredAgents, 2000);
                 });
 
                 mqttClient.on('error', (err) => {
@@ -167,25 +217,74 @@ const useMqttStore = create((set, get) => {
                             if (payload.uuid && payload.status) {
                                 console.log(`收到代理状态更新: ${payload.uuid}, 状态: ${payload.status}`);
 
-                                // 更新代理状态
+                                // 收到离线遗嘱消息，临时禁止该代理注册
                                 if (payload.status === "offline") {
-                                    agentState[payload.uuid] = {
-                                        ...agentState[payload.uuid],
-                                        online: false,
-                                        lastUpdate: new Date()
-                                    };
+                                    console.log(`代理发送遗嘱，临时禁止注册: ${payload.uuid}`);
+                                    tempBlockedAgents.add(payload.uuid);
 
-                                    // 立即更新状态，不使用节流
-                                    useAgentStore.getState().updateMqttAgentState({...agentState});
+                                    // 如果存在于agentState中，标记为离线
+                                    if (agentState[payload.uuid]) {
+                                        agentState[payload.uuid].online = false;
+                                        agentState[payload.uuid].lastUpdate = new Date();
+                                        useAgentStore.getState().updateMqttAgentState({...agentState});
+                                    }
                                 }
                             }
-                        } else if (topic === TOPICS.HEARTBEAT) {
+                        }
+                        else if (topic === TOPICS.HEARTBEAT) {
                             // 处理心跳消息
                             if (payload.uuid) {
                                 const uuid = payload.uuid;
                                 const timestamp = new Date();
 
-                                // 更新代理状态
+                                // 检查代理是否已在MongoDB中注册
+                                const isRegistered = isAgentRegistered(uuid);
+                                const isBeingRegistered = agentState[uuid]?._registering;
+
+                                // 已注册代理，正常处理
+                                if (isRegistered) {
+                                    // 更新状态
+                                    agentState[uuid] = {
+                                        ...agentState[uuid],
+                                        ...payload,
+                                        online: true,
+                                        lastHeartbeat: timestamp,
+                                        lastUpdate: timestamp
+                                    };
+                                    updateAgentStoreThrottled({...agentState});
+
+                                    // 收到心跳，移除临时禁止
+                                    if (tempBlockedAgents.has(uuid)) {
+                                        console.log(`代理恢复活动，移除临时禁止: ${uuid}`);
+                                        tempBlockedAgents.delete(uuid);
+                                    }
+                                    return;
+                                }
+
+                                // 如果是被临时禁止的代理且未删除过，不自动注册
+                                if (tempBlockedAgents.has(uuid) && !deletedAgents.has(uuid)) {
+                                    console.log(`代理处于临时禁止状态，不自动注册: ${uuid}`);
+                                    // 但仍然更新其状态，让用户可以看到它
+                                    agentState[uuid] = {
+                                        ...agentState[uuid],
+                                        ...payload,
+                                        online: true,
+                                        lastHeartbeat: timestamp,
+                                        lastUpdate: timestamp,
+                                        _tempBlocked: true
+                                    };
+                                    updateAgentStoreThrottled({...agentState});
+                                    return;
+                                }
+
+                                // 如果已删除过，允许重新注册
+                                if (deletedAgents.has(uuid)) {
+                                    console.log(`删除后的代理重新上线，允许注册: ${uuid}`);
+                                    deletedAgents.delete(uuid);
+                                    tempBlockedAgents.delete(uuid); // 同时清除临时禁止
+                                }
+
+                                // 更新状态
                                 agentState[uuid] = {
                                     ...agentState[uuid],
                                     ...payload,
@@ -193,18 +292,13 @@ const useMqttStore = create((set, get) => {
                                     lastHeartbeat: timestamp,
                                     lastUpdate: timestamp
                                 };
-
-                                // 使用节流函数更新agent store中的MQTT状态
                                 updateAgentStoreThrottled({...agentState});
 
-                                // 检查是否为新代理，自动注册
-                                const httpAgents = useAgentStore.getState().agents;
-                                const existingAgent = httpAgents.find(a => a.uuid === uuid);
-
-                                if (!existingAgent && !agentState[uuid]._registering) {
+                                // 自动注册逻辑
+                                if (!isBeingRegistered && !isRegistered) {
                                     // 标记为正在注册中
                                     agentState[uuid]._registering = true;
-                                    console.log(`自动注册新发现的代理: ${uuid}`);
+                                    console.log(`自动注册代理: ${uuid}`);
 
                                     // 注册新代理
                                     useAgentStore.getState().registerAgent({
@@ -218,16 +312,14 @@ const useMqttStore = create((set, get) => {
                                         memory: payload.memory
                                     }).then(result => {
                                         if (result.success) {
-                                            // 注册成功，更新本地状态
                                             console.log(`代理注册成功: ${uuid}`);
                                             delete agentState[uuid]._registering;
-
-                                            // 注册成功后刷新HTTP数据
                                             useAgentStore.getState().fetchAgents(true);
                                         } else {
-                                            // 注册失败，清除标记
                                             console.error(`代理注册失败: ${uuid}`, result.error);
                                             delete agentState[uuid]._registering;
+                                            delete agentState[uuid];
+                                            updateAgentStoreThrottled({...agentState});
                                         }
                                     });
                                 }
@@ -266,6 +358,8 @@ const useMqttStore = create((set, get) => {
                 if (cleanupInterval) clearInterval(cleanupInterval);
                 cleanupInterval = setInterval(() => {
                     const now = Date.now();
+
+                    // 清理过期命令
                     pendingCommands.forEach(({timestamp, timeoutId}, requestId) => {
                         // 清理超过30秒的命令
                         if (now - timestamp > 30000) {
@@ -275,6 +369,9 @@ const useMqttStore = create((set, get) => {
                             pendingCommands.delete(requestId);
                         }
                     });
+
+                    // 定期同步代理状态与MongoDB
+                    cleanupUnregisteredAgents();
                 }, 10000);
             } catch (err) {
                 console.error('MQTT连接失败:', err);
@@ -374,6 +471,14 @@ const useMqttStore = create((set, get) => {
 
         // 获取代理状态
         getAgentState: () => ({...agentState}),
+
+        // 标记代理已删除，避免重新自动注册
+        markAgentDeleted,
+
+        // 清除已删除代理记录（用于测试）
+        clearDeletedAgents: () => {
+            deletedAgents.clear();
+        },
 
         // Nginx相关命令
         reloadNginx: (uuid) => get().sendCommand(uuid, 'reload_nginx'),

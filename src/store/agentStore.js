@@ -1,6 +1,7 @@
 // src/store/agentStore.js
 import {create} from 'zustand';
 import {combineAgentData} from '@/lib/agent-utils';
+import useMqttStore from './mqttStore';
 
 // 创建agent全局状态管理
 const useAgentStore = create((set, get) => ({
@@ -65,9 +66,33 @@ const useAgentStore = create((set, get) => ({
 
     // 删除代理
     deleteAgent: async (agentId) => {
-        if (!agentId) return {success: false, error: 'Invalid agent ID'};
+        if (!agentId) return {success: false, error: '无效的代理ID'};
 
         try {
+            // 先查询代理信息，以便获取UUID
+            const agentResponse = await fetch(`/api/agents/${agentId}`);
+            let agentUuid = null;
+
+            if (agentResponse.ok) {
+                const agentData = await agentResponse.json();
+                agentUuid = agentData.uuid; // 保存UUID用于后续清理
+                console.log(`准备删除代理: ${agentId}, UUID: ${agentUuid}`);
+            } else {
+                console.error(`获取代理信息失败: ${agentId}`);
+                // 尝试从本地状态获取UUID
+                const state = get();
+                const agent = state.agents.find(a => a._id === agentId);
+                if (agent && agent.uuid) {
+                    agentUuid = agent.uuid;
+                    console.log(`从本地状态获取代理UUID: ${agentUuid}`);
+                }
+            }
+
+            if (!agentUuid) {
+                console.error(`无法获取代理UUID, 仅删除数据库记录: ${agentId}`);
+            }
+
+            // 执行删除操作
             const response = await fetch(`/api/agents/${agentId}`, {
                 method: 'DELETE'
             });
@@ -80,6 +105,31 @@ const useAgentStore = create((set, get) => ({
             set(state => ({
                 agents: state.agents.filter(agent => agent._id !== agentId)
             }));
+
+            // 如果有UUID，同时标记为已删除，防止再次自动注册
+            if (agentUuid) {
+                console.log(`标记代理为已删除: ${agentUuid}`);
+                const mqttStore = useMqttStore.getState();
+
+                // 确保MQTT Store已初始化
+                if (typeof mqttStore.markAgentDeleted === 'function') {
+                    mqttStore.markAgentDeleted(agentUuid);
+                } else {
+                    console.error('MQTT Store未初始化，无法标记代理为已删除');
+                }
+
+                // 双保险：直接移除MQTT状态中的代理数据
+                try {
+                    const mqttAgentState = {...mqttStore.getAgentState()};
+                    if (mqttAgentState[agentUuid]) {
+                        console.log(`从MQTT状态中删除代理: ${agentUuid}`);
+                        delete mqttAgentState[agentUuid];
+                        get().updateMqttAgentState(mqttAgentState);
+                    }
+                } catch (err) {
+                    console.error('清理MQTT状态失败:', err);
+                }
+            }
 
             return {success: true};
         } catch (error) {

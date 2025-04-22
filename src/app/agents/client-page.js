@@ -1,14 +1,14 @@
 // src/app/agents/client-page.js
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { formatDistanceToNow } from 'date-fns';
-import { Eye, RefreshCw, Trash2 } from 'lucide-react';
+import {useEffect, useState} from 'react';
+import {formatDistanceToNow} from 'date-fns';
+import {Eye, RefreshCw, Trash2} from 'lucide-react';
 import Button from '@/components/ui/Button';
 import NavLink from '@/components/ui/NavLink';
-import { usePathname } from 'next/navigation';
+import {usePathname} from 'next/navigation';
 import TableSpinner from '@/components/ui/TableSpinner';
-import { useClientMount } from '@/hooks/useClientMount';
+import {useClientMount} from '@/hooks/useClientMount';
 import useAgentStore from '@/store/agentStore';
 import useMqttStore from '@/store/mqttStore';
 
@@ -68,7 +68,7 @@ export default function AgentsClientPage() {
     // 删除代理处理
     const handleDeleteAgent = async (agentId) => {
         if (!confirm('确定要删除此代理吗？此操作不可撤销。')) {
-            return { success: false, canceled: true };
+            return {success: false, canceled: true};
         }
 
         try {
@@ -83,7 +83,7 @@ export default function AgentsClientPage() {
         } catch (error) {
             console.error('删除代理失败:', error);
             alert('删除代理失败，请重试');
-            return { success: false, error };
+            return {success: false, error};
         } finally {
             setDeleteLoading(null);
         }
