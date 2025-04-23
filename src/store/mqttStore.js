@@ -220,7 +220,7 @@ const useMqttStore = create((set, get) => {
                                 console.log(`收到代理状态更新: ${payload.uuid}, 状态: ${payload.status}`);
 
                                 // 收到离线遗嘱消息，临时禁止该代理注册
-                                if (payload.status === "offline") {
+                                if (payload.status === 'offline') {
                                     console.log(`代理发送遗嘱，临时禁止注册: ${payload.uuid}`);
                                     tempBlockedAgents.add(payload.uuid);
 
@@ -232,8 +232,7 @@ const useMqttStore = create((set, get) => {
                                     }
                                 }
                             }
-                        }
-                        else if (topic === TOPICS.HEARTBEAT) {
+                        } else if (topic === TOPICS.HEARTBEAT) {
                             // 处理心跳消息
                             if (payload.uuid) {
                                 const uuid = payload.uuid;
@@ -340,7 +339,7 @@ const useMqttStore = create((set, get) => {
                                     // 更新终端会话状态
                                     const updatedSession = {
                                         ...session,
-                                        lastResponse: new Date(),
+                                        lastResponse: new Date()
                                     };
 
                                     // 判断是流式输出还是最终输出
@@ -551,7 +550,65 @@ const useMqttStore = create((set, get) => {
                 };
             });
         },
+// 发送终端输入
+        sendTerminalInput: (agentUuid, sessionId, input) => {
+            return new Promise((resolve, reject) => {
+                if (!mqttClient || !mqttClient.connected) {
+                    reject(new Error('MQTT客户端未连接'));
+                    return;
+                }
 
+                if (!agentUuid || !sessionId || input === undefined) {
+                    reject(new Error('缺少必要参数'));
+                    return;
+                }
+
+                // 创建请求ID
+                const requestId = uuidv4();
+
+                // 构建命令消息
+                const commandMessage = {
+                    command: 'terminal_input',
+                    requestId,
+                    sessionId,
+                    input,
+                    timestamp: Date.now(),
+                    clientId
+                };
+
+                // 设置超时
+                const timeoutId = setTimeout(() => {
+                    pendingCommands.delete(requestId);
+                    reject(new Error('发送输入超时'));
+                }, 5000); // 5秒超时
+
+                // 保存待处理命令
+                pendingCommands.set(requestId, {
+                    resolve,
+                    reject,
+                    timeoutId,
+                    timestamp: Date.now()
+                });
+
+                // 发布命令消息
+                const commandTopic = `${TOPICS.COMMAND}${agentUuid}`;
+
+                // 日志输出，不显示实际输入内容，以免刷屏
+                if (input === '\u0003') {
+                    console.log(`发送Ctrl+C到 ${commandTopic}:`, {sessionId});
+                } else {
+                    console.log(`发送终端输入到 ${commandTopic}:`, {sessionId, inputLength: input.length});
+                }
+
+                mqttClient.publish(commandTopic, JSON.stringify(commandMessage), {qos: 0}, (err) => {
+                    if (err) {
+                        clearTimeout(timeoutId);
+                        pendingCommands.delete(requestId);
+                        reject(new Error(`发送终端输入失败: ${err.message}`));
+                    }
+                });
+            });
+        },
         interruptCommand: (sessionId) => {
             // 获取会话
             const session = get().terminalSessions[sessionId];
