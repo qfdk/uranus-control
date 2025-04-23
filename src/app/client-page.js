@@ -1,8 +1,8 @@
 'use client';
 
-import {useCallback, useEffect, useState, useRef} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import {formatDistanceToNow} from 'date-fns';
-import {Eye, Plus, RefreshCw, Server, Zap} from 'lucide-react';
+import {Eye, RefreshCw, Server} from 'lucide-react';
 import NavLink from '@/components/ui/NavLink';
 import StatusCard from '@/components/ui/StatusCard';
 import QuickActionButton from '@/components/ui/QuickActionButton';
@@ -13,7 +13,6 @@ import useAgentStore from '@/store/agentStore';
 import useMqttStore from '@/store/mqttStore';
 
 export default function DashboardClientPage() {
-    const [lastMqttUpdate, setLastMqttUpdate] = useState(null);
     const [upgradeStatus, setUpgradeStatus] = useState({
         isUpgrading: false,
         success: 0,
@@ -36,7 +35,7 @@ export default function DashboardClientPage() {
     } = useAgentStore();
 
     // MQTT store
-    const { connect: connectMqtt } = useMqttStore();
+    const {connect: connectMqtt} = useMqttStore();
 
     // 本地loading状态
     const [localLoading, setLocalLoading] = useState(false);
@@ -55,8 +54,6 @@ export default function DashboardClientPage() {
     // 组件挂载时连接MQTT
     useEffect(() => {
         if (isMounted) {
-            // 设置最后更新时间为当前时间
-            setLastMqttUpdate(new Date());
 
             // 延迟初始化MQTT，避免与数据加载冲突
             const timer = setTimeout(() => {
@@ -67,12 +64,6 @@ export default function DashboardClientPage() {
         }
     }, [isMounted, connectMqtt]);
 
-    // 更新MQTT时间戳
-    useEffect(() => {
-        if (mqttConnected) {
-            setLastMqttUpdate(new Date());
-        }
-    }, [mqttConnected]);
 
     // 处理手动刷新按钮点击
     const handleManualRefresh = useCallback(async () => {
@@ -224,15 +215,6 @@ export default function DashboardClientPage() {
                 </div>
             )}
 
-            {/* MQTT状态指示器 (已连接时) */}
-            {mqttConnected && lastMqttUpdate && (
-                <div
-                    className="mb-4 p-2 bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 rounded-md text-sm text-blue-700 dark:text-blue-300 flex items-center">
-                    <Zap className="w-4 h-4 mr-2 text-blue-500 dark:text-blue-400"/>
-                    <span>MQTT实时监控已连接 - 最后更新: {formatDistanceToNow(lastMqttUpdate, {addSuffix: true})}</span>
-                </div>
-            )}
-
             {/* 状态卡片 */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <StatusCard
@@ -246,8 +228,10 @@ export default function DashboardClientPage() {
                     title="网站"
                     value={totalWebsites}
                     description="托管网站总数"
-                    icon={<svg className="w-8 h-8 text-green-500 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+                    icon={<svg className="w-8 h-8 text-green-500 dark:text-green-400" fill="none" viewBox="0 0 24 24"
+                               stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                              d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
                     </svg>}
                     color="green"
                 />
@@ -255,8 +239,10 @@ export default function DashboardClientPage() {
                     title="SSL证书"
                     value={totalCertificates}
                     description="有效证书数量"
-                    icon={<svg className="w-8 h-8 text-purple-500 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                    icon={<svg className="w-8 h-8 text-purple-500 dark:text-purple-400" fill="none" viewBox="0 0 24 24"
+                               stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                              d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
                     </svg>}
                     color="purple"
                 />
