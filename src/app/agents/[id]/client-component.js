@@ -101,17 +101,28 @@ export default function AgentDetail({agent: initialAgent}) {
     const refreshAgentData = useCallback(async () => {
         if (!agent?._id) return;
 
+        console.log(`正在刷新代理数据: ${agent._id}`);
+
         try {
             const refreshResponse = await fetch(`/api/agents/${agent._id}`);
-            if (refreshResponse.ok) {
-                const updatedAgent = await refreshResponse.json();
-                setAgent(prev => ({
-                    ...updatedAgent,
-                    _fromMqtt: prev._fromMqtt
-                }));
+
+            if (!refreshResponse.ok) {
+                throw new Error(`获取代理数据失败: HTTP ${refreshResponse.status}`);
             }
+
+            const updatedAgent = await refreshResponse.json();
+            console.log('获取到更新的代理数据:', updatedAgent);
+
+            // 更新代理数据，保留MQTT标记
+            setAgent(prev => ({
+                ...updatedAgent,
+                _fromMqtt: prev?._fromMqtt || false
+            }));
+
+            return updatedAgent;
         } catch (error) {
             console.error('刷新代理状态失败:', error);
+            throw error;
         }
     }, [agent?._id]);
 
@@ -187,12 +198,14 @@ export default function AgentDetail({agent: initialAgent}) {
     };
 
     // 处理升级代理
-    const handleUpgradeAgent = async () => {
-        if (!confirm('确定要升级此代理吗？在升级过程中，代理可能会重启。')) {
-            return;
-        }
+    const handleUpgradeAgent = () => {
+        // 不阻塞主线程，将confirm放在setTimeout中
+        setTimeout(() => {
+            if (!confirm('确定要升级此代理吗？在升级过程中，代理可能会重启。')) {
+                return;
+            }
 
-        try {
+            // 立即更新UI状态，提高响应性
             setIsUpgrading(true);
             setUpgradeStatus({
                 type: 'loading',
@@ -200,39 +213,84 @@ export default function AgentDetail({agent: initialAgent}) {
                 show: true
             });
 
-            const result = await upgradeAgent(agent._id);
-
-            if (result.success) {
-                setUpgradeStatus({
-                    type: 'success',
-                    message: result.message || '升级请求已发送',
-                    show: true
-                });
-            } else {
-                setUpgradeStatus({
-                    type: 'error',
-                    message: result.error?.message || '升级失败',
-                    show: true
-                });
-            }
-
-            // 升级可能需要一些时间，设置延迟刷新
-            statusTimeoutRef.current = setTimeout(async () => {
+            // 异步处理升级操作
+            setTimeout(async () => {
                 try {
-                    await refreshAgentData();
-                } finally {
+                    const result = await upgradeAgent(agent._id);
+
+                    console.log('升级响应:', result);
+
+                    // 检查响应是成功的
+                    if (result.success || result.message) {
+                        // 获取正确的消息内容
+                        const statusMessage = result.message ||
+                            (result.result?.message) ||
+                            '升级请求已发送，等待代理重启...';
+
+                        setUpgradeStatus({
+                            type: 'success',
+                            message: statusMessage,
+                            show: true
+                        });
+
+                        // 清除之前的定时器
+                        if (statusTimeoutRef.current) {
+                            clearTimeout(statusTimeoutRef.current);
+                        }
+
+                        // 延迟刷新数据
+                        statusTimeoutRef.current = setTimeout(async () => {
+                            try {
+                                setUpgradeStatus({
+                                    type: 'info',
+                                    message: '正在刷新代理状态...',
+                                    show: true
+                                });
+
+                                // 强制刷新代理数据
+                                await refreshAgentData();
+
+                                setUpgradeStatus({
+                                    type: 'success',
+                                    message: '代理升级完成，数据已更新',
+                                    show: true
+                                });
+
+                                // 再次延迟刷新，确保获取最新数据
+                                setTimeout(async () => {
+                                    await refreshAgentData();
+                                    setRenderKey(prev => prev + 1); // 强制重新渲染
+                                }, 5000);
+                            } catch (error) {
+                                console.error('刷新代理数据失败:', error);
+                                setUpgradeStatus({
+                                    type: 'warning',
+                                    message: '代理可能已升级，但无法获取最新状态',
+                                    show: true
+                                });
+                            } finally {
+                                setIsUpgrading(false);
+                            }
+                        }, 20000); // 给代理足够时间完成升级
+                    } else {
+                        setUpgradeStatus({
+                            type: 'error',
+                            message: result.error?.message || '升级失败',
+                            show: true
+                        });
+                        setIsUpgrading(false);
+                    }
+                } catch (error) {
+                    console.error('升级代理失败:', error);
+                    setUpgradeStatus({
+                        type: 'error',
+                        message: error.message || '升级代理失败，请重试',
+                        show: true
+                    });
                     setIsUpgrading(false);
                 }
-            }, 15000); // 15秒后刷新
-        } catch (error) {
-            console.error('升级代理失败:', error);
-            setUpgradeStatus({
-                type: 'error',
-                message: error.message || '升级代理失败，请重试',
-                show: true
-            });
-            setIsUpgrading(false);
-        }
+            }, 0);
+        }, 0);
     };
 
     // 清除升级状态消息

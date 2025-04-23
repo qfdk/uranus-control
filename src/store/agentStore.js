@@ -12,6 +12,7 @@ const useAgentStore = create((set, get) => ({
     lastUpdated: null,
     mqttAgentState: {},
     mqttConnected: false,
+    pendingRequests: {}, // 用于追踪请求状态
 
     // 设置MQTT状态
     setMqttConnected: (connected) => set((state) => {
@@ -66,7 +67,7 @@ const useAgentStore = create((set, get) => ({
 
     // 删除代理
     deleteAgent: async (agentId) => {
-        if (!agentId) return {success: false, error: '无效的代理ID'};
+        if (!agentId) return {success: false, error: {message: '无效的代理ID'}};
 
         try {
             // 先查询代理信息，以便获取UUID
@@ -141,7 +142,7 @@ const useAgentStore = create((set, get) => ({
     // 注册新代理
     registerAgent: async (agentData) => {
         if (!agentData || !agentData.uuid) {
-            return {success: false, error: 'Invalid agent data'};
+            return {success: false, error: {message: 'Invalid agent data'}};
         }
 
         try {
@@ -171,29 +172,88 @@ const useAgentStore = create((set, get) => ({
 
     // 升级代理
     upgradeAgent: async (agentId) => {
-        if (!agentId) return {success: false, error: 'Invalid agent ID'};
+        if (!agentId) return {success: false, error: {message: '无效的代理ID'}};
 
-        try {
-            const response = await fetch(`/api/agents/${agentId}/upgrade`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'}
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || `升级失败: ${response.status}`);
-            }
-
-            return await response.json();
-        } catch (error) {
-            console.error('升级代理失败:', error);
-            return {success: false, error};
+        // 防止重复请求的简单缓存
+        if (get().pendingRequests && get().pendingRequests[agentId]) {
+            console.log('升级请求正在处理中，避免重复请求');
+            return get().pendingRequests[agentId];
         }
+
+        // 创建请求Promise
+        const requestPromise = (async () => {
+            try {
+                console.log(`正在发送升级请求到代理: ${agentId}`);
+
+                const response = await fetch(`/api/agents/${agentId}/upgrade`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+
+                // 检查HTTP状态码
+                if (!response.ok) {
+                    let errorMessage = `HTTP错误: ${response.status}`;
+                    try {
+                        const errorData = await response.json();
+                        errorMessage = errorData.error || errorMessage;
+                    } catch (e) {
+                        // 忽略JSON解析错误
+                    }
+                    throw new Error(errorMessage);
+                }
+
+                // 解析响应数据
+                const responseData = await response.json();
+                console.log('升级请求响应:', responseData);
+
+                // 格式化响应数据，确保结构一致
+                const result = {
+                    ...responseData,
+                    success: true, // 添加成功标志
+                    message: responseData.message || (responseData.result?.message) || '升级请求已成功发送'
+                };
+
+                // 在后台安排一个延迟任务来刷新代理信息
+                setTimeout(async () => {
+                    try {
+                        console.log(`安排在升级后刷新代理 ${agentId} 的信息`);
+                        await get().fetchAgents(true);
+                        console.log(`代理 ${agentId} 的信息已在升级后更新`);
+                    } catch (err) {
+                        console.error('升级后刷新代理数据失败:', err);
+                    }
+                }, 25000); // 给代理足够的升级时间
+
+                return result;
+            } catch (error) {
+                console.error('升级代理失败:', error);
+                return {success: false, error: {message: error.message}};
+            } finally {
+                // 清除请求缓存
+                setTimeout(() => {
+                    set(state => {
+                        const newPendingRequests = {...state.pendingRequests};
+                        delete newPendingRequests[agentId];
+                        return {pendingRequests: newPendingRequests};
+                    });
+                }, 1000);
+            }
+        })();
+
+        // 保存请求Promise到状态
+        set(state => ({
+            pendingRequests: {
+                ...state.pendingRequests,
+                [agentId]: requestPromise
+            }
+        }));
+
+        return requestPromise;
     },
 
     // 获取单个代理
     getAgent: async (agentId) => {
-        if (!agentId) return {success: false, error: 'Invalid agent ID'};
+        if (!agentId) return {success: false, error: {message: 'Invalid agent ID'}};
 
         try {
             const response = await fetch(`/api/agents/${agentId}`);
@@ -213,7 +273,7 @@ const useAgentStore = create((set, get) => ({
     // 将命令发送到代理
     sendCommand: async (agentId, command) => {
         if (!agentId || !command) {
-            return {success: false, error: 'Invalid agent ID or command'};
+            return {success: false, error: {message: 'Invalid agent ID or command'}};
         }
 
         try {
