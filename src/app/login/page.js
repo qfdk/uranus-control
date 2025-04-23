@@ -34,7 +34,7 @@ export default function LoginPage() {
         e.preventDefault();
         setIsLoading(true);
         setError('');
-
+        
         try {
             // 调用登录API
             const response = await fetch('/api/auth/login', {
@@ -42,13 +42,13 @@ export default function LoginPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(formData)
             });
-
+        
             const data = await response.json();
-
+        
             if (!response.ok) {
                 throw new Error(data.message || '登录失败');
             }
-
+        
             if (data.success) {
                 // 使用AuthContext提供的login函数
                 login(data.user);
