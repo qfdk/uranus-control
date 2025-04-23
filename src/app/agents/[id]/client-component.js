@@ -126,6 +126,11 @@ export default function AgentDetail({agent: initialAgent}) {
         if (tab === 'info') {
             refreshAgentData();
         }
+
+        // 清除命令状态消息
+        if (tab !== 'nginx') {
+            clearMessage();
+        }
     };
 
     // 处理删除代理
@@ -250,7 +255,7 @@ export default function AgentDetail({agent: initialAgent}) {
 
     // Nginx命令
     const executeCommand = async (command) => {
-        if (isExecuting || !agent?.online) return;
+        if (isExecuting || !agent?.online || !mqttConnected) return;
 
         clearMessage();
         setIsExecuting(true);
@@ -270,44 +275,24 @@ export default function AgentDetail({agent: initialAgent}) {
                 show: true
             });
 
-            // 优先使用MQTT发送命令
-            if (mqttConnected) {
-                const mqttCommand = {
-                    'reload': () => useMqttStore.getState().reloadNginx(agent.uuid),
-                    'restart': () => useMqttStore.getState().restartNginx(agent.uuid),
-                    'stop': () => useMqttStore.getState().stopNginx(agent.uuid),
-                    'start': () => useMqttStore.getState().startNginx(agent.uuid)
-                };
+            // 使用MQTT发送命令
+            const mqttCommand = {
+                'reload': () => useMqttStore.getState().reloadNginx(agent.uuid),
+                'restart': () => useMqttStore.getState().restartNginx(agent.uuid),
+                'stop': () => useMqttStore.getState().stopNginx(agent.uuid),
+                'start': () => useMqttStore.getState().startNginx(agent.uuid)
+            };
 
-                if (mqttCommand[command]) {
-                    const result = await mqttCommand[command]();
-                    setCommandMessage({
-                        type: 'success',
-                        content: `${commandNames[command] || command}成功: ${result.message || '操作已完成'}`,
-                        show: true
-                    });
-                    return;
-                }
+            if (mqttCommand[command]) {
+                const result = await mqttCommand[command]();
+                setCommandMessage({
+                    type: 'success',
+                    content: `${commandNames[command] || command}成功: ${result.message || '操作已完成'}`,
+                    show: true
+                });
+            } else {
+                throw new Error('不支持的命令');
             }
-
-            // 回退到HTTP API
-            const response = await fetch(`/api/agents/${agent._id}/command`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({command})
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error || `HTTP错误: ${response.status}`);
-            }
-
-            setCommandMessage({
-                type: 'success',
-                content: `${commandNames[command] || command}成功: ${data.message || '操作已完成'}`,
-                show: true
-            });
         } catch (error) {
             console.error(`${command}命令执行失败:`, error);
             setCommandMessage({
@@ -395,15 +380,6 @@ export default function AgentDetail({agent: initialAgent}) {
                 onClose={clearUpgradeStatus}
             />
 
-            {/* 命令执行状态 */}
-            {agent.online && activeTab === 'info' && <StatusMessage
-                type={commandMessage.type}
-                content={commandMessage.content}
-                show={commandMessage.show}
-                onClose={clearMessage}
-                className="mt-3 mb-4"
-            />}
-
             {/* 选项卡导航 */}
             <div className="flex border-b border-gray-200 dark:border-gray-700 mb-6">
                 <button
@@ -417,6 +393,24 @@ export default function AgentDetail({agent: initialAgent}) {
                     <Info className="w-4 h-4 mr-2"/>
                     信息详情
                 </button>
+
+                <button
+                    onClick={() => handleTabChange('nginx')}
+                    className={`py-3 px-6 text-sm font-medium border-b-2 -mb-px flex items-center ${
+                        activeTab === 'nginx'
+                            ? 'border-blue-500 text-blue-600 dark:text-blue-400 dark:border-blue-400'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                    }`}
+                    disabled={!agent.online || !mqttConnected}
+                >
+                    <Server className="w-4 h-4 mr-2"/>
+                    Nginx控制
+                    {(!agent.online || !mqttConnected) && <span
+                        className="ml-2 text-xs bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 px-1.5 py-0.5 rounded-full">
+                        {!agent.online ? '离线' : 'MQTT未连接'}
+                    </span>}
+                </button>
+
                 <button
                     onClick={() => handleTabChange('terminal')}
                     className={`py-3 px-6 text-sm font-medium border-b-2 -mb-px flex items-center ${
@@ -485,11 +479,28 @@ export default function AgentDetail({agent: initialAgent}) {
                                     <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">IP地址</h3>
                                     <p className="text-sm font-medium dark:text-white mt-1">{agent.ip || '未知'}</p>
                                 </div>
-
+                                {/* URL字段 */}
                                 <div>
-                                    <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">版本</h3>
-                                    <p className="text-sm font-medium dark:text-white mt-1">{agent.buildVersion || '未知'}</p>
+                                    <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">管理页面</h3>
+                                    <p className="text-sm font-medium dark:text-white mt-1">
+                                        {agent.url ? (
+                                            <a
+                                                href={agent.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 flex items-center"
+                                            >
+                                                <span>{agent.url}</span>
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1"
+                                                     fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                                          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                                                </svg>
+                                            </a>
+                                        ) : '未设置'}
+                                    </p>
                                 </div>
+
 
                                 <div>
                                     <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">构建时间</h3>
@@ -497,76 +508,156 @@ export default function AgentDetail({agent: initialAgent}) {
                                 </div>
 
                                 <div>
-                                    <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">提交ID</h3>
+                                    <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Hash</h3>
                                     <p className="text-sm font-medium dark:text-white mt-1">
                                         {agent.commitId ? agent.commitId.substring(0, 8) : '未知'}
-                                        {agent.commitId &&
-                                            <span className="text-xs text-gray-400 ml-2">{agent.commitId}</span>}
                                     </p>
+                                </div>
+
+                                <div>
+                                    <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">版本</h3>
+                                    <p className="text-sm font-medium dark:text-white mt-1">{agent.buildVersion || '未知'}</p>
                                 </div>
 
                                 <div>
                                     <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">MQTT连接状态</h3>
                                     <p className="text-sm font-medium flex items-center dark:text-white mt-1">
-                                        <span
-                                            className={`inline-block w-2 h-2 rounded-full mr-2 ${mqttConnected ? 'bg-green-500' : 'bg-gray-400'}`}></span>
-                                        {mqttConnected ? 'MQTT已连接' : 'MQTT未连接 (使用HTTP API)'}
+                <span
+                    className={`inline-block w-2 h-2 rounded-full mr-2 ${mqttConnected ? 'bg-green-500' : 'bg-gray-400'}`}></span>
+                                        {mqttConnected ? '已连接' : '未连接 (使用HTTP API)'}
                                     </p>
                                 </div>
                             </div>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* Nginx控制选项卡 */}
+            {activeTab === 'nginx' && (
+                <div className="space-y-6">
+                    {/* 命令执行状态 */}
+                    <StatusMessage
+                        type={commandMessage.type}
+                        message={commandMessage.content}
+                        show={commandMessage.show}
+                        onClose={clearMessage}
+                        className="mt-3 mb-4"
+                    />
 
                     {/* Nginx控制面板 */}
-                    {agent.online && (
+                    {agent.online && mqttConnected ? (
                         <div className="bg-white rounded-lg shadow dark:bg-gray-800">
                             <div className="p-5">
-                                <div className="flex items-center mb-4">
-                                    <Server className="w-5 h-5 text-blue-500 dark:text-blue-400 mr-2"/>
-                                    <h2 className="text-lg font-medium text-gray-800 dark:text-white">Nginx服务控制</h2>
+                                <div className="flex items-center mb-6">
+                                    <Server className="w-6 h-6 text-blue-500 dark:text-blue-400 mr-2"/>
+                                    <h2 className="text-xl font-medium text-gray-800 dark:text-white">Nginx服务控制</h2>
                                 </div>
 
-                                <div className="flex flex-wrap gap-2">
-                                    <button
-                                        onClick={reloadNginx}
-                                        disabled={isExecuting}
-                                        className="flex items-center px-3 py-1.5 rounded text-white bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 transition-colors"
-                                        title="重载Nginx配置"
-                                    >
-                                        <RotateCw className={`w-4 h-4 ${isExecuting ? 'animate-spin' : ''}`}/>
-                                        <span className="ml-2 text-sm">重载</span>
-                                    </button>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div
+                                        className="bg-blue-50 dark:bg-blue-900/20 p-5 rounded-lg border border-blue-100 dark:border-blue-800">
+                                        <div className="flex items-center mb-3">
+                                            <RotateCw className="w-5 h-5 text-blue-500 dark:text-blue-400 mr-2"/>
+                                            <h3 className="text-lg font-medium text-gray-800 dark:text-white">重载配置</h3>
+                                        </div>
+                                        <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                                            重新加载Nginx配置文件，不中断正在处理的连接。
+                                        </p>
+                                        <button
+                                            onClick={reloadNginx}
+                                            disabled={isExecuting}
+                                            className={`flex items-center px-3 py-1.5 rounded text-white bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 transition-colors ${isExecuting ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                            title="重载Nginx配置"
+                                        >
+                                            <RotateCw className={`w-4 h-4 ${isExecuting ? 'animate-spin' : ''}`}/>
+                                            <span className="ml-2 text-sm">重载配置</span>
+                                        </button>
+                                    </div>
 
-                                    <button
-                                        onClick={restartNginx}
-                                        disabled={isExecuting}
-                                        className="flex items-center px-3 py-1.5 rounded text-white bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700 transition-colors"
-                                        title="重启Nginx服务"
-                                    >
-                                        <RefreshCw className={`w-4 h-4 ${isExecuting ? 'animate-spin' : ''}`}/>
-                                        <span className="ml-2 text-sm">重启</span>
-                                    </button>
+                                    <div
+                                        className="bg-green-50 dark:bg-green-900/20 p-5 rounded-lg border border-green-100 dark:border-green-800">
+                                        <div className="flex items-center mb-3">
+                                            <RefreshCw className="w-5 h-5 text-green-500 dark:text-green-400 mr-2"/>
+                                            <h3 className="text-lg font-medium text-gray-800 dark:text-white">重启服务</h3>
+                                        </div>
+                                        <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                                            完全停止并重新启动Nginx服务，会暂时中断所有连接。
+                                        </p>
+                                        <button
+                                            onClick={restartNginx}
+                                            disabled={isExecuting}
+                                            className={`flex items-center px-3 py-1.5 rounded text-white bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700 transition-colors ${isExecuting ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                            title="重启Nginx服务"
+                                        >
+                                            <RefreshCw className={`w-4 h-4 ${isExecuting ? 'animate-spin' : ''}`}/>
+                                            <span className="ml-2 text-sm">重启服务</span>
+                                        </button>
+                                    </div>
 
-                                    <button
-                                        onClick={stopNginx}
-                                        disabled={isExecuting}
-                                        className="flex items-center px-3 py-1.5 rounded text-white bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 transition-colors"
-                                        title="停止Nginx服务"
-                                    >
-                                        <Square className="w-4 h-4"/>
-                                        <span className="ml-2 text-sm">停止</span>
-                                    </button>
+                                    <div
+                                        className="bg-red-50 dark:bg-red-900/20 p-5 rounded-lg border border-red-100 dark:border-red-800">
+                                        <div className="flex items-center mb-3">
+                                            <Square className="w-5 h-5 text-red-500 dark:text-red-400 mr-2"/>
+                                            <h3 className="text-lg font-medium text-gray-800 dark:text-white">停止服务</h3>
+                                        </div>
+                                        <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                                            停止Nginx服务，所有网站将无法访问。
+                                        </p>
+                                        <button
+                                            onClick={stopNginx}
+                                            disabled={isExecuting}
+                                            className={`flex items-center px-3 py-1.5 rounded text-white bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 transition-colors ${isExecuting ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                            title="停止Nginx服务"
+                                        >
+                                            <Square className="w-4 h-4"/>
+                                            <span className="ml-2 text-sm">停止服务</span>
+                                        </button>
+                                    </div>
 
-                                    <button
-                                        onClick={startNginx}
-                                        disabled={isExecuting}
-                                        className="flex items-center px-3 py-1.5 rounded text-white bg-purple-500 hover:bg-purple-600 dark:bg-purple-600 dark:hover:bg-purple-700 transition-colors"
-                                        title="启动Nginx服务"
-                                    >
-                                        <Play className="w-4 h-4"/>
-                                        <span className="ml-2 text-sm">启动</span>
-                                    </button>
+                                    <div
+                                        className="bg-purple-50 dark:bg-purple-900/20 p-5 rounded-lg border border-purple-100 dark:border-purple-800">
+                                        <div className="flex items-center mb-3">
+                                            <Play className="w-5 h-5 text-purple-500 dark:text-purple-400 mr-2"/>
+                                            <h3 className="text-lg font-medium text-gray-800 dark:text-white">启动服务</h3>
+                                        </div>
+                                        <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                                            启动已停止的Nginx服务，恢复网站访问。
+                                        </p>
+                                        <button
+                                            onClick={startNginx}
+                                            disabled={isExecuting}
+                                            className={`flex items-center px-3 py-1.5 rounded text-white bg-purple-500 hover:bg-purple-600 dark:bg-purple-600 dark:hover:bg-purple-700 transition-colors ${isExecuting ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                            title="启动Nginx服务"
+                                        >
+                                            <Play className="w-4 h-4"/>
+                                            <span className="ml-2 text-sm">启动服务</span>
+                                        </button>
+                                    </div>
                                 </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="bg-white rounded-lg shadow dark:bg-gray-800 p-5 text-center">
+                            <div className="py-10">
+                                <div
+                                    className="inline-flex items-center justify-center p-3 bg-red-100 dark:bg-red-900/30 rounded-full mb-4">
+                                    <XCircle className="w-8 h-8 text-red-500 dark:text-red-400"/>
+                                </div>
+                                <h3 className="text-lg font-medium text-gray-800 dark:text-white mb-2">
+                                    {!agent.online ? '代理当前离线' : 'MQTT未连接'}
+                                </h3>
+                                <p className="text-gray-500 dark:text-gray-400 mb-4">
+                                    {!agent.online
+                                        ? '无法控制Nginx服务，请等待代理重新上线后再试'
+                                        : 'MQTT连接失败，无法发送实时命令，请检查MQTT设置'}
+                                </p>
+                                <Button
+                                    variant="primary"
+                                    onClick={() => handleTabChange('info')}
+                                >
+                                    返回信息页面
+                                </Button>
                             </div>
                         </div>
                     )}
