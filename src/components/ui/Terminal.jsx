@@ -28,6 +28,9 @@ const SPECIAL_KEYS = {
     PAGE_DOWN: '\u001b[6~'
 };
 
+// 需要特殊处理的命令列表
+const SPECIAL_INTERRUPT_COMMANDS = ['ping', 'traceroute', 'telnet', 'ssh', 'nc', 'netcat'];
+
 /**
  * Web终端组件
  */
@@ -60,6 +63,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
     const [debugInfo, setDebugInfo] = useState({ lastMqttEvent: null });
     const [lastCommand, setLastCommand] = useState(null);
     const [receivedResponses, setReceivedResponses] = useState([]);
+    const [currentCommandName, setCurrentCommandName] = useState(null);
 
     // DOM引用
     const terminalRef = useRef(null);
@@ -72,6 +76,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
     const savedSessionTimeoutRef = useRef(null);
     const isUpdatingFromStore = useRef(false);
     const sessionRef = useRef(null);
+    const interruptCountRef = useRef(0);
 
     // 确保MQTT连接
     useEffect(() => {
@@ -149,6 +154,10 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
 
                     if (existingSession.interactiveMode) {
                         setInteractiveMode(true);
+                    }
+
+                    if (existingSession.currentCommandName) {
+                        setCurrentCommandName(existingSession.currentCommandName);
                     }
                 } else {
                     // 创建新会话
@@ -241,6 +250,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                                 history: simpleHistory,
                                 commandHistory: simpleCommandHistory,
                                 interactiveMode,
+                                currentCommandName,
                                 lastSaved: new Date().toISOString()
                             };
 
@@ -256,7 +266,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                 }
             }
         };
-    }, [mqttConnected, agentUuid, isOnline, startTerminalSession, terminalSessions, history, commandHistory, interactiveMode, sessionId, connectMqtt, initAttempted]);
+    }, [mqttConnected, agentUuid, isOnline, startTerminalSession, terminalSessions, history, commandHistory, interactiveMode, sessionId, connectMqtt, initAttempted, currentCommandName]);
 
     // 强制滚动到底部的函数
     const scrollToBottom = useCallback(() => {
@@ -281,8 +291,15 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
             sessionId, 
             historyLength: currentSession.history?.length,
             lastUpdate: currentSession.lastUpdated,
-            hasActiveCommand: !!currentSession.activeCommand
+            hasActiveCommand: !!currentSession.activeCommand,
+            currentCommandName: currentSession.currentCommandName
         });
+        
+        // 更新当前命令名称
+        if (currentSession.currentCommandName !== undefined && 
+            currentSession.currentCommandName !== currentCommandName) {
+            setCurrentCommandName(currentSession.currentCommandName);
+        }
         
         // 检查历史记录是否有更新
         if (currentSession.history && currentSession.history.length > 0) {
@@ -303,7 +320,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
             // 确保滚动到底部
             setTimeout(scrollToBottom, 0);
         }
-    }, [terminalSessions, sessionId, loading, scrollToBottom, interactiveMode]);
+    }, [terminalSessions, sessionId, loading, scrollToBottom, interactiveMode, currentCommandName]);
 
     // 监听接收到的响应
     useEffect(() => {
@@ -344,10 +361,105 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                 if (latestResponse.final) {
                     setLoading(false);
                     setLastCommand(null);
+                    setCurrentCommandName(null);
+                    
+                    // 重置中断计数器
+                    interruptCountRef.current = 0;
                 }
             }
         }
     }, [receivedResponses, lastCommand]);
+
+    // 发送多重中断信号的增强函数
+    const sendEnhancedInterrupt = useCallback(async () => {
+        if (!sessionId || !agentUuid || !isMountedRef.current) return;
+
+        try {
+            // 增加中断计数
+            interruptCountRef.current += 1;
+            const attemptCount = interruptCountRef.current;
+            
+            // 本地显示中断信号
+            setHistory(prev => [...prev, { 
+                type: 'system', 
+                text: `^C (中断尝试 #${attemptCount})` 
+            }]);
+            
+            setInputBuffer('');
+            console.log(`发送增强中断信号 #${attemptCount} - 命令: ${currentCommandName || 'unknown'}`);
+
+            // 特殊命令需要更强力的中断手段
+            const isSpecialCommand = currentCommandName && 
+                SPECIAL_INTERRUPT_COMMANDS.some(cmd => 
+                    currentCommandName.toLowerCase().startsWith(cmd.toLowerCase()));
+
+            // 优先使用中断命令 API
+            try {
+                await interruptCommand(sessionId);
+                console.log('已使用interruptCommand API');
+            } catch (err) {
+                console.error('使用中断命令API失败:', err);
+            }
+
+            // 发送标准中断信号 (Ctrl+C)
+            await sendCommand(agentUuid, 'terminal_input', {
+                sessionId,
+                input: SPECIAL_KEYS.CTRL_C,
+                timestamp: Date.now()
+            });
+
+            // 对于特殊命令或重复中断，使用增强中断方法
+            if (isSpecialCommand || attemptCount > 1) {
+                console.log(`使用增强中断方法 - 特殊命令: ${isSpecialCommand}, 尝试次数: ${attemptCount}`);
+                
+                // 发送 force_interrupt 命令 (最强力的中断)
+                await sendCommand(agentUuid, 'force_interrupt', {
+                    sessionId,
+                    requestId: Math.random().toString(36).substring(2, 15),
+                    timestamp: Date.now()
+                });
+                
+                // 同时发送特定命令终止，使用多个SIGKILL
+                await sendCommand(agentUuid, 'execute', {
+                    command: 'pkill -9 ping', // 尝试强制终止ping进程
+                    sessionId,
+                    streaming: false,
+                    silent: true,
+                    requestId: Math.random().toString(36).substring(2, 15)
+                });
+                
+                if (currentCommandName === 'ping') {
+                    // 备用ping终止命令
+                    await sendCommand(agentUuid, 'execute', {
+                        command: 'killall -9 ping',
+                        sessionId,
+                        streaming: false,
+                        silent: true
+                    });
+                }
+            }
+
+            // 监控交互模式状态变更
+            if (interactiveMode) {
+                interruptTimerRef.current = setTimeout(() => {
+                    if (!isMountedRef.current) return;
+
+                    const currentSession = terminalSessions[sessionId];
+                    if (!currentSession || !currentSession.activeCommand) {
+                        setInteractiveMode(false);
+                        setCurrentCommandName(null);
+                    } else if (attemptCount < 3) {
+                        // 如果三次尝试后仍在交互模式，则尝试更强力的中断
+                        console.log(`命令仍在运行，尝试更强力的中断方法`);
+                        sendEnhancedInterrupt();
+                    }
+                }, 500);
+            }
+        } catch (error) {
+            console.error('发送中断信号失败:', error);
+            setDebugInfo(prev => ({ ...prev, interruptError: error.message }));
+        }
+    }, [sessionId, agentUuid, interruptCommand, sendCommand, terminalSessions, interactiveMode, currentCommandName]);
 
     // 发送交互式输入
     const sendInteractiveInput = useCallback(async (input) => {
@@ -356,51 +468,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
         try {
             // 特殊处理Ctrl+C
             if (input === SPECIAL_KEYS.CTRL_C) {
-                // 本地显示中断信号
-                setHistory(prev => [...prev, { type: 'system', text: '^C' }]);
-                setInputBuffer('');
-
-                // 连续发送多个信号增加中断成功率
-                console.log('发送Ctrl+C中断信号');
-                setDebugInfo(prev => ({ ...prev, lastCommand: 'Ctrl+C中断' }));
-
-                // 首先尝试使用优化的中断命令 - 这包含了多重中断机制
-                if (interruptCommand && typeof interruptCommand === 'function') {
-                    try {
-                        interruptCommand(sessionId);
-                    } catch (err) {
-                        console.error('使用中断命令失败:', err);
-                    }
-                }
-
-                // 备份方案: 直接发送Ctrl+C (3次尝试)
-                for (let i = 0; i < 3; i++) {
-                    try {
-                        if (!isMountedRef.current) break;
-
-                        await sendCommand(agentUuid, 'terminal_input', {
-                            sessionId,
-                            input: SPECIAL_KEYS.CTRL_C,
-                            timestamp: Date.now()
-                        });
-
-                        // 短暂延迟确保服务器有时间处理
-                        if (i < 2) await new Promise(r => setTimeout(r, 50));
-                    } catch (e) {
-                        console.error(`第${i+1}次Ctrl+C发送失败:`, e);
-                    }
-                }
-
-                // 延迟一段时间后检查交互模式状态
-                interruptTimerRef.current = setTimeout(() => {
-                    if (!isMountedRef.current) return;
-
-                    const currentSession = terminalSessions[sessionId];
-                    if (!currentSession || !currentSession.activeCommand) {
-                        setInteractiveMode(false);
-                    }
-                }, 500);
-
+                sendEnhancedInterrupt();
                 return;
             }
 
@@ -432,7 +500,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                 }]);
             }
         }
-    }, [sessionId, agentUuid, terminalSessions, sendCommand, interruptCommand]);
+    }, [sessionId, agentUuid, sendCommand, sendEnhancedInterrupt]);
 
     // 处理键盘事件
     const handleKeyDown = useCallback((e) => {
@@ -447,7 +515,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
             e.preventDefault();
 
             if (loading || interactiveMode) {
-                sendInteractiveInput(SPECIAL_KEYS.CTRL_C);
+                sendEnhancedInterrupt();
                 return;
             }
         }
@@ -460,7 +528,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
             if (e.key === 'Escape') {
                 sendInteractiveInput(SPECIAL_KEYS.ESCAPE);
             } else if (e.ctrlKey && e.key === 'c') {
-                sendInteractiveInput(SPECIAL_KEYS.CTRL_C);
+                sendEnhancedInterrupt();
             } else if (e.ctrlKey && e.key === 'd') {
                 sendInteractiveInput(SPECIAL_KEYS.CTRL_D);
             } else if (e.ctrlKey && e.key === 'z') {
@@ -515,7 +583,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
             e.preventDefault();
             inputRef.current?.focus();
         }
-    }, [historyIndex, commandHistory, loading, interactiveMode, sendInteractiveInput]);
+    }, [historyIndex, commandHistory, loading, interactiveMode, sendInteractiveInput, sendEnhancedInterrupt]);
 
     // 全局键盘事件处理
     useEffect(() => {
@@ -534,7 +602,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                     e.preventDefault();
                     e.stopPropagation();
                     console.log("检测到Ctrl+C，中断命令");
-                    sendInteractiveInput(SPECIAL_KEYS.CTRL_C);
+                    sendEnhancedInterrupt();
                     return false;
                 }
             }
@@ -546,7 +614,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
         // 使用捕获阶段确保能拦截事件
         document.addEventListener('keydown', handleGlobalKeyDown, true);
         return () => document.removeEventListener('keydown', handleGlobalKeyDown, true);
-    }, [handleKeyDown, interactiveMode, loading, sendInteractiveInput]);
+    }, [handleKeyDown, interactiveMode, loading, sendEnhancedInterrupt]);
 
     // 处理滚动事件
     useEffect(() => {
@@ -613,6 +681,20 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
         return /^(vim|vi|nano|emacs|less|more|top|htop|mysql|psql|mongo|ssh|telnet|tmux|screen)/i.test(cmd.trim());
     };
 
+    // 检测特殊处理命令（如ping）
+    const isSpecialCommand = (cmd) => {
+        const normalizedCmd = cmd.trim().toLowerCase();
+        return SPECIAL_INTERRUPT_COMMANDS.some(specialCmd => 
+            normalizedCmd.startsWith(specialCmd));
+    };
+
+    // 提取命令名称
+    const extractCommandName = (cmdString) => {
+        const trimmed = cmdString.trim();
+        const match = trimmed.match(/^(\S+)/);
+        return match ? match[1].toLowerCase() : null;
+    };
+
     // 处理命令提交
     const handleSubmit = async (e) => {
         e?.preventDefault();
@@ -632,6 +714,12 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
             return [...prev, trimmedCommand].slice(-COMMAND_HISTORY_MAX);
         });
 
+        // 提取命令名称
+        const cmdName = extractCommandName(trimmedCommand);
+        if (cmdName) {
+            setCurrentCommandName(cmdName);
+        }
+
         // 添加命令到历史记录
         setHistory(prev => {
             const newHistory = [...prev, { type: 'command', text: trimmedCommand }];
@@ -645,6 +733,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
         setDebugInfo(prev => ({ 
             ...prev, 
             lastCommand: trimmedCommand,
+            commandName: cmdName,
             commandTime: new Date().toISOString() 
         }));
 
@@ -682,14 +771,19 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
             if (trimmedCommand === 'debug') {
                 setHistory(prev => [...prev, {
                     type: 'system',
-                    text: `调试信息:\n- 会话ID: ${sessionId}\n- MQTT连接: ${mqttConnected ? '已连接' : '未连接'}\n- 代理UUID: ${agentUuid}\n- 交互模式: ${interactiveMode ? '是' : '否'}\n\n详细信息: ${JSON.stringify(debugInfo, null, 2)}`
+                    text: `调试信息:\n- 会话ID: ${sessionId}\n- MQTT连接: ${mqttConnected ? '已连接' : '未连接'}\n- 代理UUID: ${agentUuid}\n- 交互模式: ${interactiveMode ? '是' : '否'}\n- 当前命令: ${currentCommandName || '无'}\n\n详细信息: ${JSON.stringify(debugInfo, null, 2)}`
                 }]);
                 setLoading(false);
                 return;
             }
 
+            // 重置中断计数器
+            interruptCountRef.current = 0;
+
             // 判断是否是交互式命令
             const isInteractive = isInteractiveCommand(trimmedCommand);
+            // 检查是否是需要特殊处理的命令（如ping）
+            const needsSpecialHandling = isSpecialCommand(trimmedCommand);
 
             if (isInteractive) {
                 // 设置交互式模式
@@ -700,6 +794,14 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                 setHistory(prev => [...prev, {
                     type: 'system',
                     text: `进入交互式模式。使用键盘直接与应用交互，按Ctrl+C可退出。`
+                }]);
+            }
+
+            if (needsSpecialHandling) {
+                // 添加针对特殊命令的提示
+                setHistory(prev => [...prev, {
+                    type: 'system',
+                    text: `注意: ${cmdName} 是特殊命令，如需中断请按Ctrl+C多次。`
                 }]);
             }
 
@@ -721,7 +823,8 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                     sessionId,
                     streaming: true,
                     interactive: isInteractive,
-                    requestId // 传递请求ID确保能匹配响应
+                    requestId, // 传递请求ID确保能匹配响应
+                    specialCommand: needsSpecialHandling // 标记是否为特殊命令
                 });
 
                 console.log('命令初始响应:', response);
@@ -738,6 +841,11 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                     initialResponse: JSON.stringify(response),
                     sentRequestId: requestId
                 }));
+
+                // 更新会话状态，记录当前命令名称
+                useMqttStore.getState().updateTerminalSession(sessionId, {
+                    currentCommandName: cmdName
+                });
 
                 // 直接处理首次响应
                 if (response && (response.output || response.message)) {
@@ -761,6 +869,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                     text: `命令发送失败: ${err.message}`
                 }]);
                 setLoading(false);
+                setCurrentCommandName(null);
             }
         } catch (error) {
             console.error('命令执行失败:', error);
@@ -775,6 +884,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
 
                 setLoading(false);
                 setInteractiveMode(false);
+                setCurrentCommandName(null);
             }
         }
     };
@@ -836,6 +946,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
         setLastCommand(null);
         setReceivedResponses([]);
         setDebugInfo({});
+        setCurrentCommandName(null);
         
         // 延迟初始化
         setTimeout(() => {
@@ -918,14 +1029,16 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                             执行中
                         </span>
                     )}
-                    {sessionId && (
-                        <span className="ml-2 text-xs text-gray-400">会话ID: {sessionId.substring(0, 8)}</span>
+                    {currentCommandName && (
+                        <span className="ml-2 text-xs px-1.5 py-0.5 bg-gray-600 text-white rounded-full">
+                            {currentCommandName}
+                        </span>
                     )}
                 </div>
                 <div className="flex space-x-2">
                     {(loading || interactiveMode) && (
                         <button
-                            onClick={() => sendInteractiveInput(SPECIAL_KEYS.CTRL_C)}
+                            onClick={sendEnhancedInterrupt}
                             className="text-red-400 hover:text-red-300 p-1 rounded transition-colors"
                             title="中断命令 (Ctrl+C)"
                         >
@@ -1021,31 +1134,6 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                     <Send size={16} />
                 </button>
             </form>
-            
-            {/* 调试信息 (仅在开发环境显示) */}
-            {process.env.NODE_ENV === 'development' && (
-                <div className="text-xs bg-gray-900 text-gray-400 p-2 border-t border-gray-700">
-                    <details>
-                        <summary className="cursor-pointer">调试信息</summary>
-                        <div className="p-2 mt-2 bg-gray-800 rounded">
-                            <p>会话ID: {sessionId}</p>
-                            <p>MQTT连接: {mqttConnected ? '已连接' : '未连接'}</p>
-                            <p>代理UUID: {agentUuid}</p>
-                            <p>交互模式: {interactiveMode ? '是' : '否'}</p>
-                            <p>历史条数: {history.length}</p>
-                            <p>接收响应数: {receivedResponses.length}</p>
-                            {lastCommand && (
-                                <p>最后命令: {lastCommand.command} (ID: {lastCommand.requestId.substring(0, 8)})</p>
-                            )}
-                            {Object.keys(debugInfo).length > 0 && (
-                                <pre className="mt-2 p-2 bg-gray-700 rounded overflow-auto max-h-40 text-gray-300">
-                                    {JSON.stringify(debugInfo, null, 2)}
-                                </pre>
-                            )}
-                        </div>
-                    </details>
-                </div>
-            )}
         </div>
     );
 }
