@@ -339,8 +339,14 @@ const useMqttStore = create((set, get) => {
                             deletedAgents.delete(uuid);
                         }
 
-                        // 检查是否是新代理或需要更新
+                        // 检查是否是新代理
                         const isNewAgent = !agentState[uuid];
+
+                        // 检查此UUID是否已在HTTP代理列表中
+                        // 获取当前HTTP代理列表进行检查
+                        const agentStoreInstance = useAgentStore.getState();
+                        const httpAgents = agentStoreInstance ? agentStoreInstance.agents : [];
+                        const isInHttpList = httpAgents.some(agent => agent.uuid === uuid);
 
                         // 更新代理状态
                         agentState[uuid] = {
@@ -357,7 +363,6 @@ const useMqttStore = create((set, get) => {
 
                         // 尝试通知agentStore更新状态
                         try {
-                            const agentStoreInstance = useAgentStore.getState();
                             if (agentStoreInstance && typeof agentStoreInstance.updateMqttAgentState === 'function') {
                                 agentStoreInstance.updateMqttAgentState({...agentState});
                             }
@@ -365,8 +370,8 @@ const useMqttStore = create((set, get) => {
                             console.error('通知agentStore更新状态失败:', error);
                         }
 
-                        // 如果是新代理，尝试自动注册 - 使用异步方式避免阻塞
-                        if (isNewAgent) {
+                        // 如果是新代理且不在HTTP列表中，尝试自动注册
+                        if (isNewAgent && !isInHttpList) {
                             // 标记为MQTT发现的代理
                             agentState[uuid]._mqttOnly = true;
                             agentState[uuid]._autoRegister = true;
@@ -374,7 +379,7 @@ const useMqttStore = create((set, get) => {
                             // 异步注册
                             Promise.resolve().then(async () => {
                                 try {
-                                    console.log(`尝试注册新发现的代理: ${uuid}`);
+                                    console.log(`尝试注册新发现的代理: ${uuid} (不在HTTP列表中)`);
                                     agentState[uuid]._registering = true;
 
                                     set(state => ({
@@ -403,9 +408,8 @@ const useMqttStore = create((set, get) => {
                                                 mqttAgentState: {...agentState}
                                             }));
 
-                                            // 尝试通知agentStore更新状态
+                                            // 只在这种情况下刷新代理列表 - 因为是新代理且成功注册
                                             try {
-                                                const agentStoreInstance = useAgentStore.getState();
                                                 if (agentStoreInstance) {
                                                     // 更新MQTT状态
                                                     if (typeof agentStoreInstance.updateMqttAgentState === 'function') {
@@ -424,7 +428,7 @@ const useMqttStore = create((set, get) => {
                                             // 触发自定义事件通知UI刷新
                                             if (typeof window !== 'undefined') {
                                                 const event = new CustomEvent('mqtt-agent-registered', {
-                                                    detail: { uuid, agent: data }
+                                                    detail: { uuid, agent: data, isNew: true }
                                                 });
                                                 window.dispatchEvent(event);
                                             }
@@ -449,6 +453,9 @@ const useMqttStore = create((set, get) => {
                                     }
                                 }
                             });
+                        } else if (!isNewAgent && isInHttpList) {
+                            // 已知代理在列表中，只更新状态，无需刷新列表
+                            console.log(`更新已知代理状态: ${uuid}`);
                         }
                     }
                 } else if (topic === TOPICS.STATUS) {

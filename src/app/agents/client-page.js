@@ -110,10 +110,6 @@ export default function AgentsClientPage() {
         if (!agentId) return {success: false, canceled: true};
 
         try {
-            if (!confirm('确定要删除此代理吗？此操作不可撤销。')) {
-                return {success: false, canceled: true};
-            }
-
             // 设置加载状态
             setDeleteLoading(agentId);
 
@@ -124,7 +120,6 @@ export default function AgentsClientPage() {
             setDeleteLoading(null);
 
             if (result.success) {
-                // 成功删除
                 return result;
             } else {
                 if (!result.canceled) {
@@ -163,8 +158,26 @@ export default function AgentsClientPage() {
     useEffect(() => {
         // 监听新代理注册事件
         const handleAgentRegistered = (event) => {
-            console.log('检测到代理注册事件，刷新列表');
-            fetchAgents(true);
+            const uuid = event.detail?.uuid;
+            const agent = event.detail?.agent;
+            const isNew = event.detail?.isNew;
+
+            if (!uuid || !agent) return;
+
+            console.log('检测到代理注册事件，UUID:', uuid, '是否新代理:', isNew);
+
+            // 仅当明确是新代理时才刷新列表
+            if (isNew) {
+                // 检查是否已在当前列表中
+                const isInCurrentList = combinedAgents.some(a => a.uuid === uuid);
+
+                if (!isInCurrentList) {
+                    console.log('新代理不在当前列表中，刷新列表');
+                    fetchAgents(true);
+                } else {
+                    console.log('代理已在列表中，无需刷新');
+                }
+            }
         };
 
         // 添加事件监听
@@ -174,7 +187,7 @@ export default function AgentsClientPage() {
         return () => {
             window.removeEventListener('mqtt-agent-registered', handleAgentRegistered);
         };
-    }, [fetchAgents]);
+    }, [fetchAgents, combinedAgents]);
 
     // 处理搜索和状态过滤
     const handleSearchChange = (e) => {
