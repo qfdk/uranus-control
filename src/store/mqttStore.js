@@ -50,21 +50,6 @@ const getMqttConfig = () => {
     };
 };
 
-// 安全地克隆对象，避免循环引用
-const safeClone = (obj) => {
-    if (!obj) return obj;
-    if (typeof obj !== 'object') return obj;
-    
-    try {
-        // 尝试通过JSON序列化来深度克隆
-        return JSON.parse(JSON.stringify(obj));
-    } catch (e) {
-        // 如果有循环引用，则回退到浅克隆
-        console.warn('无法深度克隆对象，可能存在循环引用，回退到浅克隆', e);
-        return Array.isArray(obj) ? [...obj] : {...obj};
-    }
-};
-
 // 创建MQTT Store
 const useMqttStore = create((set, get) => {
     // 静态变量 - 避免每次创建store时重新生成
@@ -582,46 +567,60 @@ const useMqttStore = create((set, get) => {
         // 安全地更新终端会话，避免直接修改嵌套对象
         updateTerminalSession: (sessionId, updates) => {
             set(state => {
-                // 检查会话是否存在
-                const currentSessions = {...state.terminalSessions};
-                const currentSession = currentSessions[sessionId];
-                
-                if (!currentSession) return state;
-                
-                // 创建新的会话对象
-                const newSession = {...currentSession};
-                
-                // 安全地处理嵌套对象
-                if (updates.history) {
-                    // 仅限最近200条记录，避免过多历史造成性能问题
-                    const safeHistory = (updates.history || []).slice(-200);
-                    newSession.history = safeHistory;
-                }
-                
-                if (updates.commandHistory) {
-                    // 命令历史也应限制数量
-                    const safeCommandHistory = (updates.commandHistory || []).slice(-50);
-                    newSession.commandHistory = safeCommandHistory;
-                }
-                
-                // 处理其他更新字段，避免循环引用
-                Object.keys(updates).forEach(key => {
-                    if (key !== 'history' && key !== 'commandHistory') {
-                        if (typeof updates[key] === 'object' && updates[key] !== null) {
-                            newSession[key] = safeClone(updates[key]);
-                        } else {
-                            newSession[key] = updates[key];
+                try {
+                    // 检查会话是否存在
+                    const currentSessions = {...state.terminalSessions};
+                    const currentSession = currentSessions[sessionId];
+                    
+                    if (!currentSession) return state;
+                    
+                    // 创建新的会话对象
+                    const newSession = {...currentSession};
+                    
+                    // 处理历史记录 - 简单复制，不用深度克隆
+                    if (updates.history) {
+                        const historyLimit = 200;
+                        newSession.history = updates.history.slice(-historyLimit);
+                    }
+                    
+                    // 处理命令历史 - 字符串数组，可以直接复制
+                    if (updates.commandHistory) {
+                        const commandLimit = 50;
+                        newSession.commandHistory = updates.commandHistory.slice(-commandLimit);
+                    }
+                    
+                    // 处理其他简单字段
+                    Object.keys(updates).forEach(key => {
+                        if (key !== 'history' && key !== 'commandHistory') {
+                            // 对于简单类型直接赋值
+                            if (updates[key] === null || 
+                                updates[key] === undefined || 
+                                typeof updates[key] !== 'object') {
+                                newSession[key] = updates[key];
+                            } 
+                            // 对于对象类型使用浅拷贝
+                            else {
+                                newSession[key] = Array.isArray(updates[key]) 
+                                    ? [...updates[key]] 
+                                    : {...updates[key]};
+                            }
                         }
-                    }
-                });
-                
-                // 返回新的状态对象
-                return {
-                    terminalSessions: {
-                        ...currentSessions,
-                        [sessionId]: newSession
-                    }
-                };
+                    });
+                    
+                    // 添加最后更新时间
+                    newSession.lastUpdated = new Date().toISOString();
+                    
+                    // 返回新的状态对象
+                    return {
+                        terminalSessions: {
+                            ...currentSessions,
+                            [sessionId]: newSession
+                        }
+                    };
+                } catch (error) {
+                    console.error('更新终端会话状态失败:', error);
+                    return state; // 出错时返回原状态
+                }
             });
         },
 
