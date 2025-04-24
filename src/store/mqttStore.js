@@ -647,27 +647,27 @@ const useMqttStore = create((set, get) => {
                     // 检查会话是否存在
                     const currentSessions = {...state.terminalSessions};
                     const currentSession = currentSessions[sessionId];
-
+        
                     if (!currentSession) return state;
-
+        
                     // 创建新的会话对象
                     const newSession = {...currentSession};
-
+        
                     // 处理历史记录 - 简单复制，不用深度克隆
                     if (updates.history) {
                         const historyLimit = 200;
                         newSession.history = updates.history.slice(-historyLimit);
                     }
-
+        
                     // 处理命令历史 - 字符串数组，可以直接复制
                     if (updates.commandHistory) {
                         const commandLimit = 50;
                         newSession.commandHistory = updates.commandHistory.slice(-commandLimit);
                     }
-
-                    // 处理其他简单字段
+        
+                    // 处理其他简单字段，忽略lastUpdated字段
                     Object.keys(updates).forEach(key => {
-                        if (key !== 'history' && key !== 'commandHistory') {
+                        if (key !== 'history' && key !== 'commandHistory' && key !== 'lastUpdated') {
                             // 对于简单类型直接赋值
                             if (updates[key] === null ||
                                 updates[key] === undefined ||
@@ -682,11 +682,12 @@ const useMqttStore = create((set, get) => {
                             }
                         }
                     });
-
-                    // 添加最后更新时间
-                    newSession.lastUpdated = new Date().toISOString();
-
-                    // 返回新的状态对象
+        
+                    // 返回新的状态对象，删除现有的lastUpdated字段
+                    if (newSession.lastUpdated) {
+                        delete newSession.lastUpdated;
+                    }
+        
                     return {
                         terminalSessions: {
                             ...currentSessions,
