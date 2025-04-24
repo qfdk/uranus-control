@@ -54,7 +54,8 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
         startTerminalSession,
         endTerminalSession,
         interruptCommand,
-        terminalSessions
+        terminalSessions,
+        connect: connectMqtt
     } = useMqttStore();
 
     // 状态管理
@@ -67,6 +68,8 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
     const [sessionId, setSessionId] = useState(null);
     const [interactiveMode, setInteractiveMode] = useState(false);
     const [inputBuffer, setInputBuffer] = useState('');
+    const [initAttempted, setInitAttempted] = useState(false);
+    const [initError, setInitError] = useState(null);
 
     // DOM引用
     const terminalRef = useRef(null);
@@ -77,12 +80,34 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
     const interruptTimerRef = useRef(null);
     const isMountedRef = useRef(false);
 
+    // 确保MQTT连接
+    useEffect(() => {
+        // 确保在挂载时连接MQTT
+        if (isOnline && !mqttConnected) {
+            console.log('Terminal组件: 连接MQTT');
+            connectMqtt().catch(err => {
+                console.error('Terminal: MQTT连接失败', err);
+                setInitError('MQTT连接失败，无法使用终端');
+            });
+        }
+    }, [isOnline, mqttConnected, connectMqtt]);
+
     // 创建或恢复终端会话
     useEffect(() => {
-        if (mqttConnected && agentUuid && isOnline) {
+        // 标记组件已挂载
+        isMountedRef.current = true;
+        
+        // 异步初始化会话
+        const initSession = async () => {
+            if (!agentUuid || !isOnline || initAttempted) return;
+            
+            setInitAttempted(true);
+            
             try {
-                // 标记组件已挂载
-                isMountedRef.current = true;
+                // 尝试确保MQTT已连接
+                if (!mqttConnected) {
+                    await connectMqtt();
+                }
                 
                 // 检查是否已有会话
                 let existingSessionId = null;
@@ -117,44 +142,62 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                     }
                 } else {
                     // 创建新会话
-                    const newSessionId = startTerminalSession(agentUuid);
-                    console.log(`创建新终端会话: ${newSessionId}`);
-                    setSessionId(newSessionId);
+                    try {
+                        const newSessionId = startTerminalSession(agentUuid);
+                        console.log(`创建新终端会话: ${newSessionId}`);
+                        setSessionId(newSessionId);
 
-                    // 添加欢迎消息
-                    setHistory([{
-                        type: 'system',
-                        text: `连接到代理 ${agentUuid} 的终端。\n` +
-                            `输入命令开始操作。输入 'help' 查看可用命令。\n` +
-                            `支持vim等交互式命令，按Ctrl+C可中断命令执行。`
-                    }]);
+                        // 添加欢迎消息
+                        setHistory([{
+                            type: 'system',
+                            text: `连接到代理 ${agentUuid} 的终端。\n` +
+                                `输入命令开始操作。输入 'help' 查看可用命令。\n` +
+                                `支持vim等交互式命令，按Ctrl+C可中断命令执行。`
+                        }]);
+                    } catch (sessionError) {
+                        console.error('创建终端会话失败:', sessionError);
+                        setInitError('创建终端会话失败，请刷新页面重试');
+                    }
                 }
             } catch (error) {
                 console.error('初始化终端会话时出错:', error);
+                setInitError(`初始化终端失败: ${error.message}`);
                 setHistory([{
                     type: 'error',
                     text: `初始化终端失败: ${error.message}`
                 }]);
             }
-        }
+        };
 
+        // 延迟初始化，确保MQTT有时间连接
+        const timer = setTimeout(() => {
+            initSession();
+        }, 500);
+        
         // 组件卸载时清理
         return () => {
+            // 清除定时器
+            clearTimeout(timer);
+            
             // 标记组件已卸载
             isMountedRef.current = false;
             
-            // 保存会话状态前确保没有循环引用
+            // 保存会话状态
             if (sessionId) {
                 try {
                     // 安全地创建新的状态对象，不共享引用
                     const safeHistory = safeClone(history).slice(-HISTORY_MAX_LENGTH);
                     const safeCommandHistory = safeClone(commandHistory).slice(-COMMAND_HISTORY_MAX);
                     
-                    useMqttStore.getState().updateTerminalSession(sessionId, {
+                    // 更新会话状态
+                    const updateData = {
                         history: safeHistory,
                         commandHistory: safeCommandHistory,
                         interactiveMode
-                    });
+                    };
+                    
+                    // 安全地更新会话
+                    useMqttStore.getState().updateTerminalSession(sessionId, updateData);
                 } catch (error) {
                     console.error('保存终端会话状态时出错:', error);
                 }
@@ -165,7 +208,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                 clearTimeout(interruptTimerRef.current);
             }
         };
-    }, [mqttConnected, agentUuid, isOnline, startTerminalSession]);
+    }, [mqttConnected, agentUuid, isOnline, startTerminalSession, terminalSessions, history, commandHistory, interactiveMode, sessionId, connectMqtt, initAttempted]);
 
     // 强制滚动到底部的函数
     const scrollToBottom = useCallback(() => {
@@ -181,7 +224,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
 
     // 监听新的终端输出
     useEffect(() => {
-        if (!sessionId || !isMountedRef.current) return;
+        if (!sessionId || !isMountedRef.current || !terminalSessions) return;
 
         const session = terminalSessions[sessionId];
         if (!session) return;
@@ -463,7 +506,9 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                     type: 'system',
                     text: '终端会话已结束。刷新页面可重新开始。'
                 }]);
-                endTerminalSession(sessionId);
+                if (endTerminalSession) {
+                    endTerminalSession(sessionId);
+                }
                 setSessionId(null);
                 setLoading(false);
                 return;
@@ -491,6 +536,11 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                     type: 'system',
                     text: `进入交互式模式。使用键盘直接与应用交互，按Ctrl+C可退出。`
                 }]);
+            }
+
+            // 确保MQTT已连接
+            if (!mqttConnected) {
+                await connectMqtt();
             }
 
             // 发送命令执行请求
@@ -546,6 +596,27 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
             }
         }, 2000);
     };
+
+    // 如果有初始化错误，显示错误信息
+    if (initError) {
+        return (
+            <div className="rounded-lg border border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900/20 p-4 text-red-700 dark:text-red-300">
+                <div className="flex items-center mb-2">
+                    <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2h-1V9z" clipRule="evenodd" />
+                    </svg>
+                    <span className="font-medium">终端初始化失败</span>
+                </div>
+                <p>{initError}</p>
+                <button 
+                    onClick={() => window.location.reload()}
+                    className="mt-3 bg-red-200 dark:bg-red-800 px-3 py-1 rounded text-red-700 dark:text-red-200 hover:bg-red-300 dark:hover:bg-red-700 transition-colors"
+                >
+                    刷新页面重试
+                </button>
+            </div>
+        );
+    }
 
     return (
         <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-black text-white dark:bg-gray-900 overflow-hidden" ref={terminalRef}>
@@ -611,7 +682,10 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
             >
                 {history.length === 0 ? (
                     <div className="text-gray-400 italic">
-                        在此终端中执行命令。支持vim等交互式命令。使用Ctrl+C可以中断命令，使用上下箭头可以浏览命令历史。
+                        {sessionId ? 
+                            '在此终端中执行命令。支持vim等交互式命令。使用Ctrl+C可以中断命令，使用上下箭头可以浏览命令历史。' :
+                            '正在初始化终端会话...'
+                        }
                     </div>
                 ) : (
                     history.map((item, index) => (
@@ -657,15 +731,15 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                     placeholder={isOnline
                         ? (loading ? "命令执行中..." : interactiveMode ? "交互模式中，使用键盘直接输入..." : "输入命令...")
                         : "代理离线，无法执行命令"}
-                    disabled={!isOnline || loading || interactiveMode}
+                    disabled={!isOnline || loading || interactiveMode || !sessionId}
                     className="flex-1 bg-transparent border-none outline-none text-white placeholder-gray-500"
                     autoComplete="off"
                     spellCheck="false"
                 />
                 <button
                     type="submit"
-                    disabled={!command.trim() || !isOnline || loading || interactiveMode}
-                    className={`ml-2 p-1 rounded ${(!command.trim() || !isOnline || loading || interactiveMode) ? 'text-gray-500' : 'text-blue-500 hover:text-blue-400'}`}
+                    disabled={!command.trim() || !isOnline || loading || interactiveMode || !sessionId}
+                    className={`ml-2 p-1 rounded ${(!command.trim() || !isOnline || loading || interactiveMode || !sessionId) ? 'text-gray-500' : 'text-blue-500 hover:text-blue-400'}`}
                 >
                     <Send size={16} />
                 </button>
