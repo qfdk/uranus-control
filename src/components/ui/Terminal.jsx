@@ -5,10 +5,16 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Send, RotateCcw, Copy, CheckCheck, X, Terminal as TerminalIcon } from 'lucide-react';
 import useMqttStore from '@/store/mqttStore';
 
-const HISTORY_MAX_LENGTH = 1000; // 限制历史记录最大条数
+// 常量定义
+const HISTORY_MAX_LENGTH = 1000; // 历史记录最大条数
+const COMMAND_HISTORY_MAX = 50;  // 命令历史记录最大条数
+
+// 特殊键代码映射
 const SPECIAL_KEYS = {
     ESCAPE: '\u001b',
     CTRL_C: '\u0003',
+    CTRL_D: '\u0004',
+    CTRL_Z: '\u001a',
     BACKSPACE: '\u0008',
     TAB: '\u0009',
     ENTER: '\r',
@@ -23,7 +29,11 @@ const SPECIAL_KEYS = {
     PAGE_DOWN: '\u001b[6~'
 };
 
+/**
+ * Web终端组件
+ */
 export default function Terminal({ agentId, agentUuid, isOnline = true }) {
+    // MQTT Store相关功能
     const {
         connected: mqttConnected,
         sendCommand,
@@ -33,26 +43,24 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
         terminalSessions
     } = useMqttStore();
 
-    // 基本状态
+    // 状态管理
     const [command, setCommand] = useState('');
     const [history, setHistory] = useState([]);
+    const [commandHistory, setCommandHistory] = useState([]);
+    const [historyIndex, setHistoryIndex] = useState(-1);
     const [loading, setLoading] = useState(false);
     const [copied, setCopied] = useState(false);
     const [sessionId, setSessionId] = useState(null);
-    const [commandHistory, setCommandHistory] = useState([]);
-    const [historyIndex, setHistoryIndex] = useState(-1);
-
-    // 交互式命令状态
     const [interactiveMode, setInteractiveMode] = useState(false);
-    const [cursorPosition, setCursorPosition] = useState(0);
     const [inputBuffer, setInputBuffer] = useState('');
 
-    // Refs
+    // DOM引用
     const terminalRef = useRef(null);
     const bottomRef = useRef(null);
     const inputRef = useRef(null);
     const outputRef = useRef(null);
     const autoScrollRef = useRef(true);
+    const interruptTimerRef = useRef(null);
 
     // 创建或恢复终端会话
     useEffect(() => {
@@ -63,29 +71,35 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
 
             if (existingSession) {
                 // 恢复现有会话
+                console.log(`恢复终端会话: ${existingSession[0]}`);
                 setSessionId(existingSession[0]);
                 setHistory(existingSession[1].history || []);
+
                 if (existingSession[1].commandHistory) {
                     setCommandHistory(existingSession[1].commandHistory);
                 }
+
                 if (existingSession[1].interactiveMode) {
                     setInteractiveMode(true);
                 }
             } else {
                 // 创建新会话
                 const newSessionId = startTerminalSession(agentUuid);
+                console.log(`创建新终端会话: ${newSessionId}`);
                 setSessionId(newSessionId);
 
                 // 添加欢迎消息
                 setHistory([{
                     type: 'system',
-                    text: `连接到代理 ${agentUuid} 的终端。输入命令开始操作。\n输入 'help' 查看可用命令列表。\n对于vim等交互式命令，已启用增强支持。`
+                    text: `连接到代理 ${agentUuid} 的终端。\n` +
+                        `输入命令开始操作。输入 'help' 查看可用命令。\n` +
+                        `支持vim等交互式命令，按Ctrl+C可中断命令执行。`
                 }]);
             }
         }
 
+        // 组件卸载时保存会话状态
         return () => {
-            // 组件卸载时保存会话状态，但不关闭会话
             if (sessionId) {
                 useMqttStore.getState().updateTerminalSession(sessionId, {
                     history,
@@ -93,8 +107,13 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                     interactiveMode
                 });
             }
+
+            // 清除任何中断计时器
+            if (interruptTimerRef.current) {
+                clearTimeout(interruptTimerRef.current);
+            }
         };
-    }, [mqttConnected, agentUuid, isOnline]);
+    }, [mqttConnected, agentUuid, isOnline, startTerminalSession, terminalSessions]);
 
     // 强制滚动到底部的函数
     const scrollToBottom = useCallback(() => {
@@ -135,28 +154,42 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
         if (!sessionId || !agentUuid) return;
 
         try {
-            // 更新输入缓冲区（可选，用于显示用户输入）
-            if (input !== SPECIAL_KEYS.CTRL_C) {
-                setInputBuffer(prev => prev + input);
-            } else {
-                // Ctrl+C特殊处理
-                setInputBuffer('');
-                setHistory(prev => [...prev, { type: 'system', text: '^C' }]);
-            }
-
-            // 通过MQTT发送按键输入
-            await sendCommand(agentUuid, 'terminal_input', {
-                sessionId,
-                input,
-                timestamp: Date.now()
-            });
-
-            // 如果是Ctrl+C，尝试终止交互模式
+            // 特殊处理Ctrl+C
             if (input === SPECIAL_KEYS.CTRL_C) {
+                // 本地显示中断信号
+                setHistory(prev => [...prev, { type: 'system', text: '^C' }]);
+                setInputBuffer('');
+
+                // 连续发送多个信号增加中断成功率
                 console.log('发送Ctrl+C中断信号');
 
-                // 延迟一段时间后检查是否还在交互模式
-                setTimeout(() => {
+                // 首先尝试使用优化的中断命令 - 这包含了多重中断机制
+                if (interruptCommand && typeof interruptCommand === 'function') {
+                    try {
+                        interruptCommand(sessionId);
+                    } catch (err) {
+                        console.error('使用中断命令失败:', err);
+                    }
+                }
+
+                // 备份方案: 直接发送Ctrl+C (3次尝试)
+                for (let i = 0; i < 3; i++) {
+                    try {
+                        await sendCommand(agentUuid, 'terminal_input', {
+                            sessionId,
+                            input: SPECIAL_KEYS.CTRL_C,
+                            timestamp: Date.now()
+                        });
+
+                        // 短暂延迟确保服务器有时间处理
+                        if (i < 2) await new Promise(r => setTimeout(r, 50));
+                    } catch (e) {
+                        console.error(`第${i+1}次Ctrl+C发送失败:`, e);
+                    }
+                }
+
+                // 延迟一段时间后检查交互模式状态
+                interruptTimerRef.current = setTimeout(() => {
                     const currentSession = terminalSessions[sessionId];
                     if (!currentSession || !currentSession.activeCommand) {
                         setInteractiveMode(false);
@@ -165,7 +198,21 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                         });
                     }
                 }, 500);
+
+                return;
             }
+
+            // 常规输入处理
+            if (input !== SPECIAL_KEYS.CTRL_C) {
+                setInputBuffer(prev => prev + input);
+            }
+
+            // 通过MQTT发送按键输入
+            await sendCommand(agentUuid, 'terminal_input', {
+                sessionId,
+                input,
+                timestamp: Date.now()
+            });
         } catch (error) {
             console.error('发送交互式输入失败:', error);
             setHistory(prev => [...prev, {
@@ -173,167 +220,68 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                 text: `发送输入失败: ${error.message}`
             }]);
         }
-    }, [sessionId, agentUuid, terminalSessions, sendCommand]);
-
-    // 强制中断命令 - 处理棘手情况
-    const forceInterruptCommand = useCallback(() => {
-        if (!sessionId || !agentUuid) return;
-
-        console.log("强制中断会话:", sessionId);
-
-        // 1. 先发送中断命令
-        interruptCommand(sessionId);
-
-        // 2. 再发送Ctrl+C字符
-        sendCommand(agentUuid, 'terminal_input', {
-            sessionId,
-            input: SPECIAL_KEYS.CTRL_C,
-            timestamp: Date.now()
-        }).catch(err => console.error("发送Ctrl+C失败:", err));
-
-        // 3. 发送特殊的强制中断命令
-        sendCommand(agentUuid, 'force_interrupt', {
-            sessionId,
-            timestamp: Date.now()
-        }).catch(err => console.error("发送强制中断命令失败:", err));
-
-        // 修改UI状态
-        setLoading(false);
-        setInteractiveMode(false);
-        setHistory(prev => [...prev, { type: 'system', text: '^C 强制中断命令' }]);
-
-        // 更新会话状态
-        useMqttStore.getState().updateTerminalSession(sessionId, {
-            interactiveMode: false,
-            activeCommand: null
-        });
-    }, [sessionId, agentUuid, interruptCommand, sendCommand]);
-
-    // 全局Ctrl+C处理
-    useEffect(() => {
-        const handleGlobalCtrlC = (e) => {
-            if (!terminalRef.current) return;
-
-            // 检测Ctrl+C
-            if (e.ctrlKey && (e.key === 'c' || e.keyCode === 67)) {
-                console.log("全局检测到Ctrl+C", {loading, interactiveMode, sessionId});
-
-                // 如果有会话，直接强制中断
-                if (sessionId) {
-                    e.preventDefault();
-                    e.stopPropagation();
-
-                    // 使用强制中断函数
-                    forceInterruptCommand();
-                    return false;
-                }
-            }
-        };
-
-        document.addEventListener('keydown', handleGlobalCtrlC, true);
-        return () => document.removeEventListener('keydown', handleGlobalCtrlC, true);
-    }, [sessionId, forceInterruptCommand]);
+    }, [sessionId, agentUuid, terminalSessions, sendCommand, interruptCommand]);
 
     // 处理键盘事件
     const handleKeyDown = useCallback((e) => {
         // 检查是否在终端区域内
         if (!terminalRef.current?.contains(e.target)) return;
 
-        // 在此处理Ctrl+C
+        // 处理Ctrl+C
         if (e.ctrlKey && (e.key === 'c' || e.keyCode === 67)) {
             e.preventDefault();
 
             if (loading || interactiveMode) {
-                forceInterruptCommand();
+                sendInteractiveInput(SPECIAL_KEYS.CTRL_C);
                 return;
             }
         }
 
         // 交互式模式下的键盘处理
         if (interactiveMode) {
-            e.preventDefault(); // 在交互模式下阻止默认行为
+            e.preventDefault();
 
             // 特殊键处理
             if (e.key === 'Escape') {
                 sendInteractiveInput(SPECIAL_KEYS.ESCAPE);
-                return;
-            }
-
-            if (e.ctrlKey && e.key === 'c') {
+            } else if (e.ctrlKey && e.key === 'c') {
                 sendInteractiveInput(SPECIAL_KEYS.CTRL_C);
-                return;
-            }
-
-            if (e.key === 'Backspace') {
+            } else if (e.ctrlKey && e.key === 'd') {
+                sendInteractiveInput(SPECIAL_KEYS.CTRL_D);
+            } else if (e.ctrlKey && e.key === 'z') {
+                sendInteractiveInput(SPECIAL_KEYS.CTRL_Z);
+            } else if (e.key === 'Backspace') {
                 sendInteractiveInput(SPECIAL_KEYS.BACKSPACE);
-                return;
-            }
-
-            if (e.key === 'Tab') {
+            } else if (e.key === 'Tab') {
                 sendInteractiveInput(SPECIAL_KEYS.TAB);
-                return;
-            }
-
-            if (e.key === 'Enter') {
+            } else if (e.key === 'Enter') {
                 sendInteractiveInput(SPECIAL_KEYS.ENTER);
-                return;
-            }
-
-            if (e.key === 'ArrowUp') {
+            } else if (e.key === 'ArrowUp') {
                 sendInteractiveInput(SPECIAL_KEYS.UP);
-                return;
-            }
-
-            if (e.key === 'ArrowDown') {
+            } else if (e.key === 'ArrowDown') {
                 sendInteractiveInput(SPECIAL_KEYS.DOWN);
-                return;
-            }
-
-            if (e.key === 'ArrowRight') {
+            } else if (e.key === 'ArrowRight') {
                 sendInteractiveInput(SPECIAL_KEYS.RIGHT);
-                return;
-            }
-
-            if (e.key === 'ArrowLeft') {
+            } else if (e.key === 'ArrowLeft') {
                 sendInteractiveInput(SPECIAL_KEYS.LEFT);
-                return;
-            }
-
-            if (e.key === 'Home') {
+            } else if (e.key === 'Home') {
                 sendInteractiveInput(SPECIAL_KEYS.HOME);
-                return;
-            }
-
-            if (e.key === 'End') {
+            } else if (e.key === 'End') {
                 sendInteractiveInput(SPECIAL_KEYS.END);
-                return;
-            }
-
-            if (e.key === 'Delete') {
+            } else if (e.key === 'Delete') {
                 sendInteractiveInput(SPECIAL_KEYS.DELETE);
-                return;
-            }
-
-            if (e.key === 'PageUp') {
+            } else if (e.key === 'PageUp') {
                 sendInteractiveInput(SPECIAL_KEYS.PAGE_UP);
-                return;
-            }
-
-            if (e.key === 'PageDown') {
+            } else if (e.key === 'PageDown') {
                 sendInteractiveInput(SPECIAL_KEYS.PAGE_DOWN);
-                return;
-            }
-
-            // 普通字符输入
-            if (e.key.length === 1) {
+            } else if (e.key.length === 1) {
+                // 普通字符输入
                 sendInteractiveInput(e.key);
             }
-
             return;
         }
 
         // 非交互模式下的键盘处理
-
         // 上下键浏览命令历史
         if (e.key === 'ArrowUp' && commandHistory.length > 0) {
             e.preventDefault();
@@ -352,13 +300,36 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
             e.preventDefault();
             inputRef.current?.focus();
         }
-    }, [historyIndex, commandHistory, loading, sessionId, interactiveMode, sendInteractiveInput, forceInterruptCommand]);
+    }, [historyIndex, commandHistory, loading, interactiveMode, sendInteractiveInput]);
 
-    // 键盘事件监听
+    // 全局键盘事件处理
     useEffect(() => {
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [handleKeyDown]);
+        const handleGlobalKeyDown = (e) => {
+            // 确保只处理终端内的按键事件
+            if (!terminalRef.current?.contains(e.target) &&
+                !terminalRef.current?.contains(document.activeElement)) {
+                return;
+            }
+
+            // 特别处理Ctrl+C - 中断正在执行的命令
+            if (e.ctrlKey && (e.key === 'c' || e.keyCode === 67)) {
+                if (interactiveMode || loading) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log("检测到Ctrl+C，中断命令");
+                    sendInteractiveInput(SPECIAL_KEYS.CTRL_C);
+                    return false;
+                }
+            }
+
+            // 其他按键处理委托给handleKeyDown
+            handleKeyDown(e);
+        };
+
+        // 使用捕获阶段确保能拦截事件
+        document.addEventListener('keydown', handleGlobalKeyDown, true);
+        return () => document.removeEventListener('keydown', handleGlobalKeyDown, true);
+    }, [handleKeyDown, interactiveMode, loading, sendInteractiveInput]);
 
     // 处理滚动事件
     useEffect(() => {
@@ -366,7 +337,6 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
             if (!outputRef.current) return;
 
             const { scrollTop, scrollHeight, clientHeight } = outputRef.current;
-            // 检测用户是否已经滚动离开了底部
             const isAtBottom = Math.abs(scrollHeight - scrollTop - clientHeight) < 10;
             autoScrollRef.current = isAtBottom;
         };
@@ -380,7 +350,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
 
     // 检测交互式命令
     const isInteractiveCommand = (cmd) => {
-        return /^(vim|vi|nano|emacs|less|more|top|htop|mysql|psql)/i.test(cmd.trim());
+        return /^(vim|vi|nano|emacs|less|more|top|htop|mysql|psql|mongo|ssh|telnet|tmux|screen)/i.test(cmd.trim());
     };
 
     // 处理命令提交
@@ -399,13 +369,13 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
             if (prev.length > 0 && prev[prev.length - 1] === trimmedCommand) {
                 return prev;
             }
-            return [...prev, trimmedCommand].slice(-50); // 保留最近50条命令
+            return [...prev, trimmedCommand].slice(-COMMAND_HISTORY_MAX);
         });
 
         // 添加命令到历史记录
         setHistory(prev => {
             const newHistory = [...prev, { type: 'command', text: trimmedCommand }];
-            return newHistory.slice(-HISTORY_MAX_LENGTH); // 限制历史记录长度
+            return newHistory.slice(-HISTORY_MAX_LENGTH);
         });
 
         setLoading(true);
@@ -433,7 +403,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
             if (trimmedCommand === 'help') {
                 setHistory(prev => [...prev, {
                     type: 'system',
-                    text: `可用命令:\n- clear: 清除终端\n- exit: 结束终端会话\n- help: 显示帮助信息\n\n交互式命令支持:\n- vim, nano, less 等交互式命令现在可以使用\n- 使用 Ctrl+C 可以中断正在执行的命令`
+                    text: `可用命令:\n- clear: 清除终端\n- exit: 结束终端会话\n- help: 显示帮助信息\n\n其他命令将直接发送给服务器执行。使用Ctrl+C可以中断命令。`
                 }]);
                 setLoading(false);
                 return;
@@ -507,26 +477,9 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
         setTimeout(() => setCopied(false), 2000);
     };
 
-    // 中断当前命令
-    const handleInterrupt = () => {
-        if ((loading || interactiveMode) && sessionId) {
-            forceInterruptCommand();
-        }
-    };
-
-    // 处理粘贴
-    const handlePaste = (e) => {
-        // 阻止特殊字符或多行粘贴
-        if (/[\x00-\x08\x0B\x0C\x0E-\x1F]/.test(e.clipboardData.getData('text'))) {
-            e.preventDefault();
-            const safeText = e.clipboardData.getData('text')
-                .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
-            setCommand(prev => prev + safeText);
-        }
-    };
-
     return (
         <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-black text-white dark:bg-gray-900 overflow-hidden" ref={terminalRef}>
+            {/* 终端标题栏 */}
             <div className="flex justify-between items-center px-4 py-2 bg-gray-800 dark:bg-gray-800 border-b border-gray-700">
                 <div className="flex items-center">
                     <div className="flex space-x-2 mr-2">
@@ -554,7 +507,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                 <div className="flex space-x-2">
                     {(loading || interactiveMode) && (
                         <button
-                            onClick={handleInterrupt}
+                            onClick={() => sendInteractiveInput(SPECIAL_KEYS.CTRL_C)}
                             className="text-red-400 hover:text-red-300 p-1 rounded transition-colors"
                             title="中断命令 (Ctrl+C)"
                         >
@@ -580,6 +533,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                 </div>
             </div>
 
+            {/* 终端输出区域 */}
             <div
                 className="p-4 h-80 overflow-y-auto font-mono text-sm terminal-output"
                 style={{ backgroundColor: '#0D1117' }}
@@ -605,10 +559,6 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                                 <div className="pl-4 border-l-2 border-red-500 text-red-300 whitespace-pre-wrap">
                                     {item.text}
                                 </div>
-                            ) : item.type === 'warning' ? (
-                                <div className="pl-4 border-l-2 border-yellow-500 text-yellow-300 whitespace-pre-wrap">
-                                    {item.text}
-                                </div>
                             ) : (
                                 <div className="pl-4 text-blue-300 whitespace-pre-wrap">
                                     {item.text}
@@ -626,6 +576,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                 <div ref={bottomRef}></div>
             </div>
 
+            {/* 命令输入区域 */}
             <form onSubmit={handleSubmit} className="flex items-center p-2 bg-gray-800 dark:bg-gray-800 border-t border-gray-700">
                 <div className="text-green-400 mr-2">$</div>
                 <input
@@ -633,15 +584,6 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                     type="text"
                     value={command}
                     onChange={(e) => setCommand(e.target.value)}
-                    onPaste={handlePaste}
-                    onKeyDown={(e) => {
-                        // 监听输入框中的Ctrl+C
-                        if (e.ctrlKey && (e.key === 'c' || e.keyCode === 67) && (loading || interactiveMode)) {
-                            e.preventDefault();
-                            console.log("输入框检测到Ctrl+C");
-                            forceInterruptCommand();
-                        }
-                    }}
                     placeholder={isOnline
                         ? (loading ? "命令执行中..." : interactiveMode ? "交互模式中，使用键盘直接输入..." : "输入命令...")
                         : "代理离线，无法执行命令"}
