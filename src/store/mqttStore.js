@@ -50,6 +50,21 @@ const getMqttConfig = () => {
     };
 };
 
+// 安全地克隆对象，避免循环引用
+const safeClone = (obj) => {
+    if (!obj) return obj;
+    if (typeof obj !== 'object') return obj;
+    
+    try {
+        // 尝试通过JSON序列化来深度克隆
+        return JSON.parse(JSON.stringify(obj));
+    } catch (e) {
+        // 如果有循环引用，则回退到浅克隆
+        console.warn('无法深度克隆对象，可能存在循环引用，回退到浅克隆', e);
+        return Array.isArray(obj) ? [...obj] : {...obj};
+    }
+};
+
 // 创建MQTT Store
 const useMqttStore = create((set, get) => {
     // 状态变量
@@ -74,15 +89,19 @@ const useMqttStore = create((set, get) => {
         if (session.interrupting) return true;
 
         // 标记正在尝试中断
-        set(state => ({
-            terminalSessions: {
-                ...state.terminalSessions,
-                [sessionId]: {
-                    ...session,
-                    interrupting: true
-                }
-            }
-        }));
+        set(state => {
+            const currentSessions = {...state.terminalSessions};
+            const currentSession = currentSessions[sessionId] ? {...currentSessions[sessionId]} : null;
+            
+            if (!currentSession) return state;
+            
+            currentSessions[sessionId] = {
+                ...currentSession,
+                interrupting: true
+            };
+            
+            return { terminalSessions: currentSessions };
+        });
 
         console.log(`尝试中断会话 ${sessionId} 的命令`);
 
@@ -137,20 +156,19 @@ const useMqttStore = create((set, get) => {
             // 重置会话状态
             setTimeout(() => {
                 set(state => {
-                    const currentSession = state.terminalSessions[sessionId];
+                    const currentSessions = {...state.terminalSessions};
+                    const currentSession = currentSessions[sessionId] ? {...currentSessions[sessionId]} : null;
+                    
                     if (!currentSession) return state;
-
-                    return {
-                        terminalSessions: {
-                            ...state.terminalSessions,
-                            [sessionId]: {
-                                ...currentSession,
-                                interrupting: false,
-                                interactiveMode: false,
-                                activeCommand: null
-                            }
-                        }
+                    
+                    currentSessions[sessionId] = {
+                        ...currentSession,
+                        interrupting: false,
+                        interactiveMode: false,
+                        activeCommand: null
                     };
+                    
+                    return { terminalSessions: currentSessions };
                 });
             }, 800);
 
@@ -256,83 +274,96 @@ const useMqttStore = create((set, get) => {
                             // 检查是否与终端会话相关
                             if (payload.sessionId) {
                                 const sessionId = payload.sessionId;
-                                const session = get().terminalSessions[sessionId];
+                                const currentSessions = get().terminalSessions;
+                                const session = currentSessions[sessionId] ? {...currentSessions[sessionId]} : null;
 
                                 if (session) {
-                                    // 更新终端会话状态
-                                    const updatedSession = {
-                                        ...session,
-                                        lastResponse: new Date()
-                                    };
-
-                                    // 判断是流式输出还是最终输出
-                                    if (payload.streaming) {
-                                        // 流式输出 - 追加到现有输出
-                                        if (!updatedSession.activeCommand) {
-                                            updatedSession.activeCommand = {
-                                                requestId,
-                                                output: '',
-                                                startTime: new Date()
-                                            };
-                                        }
-
-                                        // 追加输出
-                                        const output = payload.output || payload.message || '';
-                                        updatedSession.activeCommand.output += output;
-
-                                        // 更新历史记录
-                                        if (!updatedSession.history) {
-                                            updatedSession.history = [];
-                                        }
-
-                                        // 查找或创建响应项
-                                        const responseIndex = updatedSession.history.findIndex(
-                                            item => item.type === 'response' && item.requestId === requestId
-                                        );
-
-                                        if (responseIndex >= 0) {
-                                            // 更新现有响应
-                                            updatedSession.history[responseIndex].text += output;
+                                    // 使用安全的状态更新方式
+                                    set(state => {
+                                        // 创建新的会话对象和会话集合，避免修改原始状态
+                                        const newSessions = {...state.terminalSessions};
+                                        const newSession = {...newSessions[sessionId]};
+                                        
+                                        // 更新会话属性
+                                        newSession.lastResponse = new Date();
+                                        
+                                        // 判断是流式输出还是最终输出
+                                        if (payload.streaming) {
+                                            // 流式输出 - 追加到现有输出
+                                            let newActiveCommand = null;
+                                            
+                                            if (!newSession.activeCommand) {
+                                                newActiveCommand = {
+                                                    requestId,
+                                                    output: '',
+                                                    startTime: new Date()
+                                                };
+                                            } else {
+                                                newActiveCommand = {...newSession.activeCommand};
+                                            }
+                                            
+                                            // 追加输出
+                                            const output = payload.output || payload.message || '';
+                                            newActiveCommand.output = (newActiveCommand.output || '') + output;
+                                            newSession.activeCommand = newActiveCommand;
+                                            
+                                            // 更新历史记录
+                                            let newHistory = newSession.history ? [...newSession.history] : [];
+                                            
+                                            // 查找或创建响应项
+                                            const responseIndex = newHistory.findIndex(
+                                                item => item.type === 'response' && item.requestId === requestId
+                                            );
+                                            
+                                            if (responseIndex >= 0) {
+                                                // 更新现有响应
+                                                const updatedItem = {
+                                                    ...newHistory[responseIndex],
+                                                    text: (newHistory[responseIndex].text || '') + output
+                                                };
+                                                newHistory = [
+                                                    ...newHistory.slice(0, responseIndex),
+                                                    updatedItem,
+                                                    ...newHistory.slice(responseIndex + 1)
+                                                ];
+                                            } else {
+                                                // 创建新的响应项
+                                                newHistory.push({
+                                                    type: 'response',
+                                                    requestId,
+                                                    text: output,
+                                                    success: payload.success !== false
+                                                });
+                                            }
+                                            
+                                            newSession.history = newHistory;
+                                            
+                                            // 如果是结束消息，标记命令完成
+                                            if (payload.final) {
+                                                newSession.activeCommand = null;
+                                                newSession.interactiveMode = false;
+                                            }
                                         } else {
-                                            // 创建新的响应项
-                                            updatedSession.history.push({
+                                            // 一次性完整输出
+                                            newSession.activeCommand = null;
+                                            newSession.interactiveMode = false;
+                                            
+                                            // 添加到历史记录
+                                            const newHistory = newSession.history ? [...newSession.history] : [];
+                                            newHistory.push({
                                                 type: 'response',
                                                 requestId,
-                                                text: output,
+                                                text: payload.output || payload.message || '命令执行成功，无输出',
                                                 success: payload.success !== false
                                             });
+                                            newSession.history = newHistory;
                                         }
-
-                                        // 如果是结束消息，标记命令完成
-                                        if (payload.final) {
-                                            updatedSession.activeCommand = null;
-                                            updatedSession.interactiveMode = false;
-                                        }
-                                    } else {
-                                        // 一次性完整输出
-                                        updatedSession.activeCommand = null;
-                                        updatedSession.interactiveMode = false;
-
-                                        // 添加到历史记录
-                                        if (!updatedSession.history) {
-                                            updatedSession.history = [];
-                                        }
-
-                                        updatedSession.history.push({
-                                            type: 'response',
-                                            requestId,
-                                            text: payload.output || payload.message || '命令执行成功，无输出',
-                                            success: payload.success !== false
-                                        });
-                                    }
-
-                                    // 更新会话
-                                    set(state => ({
-                                        terminalSessions: {
-                                            ...state.terminalSessions,
-                                            [sessionId]: updatedSession
-                                        }
-                                    }));
+                                        
+                                        // 更新会话
+                                        newSessions[sessionId] = newSession;
+                                        
+                                        return { terminalSessions: newSessions };
+                                    });
                                 }
                             }
 
@@ -444,18 +475,47 @@ const useMqttStore = create((set, get) => {
             });
         },
 
+        // 修复：安全地更新终端会话，避免直接修改嵌套对象
         updateTerminalSession: (sessionId, updates) => {
             set(state => {
-                const session = state.terminalSessions[sessionId];
-                if (!session) return state;
-
+                // 检查会话是否存在
+                const currentSessions = {...state.terminalSessions};
+                const currentSession = currentSessions[sessionId];
+                
+                if (!currentSession) return state;
+                
+                // 创建新的会话对象
+                const newSession = {...currentSession};
+                
+                // 安全地处理嵌套对象
+                if (updates.history) {
+                    // 仅限最近200条记录，避免过多历史造成性能问题
+                    const safeHistory = (updates.history || []).slice(-200);
+                    newSession.history = safeHistory;
+                }
+                
+                if (updates.commandHistory) {
+                    // 命令历史也应限制数量
+                    const safeCommandHistory = (updates.commandHistory || []).slice(-50);
+                    newSession.commandHistory = safeCommandHistory;
+                }
+                
+                // 处理其他更新字段，避免循环引用
+                Object.keys(updates).forEach(key => {
+                    if (key !== 'history' && key !== 'commandHistory') {
+                        if (typeof updates[key] === 'object' && updates[key] !== null) {
+                            newSession[key] = safeClone(updates[key]);
+                        } else {
+                            newSession[key] = updates[key];
+                        }
+                    }
+                });
+                
+                // 返回新的状态对象
                 return {
                     terminalSessions: {
-                        ...state.terminalSessions,
-                        [sessionId]: {
-                            ...session,
-                            ...updates
-                        }
+                        ...currentSessions,
+                        [sessionId]: newSession
                     }
                 };
             });
@@ -507,23 +567,28 @@ const useMqttStore = create((set, get) => {
                             // 如果有会话ID，更新会话状态
                             const sessionId = params.sessionId;
                             if (sessionId) {
-                                const session = get().terminalSessions[sessionId];
-                                if (session) {
-                                    set(state => ({
-                                        terminalSessions: {
-                                            ...state.terminalSessions,
-                                            [sessionId]: {
-                                                ...session,
-                                                activeCommand: null,
-                                                interactiveMode: false,
-                                                history: [...(session.history || []), {
-                                                    type: 'error',
-                                                    text: '命令执行超时'
-                                                }]
-                                            }
-                                        }
-                                    }));
-                                }
+                                set(state => {
+                                    const currentSessions = {...state.terminalSessions};
+                                    const session = currentSessions[sessionId];
+                                    
+                                    if (!session) return state;
+                                    
+                                    const newSession = {...session};
+                                    newSession.activeCommand = null;
+                                    newSession.interactiveMode = false;
+                                    
+                                    // 创建新的历史记录数组
+                                    const newHistory = newSession.history ? [...newSession.history] : [];
+                                    newHistory.push({
+                                        type: 'error',
+                                        text: '命令执行超时'
+                                    });
+                                    newSession.history = newHistory;
+                                    
+                                    currentSessions[sessionId] = newSession;
+                                    
+                                    return { terminalSessions: currentSessions };
+                                });
                             }
                         }
                     }, 30000); // 30秒超时
