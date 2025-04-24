@@ -13,16 +13,35 @@ const useAgentStore = create((set, get) => ({
     mqttAgentState: {},
     mqttConnected: false,
     pendingRequests: {}, // 用于追踪请求状态
+    initialLoaded: false, // 新增标志，标记是否已完成初始加载
 
     // 设置MQTT状态
-    setMqttConnected: (connected) => set((state) => {
-        // 只有当状态实际变化时才更新
-        if (state.mqttConnected !== connected) {
-            return {mqttConnected: connected};
-        }
-        return {};
-    }),
+    setMqttConnected: (connected) => {
+        console.log(`更新MQTT连接状态: ${connected}`);
+        set((state) => {
+            if (state.mqttConnected !== connected) {
+                return {mqttConnected: connected};
+            }
+            return state;
+        });
 
+        // 如果MQTT连接已建立，但agentStore中还没有同步状态
+        if (connected) {
+            try {
+                // 获取MQTT代理状态并同步
+                const mqttStore = useMqttStore.getState();
+                if (mqttStore) {
+                    const mqttAgentState = mqttStore.getAgentState();
+                    if (mqttAgentState && Object.keys(mqttAgentState).length > 0) {
+                        console.log('同步MQTT代理状态到agentStore');
+                        set({mqttAgentState: {...mqttAgentState}});
+                    }
+                }
+            } catch (error) {
+                console.error('同步MQTT状态失败:', error);
+            }
+        }
+    },
     // 更新MQTT代理状态
     updateMqttAgentState: (agentState) => set({
         mqttAgentState: agentState,
@@ -31,12 +50,22 @@ const useAgentStore = create((set, get) => ({
 
     // 获取所有代理
     fetchAgents: async (force = false) => {
+        // 检查是否已经完成初始加载且不是强制刷新
+        if (get().initialLoaded && !force) {
+            console.log('已完成初始加载，跳过请求');
+            return {success: true, data: get().agents};
+        }
+
         // 如果已经在加载且不是强制刷新，则跳过
-        if (get().isLoading && !force) return {success: true, data: get().agents};
+        if (get().isLoading && !force) {
+            console.log('正在加载中，跳过请求');
+            return {success: true, data: get().agents};
+        }
 
         set({isLoading: true, error: null});
 
         try {
+            console.log('从API获取代理列表...');
             const response = await fetch('/api/agents');
 
             if (response.status === 401) {
@@ -48,10 +77,13 @@ const useAgentStore = create((set, get) => ({
             }
 
             const data = await response.json();
+            console.log(`获取到${data.length}个代理`);
+
             set({
                 agents: data,
                 isLoading: false,
-                lastUpdated: new Date()
+                lastUpdated: new Date(),
+                initialLoaded: true // 标记已完成初始加载
             });
 
             return {success: true, data};
@@ -304,7 +336,13 @@ const useAgentStore = create((set, get) => ({
     getAgentById: (agentId) => {
         const {agents} = get();
         return agents.find(agent => agent._id === agentId);
-    }
+    },
+
+    // 重置加载状态（用于初始化以及测试）
+    resetLoadingState: () => set({
+        initialLoaded: false,
+        isLoading: false
+    })
 }));
 
 export default useAgentStore;

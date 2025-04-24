@@ -6,6 +6,7 @@ import useMqttStore from '@/store/mqttStore';
 
 // 常量定义
 const HISTORY_MAX_LENGTH = 500; // 历史记录最大条数
+const AUTO_RECONNECT_INTERVAL = 5000; // 自动重连间隔 (毫秒)
 
 /**
  * 简化的终端组件
@@ -16,7 +17,8 @@ export default function TerminalComponent({agentUuid, isOnline = true}) {
         connected: mqttConnected,
         sendCommand,
         startTerminalSession,
-        endTerminalSession
+        endTerminalSession,
+        connect: connectMqtt
     } = useMqttStore();
 
     // 基础状态
@@ -27,6 +29,7 @@ export default function TerminalComponent({agentUuid, isOnline = true}) {
     const [commandCounter, setCommandCounter] = useState(0);
     const [activeCommand, setActiveCommand] = useState(null);
     const [error, setError] = useState(null);
+    const [connectAttempts, setConnectAttempts] = useState(0);
 
     // Refs
     const terminalRef = useRef(null);
@@ -35,8 +38,24 @@ export default function TerminalComponent({agentUuid, isOnline = true}) {
     const bottomRef = useRef(null);
     const autoScrollRef = useRef(true);
     const isMountedRef = useRef(false);
+    const reconnectTimerRef = useRef(null);
     // 记录命令输出缓存
     const outputCache = useRef({});
+
+    // 连接MQTT的函数
+    const attemptMqttConnect = useCallback(async () => {
+        if (!mqttConnected) {
+            try {
+                setConnectAttempts(prev => prev + 1);
+                await connectMqtt();
+                return true;
+            } catch (err) {
+                console.error('MQTT连接失败:', err);
+                return false;
+            }
+        }
+        return true;
+    }, [mqttConnected, connectMqtt]);
 
     // 初始化终端会话
     useEffect(() => {
@@ -51,7 +70,24 @@ export default function TerminalComponent({agentUuid, isOnline = true}) {
             try {
                 // 确保MQTT连接
                 if (!mqttConnected) {
-                    await useMqttStore.getState().connect();
+                    const connected = await attemptMqttConnect();
+                    if (!connected) {
+                        setError('MQTT连接失败，请稍后重试');
+
+                        // 设置自动重连
+                        if (!reconnectTimerRef.current) {
+                            reconnectTimerRef.current = setInterval(() => {
+                                if (isMountedRef.current && !mqttConnected) {
+                                    attemptMqttConnect();
+                                } else if (mqttConnected && reconnectTimerRef.current) {
+                                    clearInterval(reconnectTimerRef.current);
+                                    reconnectTimerRef.current = null;
+                                }
+                            }, AUTO_RECONNECT_INTERVAL);
+                        }
+
+                        return;
+                    }
                 }
 
                 // 创建新的终端会话
@@ -87,8 +123,14 @@ export default function TerminalComponent({agentUuid, isOnline = true}) {
                     console.error('终端会话清理失败:', err);
                 }
             }
+
+            // 清除重连定时器
+            if (reconnectTimerRef.current) {
+                clearInterval(reconnectTimerRef.current);
+                reconnectTimerRef.current = null;
+            }
         };
-    }, [agentUuid, isOnline, mqttConnected, startTerminalSession, endTerminalSession]);
+    }, [agentUuid, isOnline, mqttConnected, startTerminalSession, endTerminalSession, attemptMqttConnect]);
 
     // 自动滚动到底部
     const scrollToBottom = useCallback(() => {
@@ -119,6 +161,38 @@ export default function TerminalComponent({agentUuid, isOnline = true}) {
             return () => outputElement.removeEventListener('scroll', handleScroll);
         }
     }, []);
+
+    // 监听MQTT连接状态变化
+    useEffect(() => {
+        if (mqttConnected && error && error.includes('MQTT连接失败')) {
+            setError(null);
+
+            // 重新初始化会话
+            if (!sessionId && isOnline && agentUuid) {
+                try {
+                    const newSessionId = startTerminalSession(agentUuid);
+                    setSessionId(newSessionId);
+
+                    // 添加重连成功消息
+                    setHistory(prev => [
+                        ...prev,
+                        {
+                            type: 'system',
+                            text: `MQTT连接已恢复，会话已重新建立。`
+                        }
+                    ]);
+                } catch (err) {
+                    console.error('重新初始化会话失败:', err);
+                }
+            }
+
+            // 停止自动重连定时器
+            if (reconnectTimerRef.current) {
+                clearInterval(reconnectTimerRef.current);
+                reconnectTimerRef.current = null;
+            }
+        }
+    }, [mqttConnected, error, sessionId, agentUuid, isOnline, startTerminalSession]);
 
     // 发送命令的核心方法
     const executeCommand = useCallback(async (cmdString) => {
@@ -164,6 +238,26 @@ export default function TerminalComponent({agentUuid, isOnline = true}) {
                 return true;
             }
 
+            // 检查MQTT连接状态
+            if (!mqttConnected) {
+                setHistory(prev => [...prev, {
+                    type: 'error',
+                    text: 'MQTT未连接，无法执行命令。正在尝试重新连接...'
+                }]);
+
+                // 尝试重新连接
+                const connected = await attemptMqttConnect();
+                if (!connected) {
+                    return false;
+                }
+
+                // 连接成功，继续执行命令
+                setHistory(prev => [...prev, {
+                    type: 'system',
+                    text: 'MQTT已连接，继续执行命令...'
+                }]);
+            }
+
             // 创建命令对象记录
             const commandObj = {
                 id: cmdId,
@@ -201,7 +295,7 @@ export default function TerminalComponent({agentUuid, isOnline = true}) {
 
             return false;
         }
-    }, [agentUuid, sessionId, isOnline, activeCommand, commandCounter, endTerminalSession, sendCommand]);
+    }, [agentUuid, sessionId, isOnline, activeCommand, commandCounter, endTerminalSession, sendCommand, mqttConnected, attemptMqttConnect]);
 
     // 接收MQTT消息更新
     useEffect(() => {
@@ -313,7 +407,7 @@ export default function TerminalComponent({agentUuid, isOnline = true}) {
             console.log(`终端组件: 取消订阅代理 ${agentUuid} 的响应`);
             unsubscribe();
         };
-    }, [sessionId, agentUuid]);
+    }, [sessionId, agentUuid, activeCommand]);
 
     // 命令表单提交处理
     const handleSubmit = (e) => {
@@ -378,12 +472,22 @@ export default function TerminalComponent({agentUuid, isOnline = true}) {
                     <span className="font-medium">终端初始化失败</span>
                 </div>
                 <p>{error}</p>
-                <button
-                    onClick={() => setError(null)}
-                    className="mt-3 bg-red-200 dark:bg-red-800 px-3 py-1 rounded text-red-700 dark:text-red-200 hover:bg-red-300 dark:hover:bg-red-700 transition-colors"
-                >
-                    重试
-                </button>
+                <div className="mt-4 flex space-x-3">
+                    <button
+                        onClick={() => setError(null)}
+                        className="bg-red-200 dark:bg-red-800 px-3 py-1 rounded text-red-700 dark:text-red-200 hover:bg-red-300 dark:hover:bg-red-700 transition-colors"
+                    >
+                        重试
+                    </button>
+                    {error.includes('MQTT') && (
+                        <button
+                            onClick={attemptMqttConnect}
+                            className="bg-blue-200 dark:bg-blue-800 px-3 py-1 rounded text-blue-700 dark:text-blue-200 hover:bg-blue-300 dark:hover:bg-blue-700 transition-colors"
+                        >
+                            {connectAttempts > 0 ? '再次尝试连接' : '连接MQTT'}
+                        </button>
+                    )}
+                </div>
             </div>
         );
     }
@@ -402,17 +506,17 @@ export default function TerminalComponent({agentUuid, isOnline = true}) {
                         <div className="w-3 h-3 rounded-full bg-green-500"></div>
                     </div>
                     <span className="text-sm font-medium flex items-center">
-            <TerminalIcon className="w-4 h-4 mr-1"/>
-            终端
-          </span>
+                        <TerminalIcon className="w-4 h-4 mr-1"/>
+                        终端
+                    </span>
                     {mqttConnected && (
                         <span className="ml-2 text-xs px-1.5 py-0.5 bg-blue-600 text-white rounded-full">MQTT</span>
                     )}
                     {activeCommand && (
                         <span
                             className="ml-2 text-xs px-1.5 py-0.5 bg-gray-600 text-white rounded-full truncate max-w-32">
-              {activeCommand.text.split(/\s+/)[0]}
-            </span>
+                            {activeCommand.text.split(/\s+/)[0]}
+                        </span>
                     )}
                 </div>
                 <div className="flex space-x-2">
@@ -494,10 +598,12 @@ export default function TerminalComponent({agentUuid, isOnline = true}) {
                         isOnline
                             ? activeCommand
                                 ? '命令执行中...'
-                                : '输入命令...'
+                                : mqttConnected
+                                    ? '输入命令...'
+                                    : 'MQTT未连接，无法执行命令'
                             : '代理离线，无法执行命令'
                     }
-                    disabled={!isOnline || activeCommand || !sessionId}
+                    disabled={!isOnline || activeCommand || !sessionId || !mqttConnected}
                     className="flex-1 bg-transparent border-none outline-none text-white placeholder-gray-500"
                     autoComplete="off"
                     spellCheck="false"
@@ -505,9 +611,9 @@ export default function TerminalComponent({agentUuid, isOnline = true}) {
                 />
                 <button
                     type="submit"
-                    disabled={!command.trim() || !isOnline || activeCommand || !sessionId}
+                    disabled={!command.trim() || !isOnline || activeCommand || !sessionId || !mqttConnected}
                     className={`ml-2 p-1 rounded ${
-                        !command.trim() || !isOnline || activeCommand || !sessionId
+                        !command.trim() || !isOnline || activeCommand || !sessionId || !mqttConnected
                             ? 'text-gray-500 cursor-not-allowed'
                             : 'text-blue-500 hover:text-blue-400'
                     }`}

@@ -18,19 +18,33 @@ export function combineAgentData(httpAgents, mqttAgentState, mqttConnected) {
         // 更新现有代理的MQTT状态
         resultAgents.forEach(agent => {
             if (agent.uuid && mqttAgentState[agent.uuid]) {
-                agent.online = mqttAgentState[agent.uuid].online;
-                agent.lastHeartbeat = mqttAgentState[agent.uuid].lastHeartbeat || agent.lastHeartbeat;
-                agent.ip = agent.ip || mqttAgentState[agent.uuid].ip;
-                agent.hostname = agent.hostname || mqttAgentState[agent.uuid].hostname;
-                agent.buildVersion = agent.buildVersion || mqttAgentState[agent.uuid].buildVersion;
-                agent.buildTime = agent.buildTime || mqttAgentState[agent.uuid].buildTime;
-                agent.commitId = agent.commitId || mqttAgentState[agent.uuid].commitId;
-                agent.os = agent.os || mqttAgentState[agent.uuid].os;
-                agent.memory = agent.memory || mqttAgentState[agent.uuid].memory;
+                const mqttData = mqttAgentState[agent.uuid];
+
+                // 明确设置在线状态，优先使用MQTT状态
+                agent.online = mqttData.online !== undefined ? mqttData.online : agent.online;
+
+                // 最后心跳时间，优先使用最新的
+                if (mqttData.lastHeartbeat) {
+                    const mqttDate = new Date(mqttData.lastHeartbeat);
+                    const agentDate = agent.lastHeartbeat ? new Date(agent.lastHeartbeat) : null;
+
+                    if (!agentDate || mqttDate > agentDate) {
+                        agent.lastHeartbeat = mqttData.lastHeartbeat;
+                    }
+                }
+
+                // 其他字段的更新策略
+                agent.ip = agent.ip || mqttData.ip;
+                agent.hostname = agent.hostname || mqttData.hostname;
+                agent.buildVersion = agent.buildVersion || mqttData.buildVersion;
+                agent.buildTime = agent.buildTime || mqttData.buildTime;
+                agent.commitId = agent.commitId || mqttData.commitId;
+                agent.os = agent.os || mqttData.os;
+                agent.memory = agent.memory || mqttData.memory;
                 agent._fromMqtt = true;
 
                 // 复制MQTT代理的注册状态
-                if (mqttAgentState[agent.uuid]._registering) {
+                if (mqttData._registering) {
                     agent._registering = true;
                 }
             } else {
@@ -43,20 +57,21 @@ export function combineAgentData(httpAgents, mqttAgentState, mqttConnected) {
 
         Object.entries(mqttAgentState).forEach(([uuid, mqttAgent]) => {
             if (!httpAgentUuids.has(uuid)) {
+                // 确保有基本的默认值
                 resultAgents.push({
                     uuid,
                     hostname: mqttAgent.hostname || uuid.substring(0, 8),
-                    ip: mqttAgent.ip || '',
-                    online: mqttAgent.online || false,
-                    lastHeartbeat: mqttAgent.lastHeartbeat,
-                    buildVersion: mqttAgent.buildVersion,
-                    buildTime: mqttAgent.buildTime,
-                    commitId: mqttAgent.commitId,
-                    os: mqttAgent.os,
-                    memory: mqttAgent.memory,
+                    ip: mqttAgent.ip || 'Unknown',
+                    online: mqttAgent.online !== undefined ? mqttAgent.online : true,
+                    lastHeartbeat: mqttAgent.lastHeartbeat || new Date(),
+                    buildVersion: mqttAgent.buildVersion || 'Unknown',
+                    buildTime: mqttAgent.buildTime || 'Unknown',
+                    commitId: mqttAgent.commitId || 'Unknown',
+                    os: mqttAgent.os || 'Unknown',
+                    memory: mqttAgent.memory || 'Unknown',
                     _mqttOnly: true,  // 标记为仅MQTT发现的代理
                     _fromMqtt: true,
-                    _registering: mqttAgent._registering // 复制注册状态
+                    _registering: mqttAgent._registering || false // 复制注册状态
                 });
             }
         });
@@ -68,37 +83,18 @@ export function combineAgentData(httpAgents, mqttAgentState, mqttConnected) {
         if (a.online !== b.online) {
             return a.online ? -1 : 1;
         }
-        // 然后按主机名排序
+
+        // MQTT标记的代理排在前面（表示更新的数据）
+        if (a._fromMqtt !== b._fromMqtt) {
+            return a._fromMqtt ? -1 : 1;
+        }
+
+        // 新发现的代理排在前面
+        if (a._mqttOnly !== b._mqttOnly) {
+            return a._mqttOnly ? -1 : 1;
+        }
+
+        // 最后按主机名排序
         return (a.hostname || '').localeCompare(b.hostname || '');
     });
-}
-
-/**
- * 合并单个代理的HTTP/MongoDB数据与MQTT实时数据
- * @param {Object} agent - 从MongoDB获取的单个代理数据
- * @param {Object} mqttAgentState - MQTT代理状态数据
- * @param {boolean} mqttConnected - MQTT连接状态
- * @returns {Object} 合并后的代理数据
- */
-export function combineSingleAgentData(agent, mqttAgentState, mqttConnected) {
-    if (!agent || !agent.uuid) return agent;
-
-    const resultAgent = {...agent};
-
-    if (mqttConnected && mqttAgentState && mqttAgentState[agent.uuid]) {
-        const mqttData = mqttAgentState[agent.uuid];
-
-        resultAgent.online = mqttData.online !== undefined ? mqttData.online : agent.online;
-        resultAgent.lastHeartbeat = mqttData.lastHeartbeat || agent.lastHeartbeat;
-        resultAgent.hostname = agent.hostname || mqttData.hostname;
-        resultAgent.ip = agent.ip || mqttData.ip;
-        resultAgent.buildVersion = mqttData.buildVersion || agent.buildVersion;
-        resultAgent.buildTime = mqttData.buildTime || agent.buildTime;
-        resultAgent.commitId = mqttData.commitId || agent.commitId;
-        resultAgent.os = mqttData.os || agent.os;
-        resultAgent.memory = mqttData.memory || agent.memory;
-        resultAgent._fromMqtt = true;
-    }
-
-    return resultAgent;
 }

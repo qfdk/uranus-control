@@ -1,7 +1,7 @@
 // src/app/agents/client-page.js
 'use client';
 
-import {useEffect, useState} from 'react';
+import {useEffect, useState, useCallback, useRef} from 'react';
 import {formatDistanceToNow} from 'date-fns';
 import {Eye, RefreshCw, Trash2} from 'lucide-react';
 import Button from '@/components/ui/Button';
@@ -18,6 +18,7 @@ export default function AgentsClientPage() {
     const [deleteLoading, setDeleteLoading] = useState(null);
     const [refreshLoading, setRefreshLoading] = useState(false);
     const pathname = usePathname();
+    const mqttInitializedRef = useRef(false);
 
     // 使用全局状态
     const {
@@ -25,22 +26,64 @@ export default function AgentsClientPage() {
         isLoading,
         fetchAgents,
         deleteAgent,
-        getCombinedAgents
+        getCombinedAgents,
+        initialLoaded,
+        setMqttConnected
     } = useAgentStore();
 
-    // MQTT状态 - 只检查连接状态，不再直接使用MQTT状态
-    const {connected: mqttConnected} = useMqttStore();
+    // MQTT状态 - 直接从Store获取connect方法
+    const {connected: mqttConnected, connect: connectMqtt} = useMqttStore();
 
     // 使用自定义Hook处理客户端挂载
     const isMounted = useClientMount();
 
-    // 初始数据加载
+    // 强制初始化MQTT连接
+    const initializeMqtt = useCallback(async () => {
+        if (!mqttInitializedRef.current && isMounted) {
+            console.log('代理页面：手动初始化MQTT连接');
+            mqttInitializedRef.current = true;
+
+            try {
+                await connectMqtt();
+                console.log('MQTT连接成功');
+                setMqttConnected(true);
+            } catch (error) {
+                console.error('MQTT连接失败:', error);
+                setMqttConnected(false);
+            }
+        }
+    }, [connectMqtt, isMounted, setMqttConnected]);
+
+    // 初始数据加载 - 仅在首次渲染或强制刷新时执行
     useEffect(() => {
         if (isMounted && pathname === '/agents') {
-            console.log('代理页面：加载数据');
-            fetchAgents();
+            // 只在首次加载或者没有缓存数据时执行API请求
+            if (!initialLoaded || agents.length === 0) {
+                console.log('代理页面：首次加载数据');
+                fetchAgents();
+            } else {
+                console.log('代理页面：使用缓存数据');
+            }
+
+            // 强制初始化MQTT
+            if (!mqttConnected) {
+                // 使用setTimeout确保不会阻塞渲染
+                setTimeout(() => {
+                    initializeMqtt();
+                }, 100);
+            }
         }
-    }, [isMounted, pathname, fetchAgents]);
+    }, [isMounted, pathname, fetchAgents, initialLoaded, agents.length, mqttConnected, initializeMqtt]);
+
+    // 监听MQTT连接状态变化
+    useEffect(() => {
+        if (mqttConnected) {
+            console.log('MQTT已连接，使用实时数据更新');
+        } else if (isMounted && !mqttInitializedRef.current) {
+            console.log('MQTT未连接，尝试连接');
+            initializeMqtt();
+        }
+    }, [mqttConnected, isMounted, initializeMqtt]);
 
     // 获取合并后的代理数据（HTTP+MQTT）
     const combinedAgents = getCombinedAgents();
@@ -62,10 +105,10 @@ export default function AgentsClientPage() {
         return true;
     });
 
+    // 处理代理删除
     const handleDeleteAgent = async (agentId) => {
         if (!agentId) return {success: false, canceled: true};
 
-        // 不使用confirm直接显示对话框，而是使用状态进行控制
         try {
             if (!confirm('确定要删除此代理吗？此操作不可撤销。')) {
                 return {success: false, canceled: true};
@@ -74,34 +117,21 @@ export default function AgentsClientPage() {
             // 设置加载状态
             setDeleteLoading(agentId);
 
-            // 异步执行删除操作
-            return new Promise((resolve) => {
-                // 使用setTimeout避免长时间阻塞
-                setTimeout(async () => {
-                    try {
-                        // 调用删除API
-                        const result = await deleteAgent(agentId);
+            // 执行删除操作
+            const result = await deleteAgent(agentId);
 
-                        // 删除完成
-                        setDeleteLoading(null);
+            // 删除完成
+            setDeleteLoading(null);
 
-                        if (result.success) {
-                            // 刷新列表
-                            await fetchAgents(true);
-                            resolve(result);
-                        } else {
-                            if (!result.canceled) {
-                                alert('删除代理失败，请重试');
-                            }
-                            resolve(result);
-                        }
-                    } catch (error) {
-                        console.error('删除代理失败:', error);
-                        setDeleteLoading(null);
-                        resolve({success: false, error});
-                    }
-                }, 0);
-            });
+            if (result.success) {
+                // 成功删除
+                return result;
+            } else {
+                if (!result.canceled) {
+                    alert('删除代理失败，请重试');
+                }
+                return result;
+            }
         } catch (err) {
             console.error('删除操作出错:', err);
             setDeleteLoading(null);
@@ -110,17 +140,26 @@ export default function AgentsClientPage() {
     };
 
     // 强制刷新所有代理
-    const handleRefreshAgents = async () => {
+    const handleRefreshAgents = useCallback(async () => {
         try {
             setRefreshLoading(true);
-            await fetchAgents(true);
+            await fetchAgents(true);  // 传入true表示强制刷新
+            console.log('代理列表已强制刷新');
+
+            // 尝试确保MQTT连接
+            if (!mqttConnected) {
+                initializeMqtt();
+            }
         } catch (error) {
             console.error('刷新代理数据失败:', error);
         } finally {
-            setRefreshLoading(false);
+            setTimeout(() => {
+                setRefreshLoading(false);
+            }, 500);
         }
-    };
+    }, [fetchAgents, mqttConnected, initializeMqtt]);
 
+    // 监听代理注册事件
     useEffect(() => {
         // 监听新代理注册事件
         const handleAgentRegistered = (event) => {
@@ -137,6 +176,7 @@ export default function AgentsClientPage() {
         };
     }, [fetchAgents]);
 
+    // 处理搜索和状态过滤
     const handleSearchChange = (e) => {
         setSearchTerm(e.target.value);
     };
@@ -158,16 +198,30 @@ export default function AgentsClientPage() {
                     {mqttConnected && (
                         <span className="ml-2 text-xs text-blue-500 dark:text-blue-400">(MQTT实时)</span>
                     )}
+                    {!mqttConnected && (
+                        <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">(HTTP模式)</span>
+                    )}
                 </h1>
-                <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleRefreshAgents}
-                    disabled={refreshLoading}
-                >
-                    <RefreshCw className={`w-4 h-4 mr-1 ${refreshLoading ? 'animate-spin' : ''}`}/>
-                    {refreshLoading ? '刷新中...' : '刷新列表'}
-                </Button>
+                <div className="flex space-x-2">
+                    {!mqttConnected && (
+                        <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={initializeMqtt}
+                        >
+                            连接MQTT
+                        </Button>
+                    )}
+                    <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={handleRefreshAgents}
+                        disabled={refreshLoading || isLoading}
+                    >
+                        <RefreshCw className={`w-4 h-4 mr-1 ${(refreshLoading || isLoading) ? 'animate-spin' : ''}`}/>
+                        {(refreshLoading || isLoading) ? '刷新中...' : '刷新列表'}
+                    </Button>
+                </div>
             </header>
 
             {/* 搜索和过滤 */}
@@ -341,40 +395,37 @@ export default function AgentsClientPage() {
                                 </td>
                             </tr>
                         ))}
-
-                        {/* 无数据状态 */}
-                        {!isLoading && filteredAgents.length === 0 && (
-                            <tr>
-                                <td colSpan="7"
-                                    className="px-6 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
-                                    {agents.length === 0 ? (
-                                        <div className="flex flex-col items-center">
-                                            <p className="mb-2">暂无代理数据</p>
-                                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                                                代理将在上线时自动注册
-                                            </p>
-                                        </div>
-                                    ) : (
-                                        <div className="flex flex-col items-center">
-                                            <p className="mb-2">未找到符合条件的代理</p>
-                                            <Button
-                                                variant="secondary"
-                                                size="sm"
-                                                onClick={() => {
-                                                    setSearchTerm('');
-                                                    setStatusFilter('all');
-                                                }}
-                                            >
-                                                清除筛选条件
-                                            </Button>
-                                        </div>
-                                    )}
-                                </td>
-                            </tr>
-                        )}
                         </tbody>
                     </table>
                 </div>
+
+                {/* 无数据状态 */}
+                {!isLoading && filteredAgents.length === 0 && (
+                    <div className="p-6 text-center text-gray-500 dark:text-gray-400">
+                        {agents.length === 0 ? (
+                            <div className="flex flex-col items-center">
+                                <p className="mb-2">暂无代理数据</p>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">
+                                    代理将在上线时自动注册
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col items-center">
+                                <p className="mb-2">未找到符合条件的代理</p>
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => {
+                                        setSearchTerm('');
+                                        setStatusFilter('all');
+                                    }}
+                                >
+                                    清除筛选条件
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );

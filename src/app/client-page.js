@@ -31,45 +31,53 @@ export default function DashboardClientPage() {
         fetchAgents,
         upgradeAgent,
         getCombinedAgents,
-        mqttConnected
+        initialLoaded
     } = useAgentStore();
 
     // MQTT store
-    const {connect: connectMqtt} = useMqttStore();
+    const {connected: mqttConnected, connect: connectMqtt} = useMqttStore();
 
     // 本地loading状态
     const [localLoading, setLocalLoading] = useState(false);
     const initialLoadRef = useRef(false);
 
-    // 初始数据加载
+    // 初始数据加载 - 仅在首次渲染时执行API请求
     useEffect(() => {
         if (isMounted && !initialLoadRef.current) {
             initialLoadRef.current = true;
-            fetchAgents().finally(() => {
+
+            // 只在未完成初始加载时执行API请求
+            if (!initialLoaded) {
+                console.log('仪表盘：首次加载数据');
+                fetchAgents().finally(() => {
+                    setLocalLoading(false);
+                });
+            } else {
+                console.log('仪表盘：使用缓存数据');
                 setLocalLoading(false);
-            });
+            }
         }
-    }, [isMounted, fetchAgents]);
+    }, [isMounted, fetchAgents, initialLoaded]);
 
     // 组件挂载时连接MQTT
     useEffect(() => {
-        if (isMounted) {
-
+        if (isMounted && !mqttConnected) {
             // 延迟初始化MQTT，避免与数据加载冲突
             const timer = setTimeout(() => {
+                console.log('仪表盘：尝试连接MQTT');
                 connectMqtt();
             }, 1000);
 
             return () => clearTimeout(timer);
         }
-    }, [isMounted, connectMqtt]);
-
+    }, [isMounted, connectMqtt, mqttConnected]);
 
     // 处理手动刷新按钮点击
     const handleManualRefresh = useCallback(async () => {
+        console.log('仪表盘：手动刷新数据');
         setLocalLoading(true);
         try {
-            await fetchAgents(true);
+            await fetchAgents(true); // 强制刷新
         } finally {
             // 短暂延迟后关闭刷新指示器
             setTimeout(() => {
@@ -131,7 +139,6 @@ export default function DashboardClientPage() {
                     total: onlineAgents.length,
                     message: `正在升级: ${successCount + failedCount}/${onlineAgents.length}`
                 });
-
             } catch (error) {
                 console.error(`升级代理 ${agent.hostname || agent.uuid} 失败:`, error);
                 failedCount++;
@@ -158,7 +165,6 @@ export default function DashboardClientPage() {
             total: onlineAgents.length,
             message: `升级完成: ${successCount}成功, ${failedCount}失败`
         });
-
     }, [combinedAgents, upgradeAgent, fetchAgents]);
 
     // 如果组件未挂载，返回null并依赖全局加载状态
@@ -167,6 +173,8 @@ export default function DashboardClientPage() {
     }
 
     // 计算统计信息
+    const totalAgents = combinedAgents.length;
+    const onlineAgents = combinedAgents.filter(agent => agent.online).length;
     const totalWebsites = combinedAgents.reduce((sum, agent) => sum + (agent.stats?.websites || 0), 0);
     const totalCertificates = combinedAgents.reduce((sum, agent) => sum + (agent.stats?.certificates || 0), 0);
 
@@ -219,7 +227,7 @@ export default function DashboardClientPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <StatusCard
                     title="代理节点"
-                    value={`${combinedAgents.filter(agent => agent.online).length}/${agents.length}`}
+                    value={`${onlineAgents}/${totalAgents}`}
                     description={mqttConnected ? 'MQTT实时监控' : '通过HTTP监控'}
                     icon={<Server className="w-8 h-8 text-blue-500 dark:text-blue-400"/>}
                     color="blue"
@@ -256,8 +264,8 @@ export default function DashboardClientPage() {
                     {mqttConnected && (
                         <span
                             className="px-2 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium rounded-full">
-              MQTT实时
-            </span>
+                            MQTT实时
+                        </span>
                     )}
                 </div>
                 <div className="overflow-x-auto">
@@ -283,21 +291,27 @@ export default function DashboardClientPage() {
                                 className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                                     {agent.hostname || '未命名代理'}
+                                    {agent._mqttOnly && agent._registering && (
+                                        <span
+                                            className="ml-2 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
+                                            同步中...
+                                        </span>
+                                    )}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{agent.ip}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  <span
-                      className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          agent.online
-                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                              : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                      }`}>
-                    {agent.online ? '在线' : '离线'}
-                      {/* 如果来自MQTT则显示实时指示器 */}
-                      {agent._fromMqtt && (
-                          <span className="ml-1 opacity-75">(实时)</span>
-                      )}
-                  </span>
+                                    <span
+                                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                            agent.online
+                                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                                                : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                                        }`}>
+                                        {agent.online ? '在线' : '离线'}
+                                        {/* 如果来自MQTT则显示实时指示器 */}
+                                        {agent._fromMqtt && (
+                                            <span className="ml-1 opacity-75">(实时)</span>
+                                        )}
+                                    </span>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{agent.buildVersion || '未知'}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{agent.commitId ? agent.commitId.substring(0, 8) : '未知'}</td>
@@ -307,13 +321,20 @@ export default function DashboardClientPage() {
                                         : '未知'}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                                    <NavLink
-                                        href={`/agents/${agent._id}`}
-                                        className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 inline-flex items-center"
-                                    >
-                                        <Eye className="w-4 h-4 mr-2"/>
-                                        详情
-                                    </NavLink>
+                                    {agent._id ? (
+                                        <NavLink
+                                            href={`/agents/${agent._id}`}
+                                            className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 inline-flex items-center"
+                                        >
+                                            <Eye className="w-4 h-4 mr-2"/>
+                                            详情
+                                        </NavLink>
+                                    ) : (
+                                        <span className="text-gray-500 dark:text-gray-400 inline-flex items-center">
+                                            <RefreshCw className="w-4 h-4 mr-2 animate-spin"/>
+                                            注册中...
+                                        </span>
+                                    )}
                                 </td>
                             </tr>
                         ))}
@@ -366,8 +387,8 @@ export default function DashboardClientPage() {
                                 <span className="text-sm text-gray-500 dark:text-gray-400">MQTT状态</span>
                                 <span
                                     className={`text-sm font-medium ${mqttConnected ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
-                  {mqttConnected ? '已连接' : '未连接'}
-                </span>
+                                    {mqttConnected ? '已连接' : '未连接'}
+                                </span>
                             </div>
                         </div>
                     </div>
@@ -383,12 +404,23 @@ export default function DashboardClientPage() {
                                 text={upgradeStatus.isUpgrading ? `升级中(${upgradeStatus.success + upgradeStatus.failed}/${upgradeStatus.total})` : '更新所有代理'}
                                 color="blue"
                                 onClick={handleUpgradeAllAgents}
-                                disabled={upgradeStatus.isUpgrading}
+                                disabled={upgradeStatus.isUpgrading || onlineAgents === 0}
                                 loading={upgradeStatus.isUpgrading}
                             />
-                            <QuickActionButton text="检查SSL证书" color="green"/>
-                            <QuickActionButton text="同步网站配置" color="purple"/>
-                            <QuickActionButton text="系统备份" color="amber"/>
+                            <QuickActionButton
+                                text="检查SSL证书"
+                                color="green"
+                                disabled={onlineAgents === 0}
+                            />
+                            <QuickActionButton
+                                text="同步网站配置"
+                                color="purple"
+                                disabled={onlineAgents === 0}
+                            />
+                            <QuickActionButton
+                                text="系统备份"
+                                color="amber"
+                            />
                         </div>
                     </div>
                 </div>

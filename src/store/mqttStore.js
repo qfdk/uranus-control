@@ -2,6 +2,7 @@
 import {create} from 'zustand';
 import mqtt from 'mqtt';
 import {v4 as uuidv4} from 'uuid';
+import useAgentStore from './agentStore';
 
 // MQTT 主题
 const TOPICS = {
@@ -69,6 +70,10 @@ const useMqttStore = create((set, get) => {
     // 存储每个代理的响应订阅
     // 结构: { agentUuid: Map<subscriptionId, callback> }
     const agentSubscriptions = new Map();
+
+    // 设置连接重试计数
+    let reconnectCount = 0;
+    const MAX_RECONNECT_ATTEMPTS = 5;
 
     // 中断命令功能
     const interruptCommand = (sessionId) => {
@@ -189,13 +194,23 @@ const useMqttStore = create((set, get) => {
             console.log(`生成MQTT客户端ID: ${clientId}`);
         }
 
-        // MQTT配置
+        // MQTT配置 - 确保设置正确的重连参数
         const mqttOptions = {
             clientId,
             clean: true,
             reconnectPeriod: config.RECONNECT_PERIOD,
             connectTimeout: config.CONNECT_TIMEOUT,
-            keepalive: config.KEEPALIVE
+            keepalive: config.KEEPALIVE,
+            will: {  // 设置遗嘱消息，确保断开连接时能更新状态
+                topic: TOPICS.STATUS,
+                payload: JSON.stringify({
+                    clientId,
+                    status: 'offline',
+                    timestamp: Date.now()
+                }),
+                qos: 1,
+                retain: false
+            }
         };
 
         console.log('正在连接MQTT:', config.MQTT_BROKER, mqttOptions);
@@ -203,8 +218,12 @@ const useMqttStore = create((set, get) => {
         // 创建MQTT客户端
         const client = mqtt.connect(config.MQTT_BROKER, mqttOptions);
 
+        // 添加连接日志
+        console.log('MQTT客户端已创建，等待连接事件...');
+
         client.on('connect', () => {
             console.log('MQTT连接成功');
+            reconnectCount = 0; // 重置重连计数
             isConnecting = false;
             set({connected: true, error: null});
 
@@ -231,20 +250,76 @@ const useMqttStore = create((set, get) => {
                     client.subscribe(agentResponseTopic, {qos: 0});
                 }
             });
+
+            // 添加连接建立消息
+            console.log('MQTT连接和订阅完成');
+
+            // 通知agentStore MQTT已连接
+            try {
+                const agentStoreInstance = useAgentStore.getState();
+                if (agentStoreInstance && typeof agentStoreInstance.setMqttConnected === 'function') {
+                    agentStoreInstance.setMqttConnected(true);
+                }
+            } catch (error) {
+                console.error('通知agentStore MQTT连接状态失败:', error);
+            }
         });
 
         client.on('error', (err) => {
             console.error('MQTT连接错误:', err);
             set({error: err.message});
+
+            // 更新重连计数
+            reconnectCount++;
+            if (reconnectCount > MAX_RECONNECT_ATTEMPTS) {
+                console.error(`MQTT重连次数超过最大限制(${MAX_RECONNECT_ATTEMPTS})，停止重连`);
+                client.end(true);
+                set({connected: false, error: '重连次数超过限制，请手动重新连接'});
+            }
+
+            // 通知agentStore MQTT连接失败
+            try {
+                const agentStoreInstance = useAgentStore.getState();
+                if (agentStoreInstance && typeof agentStoreInstance.setMqttConnected === 'function') {
+                    agentStoreInstance.setMqttConnected(false);
+                }
+            } catch (error) {
+                console.error('通知agentStore MQTT连接状态失败:', error);
+            }
+        });
+
+        client.on('offline', () => {
+            console.log('MQTT客户端离线');
+            set({connected: false});
+
+            // 通知agentStore MQTT离线
+            try {
+                const agentStoreInstance = useAgentStore.getState();
+                if (agentStoreInstance && typeof agentStoreInstance.setMqttConnected === 'function') {
+                    agentStoreInstance.setMqttConnected(false);
+                }
+            } catch (error) {
+                console.error('通知agentStore MQTT连接状态失败:', error);
+            }
         });
 
         client.on('close', () => {
             console.log('MQTT连接关闭');
             set({connected: false});
+
+            // 通知agentStore MQTT连接关闭
+            try {
+                const agentStoreInstance = useAgentStore.getState();
+                if (agentStoreInstance && typeof agentStoreInstance.setMqttConnected === 'function') {
+                    agentStoreInstance.setMqttConnected(false);
+                }
+            } catch (error) {
+                console.error('通知agentStore MQTT连接状态失败:', error);
+            }
         });
 
         client.on('reconnect', () => {
-            console.log('MQTT正在重新连接...');
+            console.log(`MQTT正在重新连接...（尝试 #${reconnectCount + 1}）`);
         });
 
         client.on('message', (topic, message) => {
@@ -280,6 +355,16 @@ const useMqttStore = create((set, get) => {
                             mqttAgentState: {...agentState}
                         }));
 
+                        // 尝试通知agentStore更新状态
+                        try {
+                            const agentStoreInstance = useAgentStore.getState();
+                            if (agentStoreInstance && typeof agentStoreInstance.updateMqttAgentState === 'function') {
+                                agentStoreInstance.updateMqttAgentState({...agentState});
+                            }
+                        } catch (error) {
+                            console.error('通知agentStore更新状态失败:', error);
+                        }
+
                         // 如果是新代理，尝试自动注册 - 使用异步方式避免阻塞
                         if (isNewAgent) {
                             // 标记为MQTT发现的代理
@@ -290,6 +375,11 @@ const useMqttStore = create((set, get) => {
                             Promise.resolve().then(async () => {
                                 try {
                                     console.log(`尝试注册新发现的代理: ${uuid}`);
+                                    agentState[uuid]._registering = true;
+
+                                    set(state => ({
+                                        mqttAgentState: {...agentState}
+                                    }));
 
                                     const response = await fetch('/api/agents', {
                                         method: 'POST',
@@ -306,11 +396,30 @@ const useMqttStore = create((set, get) => {
                                             agentState[uuid]._id = data._id;
                                             agentState[uuid]._autoRegister = false;
                                             agentState[uuid]._mqttOnly = false;
+                                            agentState[uuid]._registering = false;
 
                                             // 通知状态变化
                                             set(state => ({
                                                 mqttAgentState: {...agentState}
                                             }));
+
+                                            // 尝试通知agentStore更新状态
+                                            try {
+                                                const agentStoreInstance = useAgentStore.getState();
+                                                if (agentStoreInstance) {
+                                                    // 更新MQTT状态
+                                                    if (typeof agentStoreInstance.updateMqttAgentState === 'function') {
+                                                        agentStoreInstance.updateMqttAgentState({...agentState});
+                                                    }
+
+                                                    // 刷新代理列表
+                                                    if (typeof agentStoreInstance.fetchAgents === 'function') {
+                                                        agentStoreInstance.fetchAgents(true);
+                                                    }
+                                                }
+                                            } catch (error) {
+                                                console.error('通知agentStore更新状态失败:', error);
+                                            }
 
                                             // 触发自定义事件通知UI刷新
                                             if (typeof window !== 'undefined') {
@@ -320,9 +429,24 @@ const useMqttStore = create((set, get) => {
                                                 window.dispatchEvent(event);
                                             }
                                         }
+                                    } else {
+                                        // 注册失败，清除注册状态
+                                        if (agentState[uuid]) {
+                                            agentState[uuid]._registering = false;
+                                            set(state => ({
+                                                mqttAgentState: {...agentState}
+                                            }));
+                                        }
                                     }
                                 } catch (error) {
                                     console.error(`注册代理失败: ${uuid}`, error);
+                                    // 清除注册状态
+                                    if (agentState[uuid]) {
+                                        agentState[uuid]._registering = false;
+                                        set(state => ({
+                                            mqttAgentState: {...agentState}
+                                        }));
+                                    }
                                 }
                             });
                         }
@@ -334,14 +458,30 @@ const useMqttStore = create((set, get) => {
 
                         // 删除列表中的代理也需要处理状态更新
                         if (deletedAgents.has(uuid)) {
-                            deletedAgents.delete(uuid);
+                            console.log(`忽略已删除代理的状态更新: ${uuid}`);
+                            return;
                         }
 
                         // 更新状态
                         if (payload.status === 'offline' && agentState[uuid]) {
+                            console.log(`收到代理离线消息: ${uuid}`);
                             agentState[uuid].online = false;
+
+                            // 更新时间戳
+                            agentState[uuid].lastStatusUpdate = new Date();
+
                             // 通知状态变化
                             set(state => ({mqttAgentState: {...agentState}}));
+
+                            // 尝试通知agentStore更新状态
+                            try {
+                                const agentStoreInstance = useAgentStore.getState();
+                                if (agentStoreInstance && typeof agentStoreInstance.updateMqttAgentState === 'function') {
+                                    agentStoreInstance.updateMqttAgentState({...agentState});
+                                }
+                            } catch (error) {
+                                console.error('通知agentStore更新状态失败:', error);
+                            }
                         }
                     }
                 } else if (topic.startsWith(TOPICS.RESPONSE)) {
@@ -393,7 +533,51 @@ const useMqttStore = create((set, get) => {
             }
         });
 
+        // 设置清理定时器，移除超时的命令
+        cleanupInterval = setInterval(() => {
+            const now = Date.now();
+            let expiredCount = 0;
+
+            // 检查挂起的命令是否超时
+            pendingCommands.forEach((command, id) => {
+                const age = now - command.timestamp;
+                // 命令超过2分钟视为过期
+                if (age > 120000) {
+                    clearTimeout(command.timeoutId);
+                    command.reject(new Error('命令执行超时，已被自动清理'));
+                    pendingCommands.delete(id);
+                    expiredCount++;
+                }
+            });
+
+            if (expiredCount > 0) {
+                console.log(`已清理 ${expiredCount} 个超时命令`);
+            }
+        }, 30000); // 每30秒检查一次
+
         return client;
+    };
+
+    // 重连方法
+    const reconnect = () => {
+        if (!mqttClient) {
+            console.log('MQTT客户端不存在，无法重连');
+            return false;
+        }
+
+        if (mqttClient.connected) {
+            console.log('MQTT已连接，不需要重连');
+            return true;
+        }
+
+        try {
+            console.log('强制重新连接MQTT...');
+            mqttClient.reconnect();
+            return true;
+        } catch (error) {
+            console.error('MQTT重连失败:', error);
+            return false;
+        }
     };
 
     return {
@@ -408,8 +592,7 @@ const useMqttStore = create((set, get) => {
         subscribeToResponses: (agentUuid, callback) => {
             if (!agentUuid || !callback) {
                 console.warn('订阅缺少代理UUID或回调函数');
-                return () => {
-                };
+                return () => {};
             }
 
             console.log(`正在订阅代理 ${agentUuid} 的响应`);
@@ -492,6 +675,7 @@ const useMqttStore = create((set, get) => {
 
             // 设置连接状态
             isConnecting = true;
+            console.log('开始MQTT连接过程...');
 
             // 创建连接Promise
             connectingPromise = new Promise((resolve, reject) => {
@@ -525,6 +709,7 @@ const useMqttStore = create((set, get) => {
                         clearTimeout(connectTimeout);
                         isConnecting = false;
                         set({connected: true, error: null});
+                        console.log('MQTT连接成功 - 事件触发');
                         resolve(true);
                     });
 
@@ -533,6 +718,7 @@ const useMqttStore = create((set, get) => {
                             clearTimeout(connectTimeout);
                             isConnecting = false;
                             set({error: err.message});
+                            console.error('MQTT连接错误:', err);
                             reject(err);
                         }
                     });
@@ -545,12 +731,16 @@ const useMqttStore = create((set, get) => {
             });
 
             try {
+                console.log('等待MQTT连接完成...');
                 await connectingPromise;
+                console.log('MQTT连接已完成');
                 return true;
             } catch (error) {
+                console.error('MQTT连接失败:', error);
                 isConnecting = false;
                 throw error;
             } finally {
+                console.log('MQTT连接过程结束');
                 connectingPromise = null;
             }
         },
@@ -567,6 +757,9 @@ const useMqttStore = create((set, get) => {
             }
         },
 
+        // 重连方法
+        reconnect,
+
         // 标记代理为已删除
         markAgentDeleted: (uuid) => {
             if (!uuid) return;
@@ -578,6 +771,16 @@ const useMqttStore = create((set, get) => {
             if (agentState[uuid]) {
                 delete agentState[uuid];
                 set(state => ({mqttAgentState: {...agentState}}));
+
+                // 尝试通知agentStore更新状态
+                try {
+                    const agentStoreInstance = useAgentStore.getState();
+                    if (agentStoreInstance && typeof agentStoreInstance.updateMqttAgentState === 'function') {
+                        agentStoreInstance.updateMqttAgentState({...agentState});
+                    }
+                } catch (error) {
+                    console.error('通知agentStore更新状态失败:', error);
+                }
             }
         },
 
@@ -760,7 +963,7 @@ const useMqttStore = create((set, get) => {
                 mqttClient.publish(
                     commandTopic,
                     JSON.stringify(commandMessage),
-                    {qos: 0},
+                    {qos: 1}, // 增加QoS级别确保消息送达
                     (err) => {
                         if (err) {
                             console.error(`发布命令失败: ${err.message}`);
