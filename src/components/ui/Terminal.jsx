@@ -29,20 +29,6 @@ const SPECIAL_KEYS = {
     PAGE_DOWN: '\u001b[6~'
 };
 
-// 安全地克隆对象，避免循环引用
-const safeClone = (obj) => {
-    if (!obj) return obj;
-    if (typeof obj !== 'object') return obj;
-    
-    try {
-        return JSON.parse(JSON.stringify(obj));
-    } catch (e) {
-        // 如果有循环引用，则使用浅克隆
-        console.warn('无法深度克隆对象，使用浅克隆');
-        return Array.isArray(obj) ? [...obj] : {...obj};
-    }
-};
-
 /**
  * Web终端组件
  */
@@ -130,11 +116,11 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                     
                     // 安全地设置状态，避免直接使用引用
                     if (existingSession.history) {
-                        setHistory(safeClone(existingSession.history) || []);
+                        setHistory([...existingSession.history]);
                     }
 
                     if (existingSession.commandHistory) {
-                        setCommandHistory(safeClone(existingSession.commandHistory) || []);
+                        setCommandHistory([...existingSession.commandHistory]);
                     }
 
                     if (existingSession.interactiveMode) {
@@ -182,18 +168,32 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
             // 标记组件已卸载
             isMountedRef.current = false;
             
-            // 保存会话状态
+            // 保存会话状态 - 使用更简单的方法避免循环引用
             if (sessionId) {
                 try {
-                    // 安全地创建新的状态对象，不共享引用
-                    const safeHistory = safeClone(history).slice(-HISTORY_MAX_LENGTH);
-                    const safeCommandHistory = safeClone(commandHistory).slice(-COMMAND_HISTORY_MAX);
+                    // 手动创建简单的新对象，避免使用深度克隆
+                    // 这样可以确保不会有循环引用
+                    
+                    // 为历史记录创建简单的新对象数组
+                    const simpleHistory = history.slice(-HISTORY_MAX_LENGTH).map(item => {
+                        // 只保留必要的字段
+                        return {
+                            type: item.type,
+                            text: item.text,
+                            requestId: item.requestId,
+                            success: item.success
+                        };
+                    });
+                    
+                    // 命令历史是简单的字符串数组，直接复制
+                    const simpleCommandHistory = commandHistory.slice(-COMMAND_HISTORY_MAX);
                     
                     // 更新会话状态
                     const updateData = {
-                        history: safeHistory,
-                        commandHistory: safeCommandHistory,
-                        interactiveMode
+                        history: simpleHistory,
+                        commandHistory: simpleCommandHistory,
+                        interactiveMode,
+                        lastSaved: new Date().toISOString()
                     };
                     
                     // 安全地更新会话
@@ -230,10 +230,9 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
         if (!session) return;
 
         try {
-            // 检查会话中的历史记录有无更新，并安全地克隆
+            // 检查会话中的历史记录有无更新
             if (session.history) {
-                const safeSessionHistory = safeClone(session.history);
-                setHistory(safeSessionHistory);
+                setHistory([...session.history]);
                 
                 // 确保在收到新历史时滚动
                 setTimeout(scrollToBottom, 0);
