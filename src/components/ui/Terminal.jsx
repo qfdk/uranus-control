@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, RotateCcw, Copy, CheckCheck, X, Terminal as TerminalIcon } from 'lucide-react';
+import React from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
+import {Send, RotateCcw, Copy, CheckCheck, X, Terminal as TerminalIcon} from 'lucide-react';
 import useMqttStore from '@/store/mqttStore';
 
 // 常量定义
@@ -217,52 +218,25 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                 clearTimeout(interruptTimerRef.current);
             }
 
-            // 保存会话状态 - 使用setTimeout防止在卸载期间触发状态更新
+            // 保存会话状态
             if (sessionId) {
+                const simpleHistory = history.slice(-HISTORY_MAX_LENGTH);
+                const simpleCommandHistory = commandHistory.slice(-COMMAND_HISTORY_MAX);
+
                 try {
-                    // 确保不会触发循环更新
-                    isUpdatingFromStore.current = true;
-
-                    savedSessionTimeoutRef.current = setTimeout(() => {
-                        try {
-                            // 检查store是否仍然可用
-                            const store = useMqttStore.getState();
-                            if (!store || typeof store.updateTerminalSession !== 'function') {
-                                return;
-                            }
-
-                            // 为历史记录创建简单的新对象数组
-                            const simpleHistory = history.slice(-HISTORY_MAX_LENGTH).map(item => {
-                                // 只保留必要的字段
-                                return {
-                                    type: item.type,
-                                    text: item.text,
-                                    requestId: item.requestId,
-                                    success: item.success
-                                };
-                            });
-
-                            // 命令历史是简单的字符串数组，直接复制
-                            const simpleCommandHistory = commandHistory.slice(-COMMAND_HISTORY_MAX);
-
-                            // 更新会话状态
-                            const updateData = {
-                                history: simpleHistory,
-                                commandHistory: simpleCommandHistory,
-                                interactiveMode,
-                                currentCommandName,
-                                lastSaved: new Date().toISOString()
-                            };
-
-                            // 安全地更新会话
-                            store.updateTerminalSession(sessionId, updateData);
-                        } catch (err) {
-                            // 忽略可能的错误，避免抛出异常
-                            console.error('延迟保存终端会话失败:', err);
-                        }
-                    }, 0);
-                } catch (error) {
-                    console.error('安排保存终端会话失败:', error);
+                    // 确保store仍然可用
+                    const store = useMqttStore.getState();
+                    if (store && typeof store.updateTerminalSession === 'function') {
+                        // 更新会话状态
+                        store.updateTerminalSession(sessionId, {
+                            history: simpleHistory,
+                            commandHistory: simpleCommandHistory,
+                            interactiveMode,
+                            currentCommandName
+                        });
+                    }
+                } catch (err) {
+                    console.error('保存终端会话失败:', err);
                 }
             }
         };
@@ -280,22 +254,16 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
         scrollToBottom();
     }, [history, interactiveMode, inputBuffer, scrollToBottom]);
 
-    // 直接监听终端会话状态变化
+    // 简化版本的会话监听 - 关键修改
     useEffect(() => {
         if (!sessionId || !terminalSessions) return;
         
         const currentSession = terminalSessions[sessionId];
         if (!currentSession) return;
         
-        // 更新当前命令名称
-        if (currentSession.currentCommandName !== undefined && 
-            currentSession.currentCommandName !== currentCommandName) {
-            setCurrentCommandName(currentSession.currentCommandName);
-        }
-        
-        // 检查历史记录是否有更新
+        // 只处理有意义的更新
         if (currentSession.history && currentSession.history.length > 0) {
-            // 直接更新本地历史记录状态
+            // 更新历史记录
             setHistory([...currentSession.history]);
             
             // 检查是否需要结束loading状态
@@ -309,10 +277,15 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                 setInteractiveMode(currentSession.interactiveMode);
             }
             
+            // 更新命令名称
+            if (currentSession.currentCommandName !== currentCommandName) {
+                setCurrentCommandName(currentSession.currentCommandName);
+            }
+            
             // 确保滚动到底部
             setTimeout(scrollToBottom, 0);
         }
-    }, [terminalSessions, sessionId, loading, scrollToBottom, interactiveMode, currentCommandName]);
+    }, [sessionId, terminalSessions, loading, interactiveMode, currentCommandName, scrollToBottom]);
 
     // 监听接收到的响应
     useEffect(() => {
@@ -636,13 +609,6 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                 
                 // 只处理与当前会话相关的消息
                 if (payload.sessionId && payload.sessionId === sessionRef.current) {
-                    console.log('收到会话相关响应:', {
-                        requestId: payload.requestId,
-                        hasOutput: !!payload.output,
-                        outputLength: payload.output?.length || 0,
-                        isFinal: payload.final
-                    });
-                    
                     // 添加到接收到的响应列表
                     setReceivedResponses(prev => [...prev, {
                         requestId: payload.requestId,
@@ -885,22 +851,14 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
     const clearHistory = () => {
         setHistory([]);
         if (sessionId) {
-            // 避免触发状态循环更新
-            isUpdatingFromStore.current = true;
-            setTimeout(() => {
-                try {
-                    const store = useMqttStore.getState();
-                    if (store && typeof store.updateTerminalSession === 'function') {
-                        store.updateTerminalSession(sessionId, { history: [] });
-                    }
-                    Promise.resolve().then(() => {
-                        isUpdatingFromStore.current = false;
-                    });
-                } catch (err) {
-                    console.error('清除历史记录失败:', err);
-                    isUpdatingFromStore.current = false;
+            try {
+                const store = useMqttStore.getState();
+                if (store && typeof store.updateTerminalSession === 'function') {
+                    store.updateTerminalSession(sessionId, { history: [] });
                 }
-            }, 0);
+            } catch (err) {
+                console.error('清除历史记录失败:', err);
+            }
         }
     };
 
