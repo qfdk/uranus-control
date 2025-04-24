@@ -15,9 +15,11 @@ export default function MqttStatus() {
     const [isReconnecting, setIsReconnecting] = useState(false);
     const [tooltipVisible, setTooltipVisible] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
+    const [reconnectAttempt, setReconnectAttempt] = useState(0);
     const settingsRef = useRef(null);
     const tooltipRef = useRef(null);
     const lastActionRef = useRef(null);
+    const reconnectTimerRef = useRef(null);
 
     // 检查设备类型
     useEffect(() => {
@@ -43,6 +45,13 @@ export default function MqttStatus() {
         if (typeof isMqttEnabled !== 'undefined') {
             setLocalMqttEnabled(isMqttEnabled);
         }
+        
+        // 清理计时器
+        return () => {
+            if (reconnectTimerRef.current) {
+                clearTimeout(reconnectTimerRef.current);
+            }
+        };
     }, []);
 
     // 同步本地状态与上下文状态
@@ -90,22 +99,49 @@ export default function MqttStatus() {
 
         if (newState) {
             setTimeout(() => {
-                reconnect();
+                handleReconnect();
             }, 100);
         }
     };
 
     // 手动重连
-    const handleReconnect = () => {
+    const handleReconnect = async () => {
         if (!localMqttEnabled) return;
 
-        lastActionRef.current = `尝试重新连接 (${new Date().toLocaleTimeString()})`;
+        // 防止频繁点击重连按钮
+        if (isReconnecting) return;
+        
+        // 记录重连时间
+        const attemptNumber = reconnectAttempt + 1;
+        setReconnectAttempt(attemptNumber);
+        lastActionRef.current = `尝试重新连接 (#${attemptNumber}, ${new Date().toLocaleTimeString()})`;
         setIsReconnecting(true);
-        reconnect();
-
-        setTimeout(() => {
-            setIsReconnecting(false);
-        }, 2000);
+        
+        try {
+            // 调用重连
+            await reconnect();
+            lastActionRef.current = `连接成功 (#${attemptNumber}, ${new Date().toLocaleTimeString()})`;
+        } catch (error) {
+            console.error('MQTT重连失败:', error);
+            lastActionRef.current = `连接失败: ${error.message} (#${attemptNumber}, ${new Date().toLocaleTimeString()})`;
+            
+            // 如果连接失败，设置自动重试
+            if (reconnectTimerRef.current) {
+                clearTimeout(reconnectTimerRef.current);
+            }
+            
+            reconnectTimerRef.current = setTimeout(() => {
+                if (localMqttEnabled && !connected) {
+                    console.log('触发自动重连...');
+                    handleReconnect();
+                }
+            }, 10000); // 10秒后自动重试
+        } finally {
+            // 重置重连状态
+            setTimeout(() => {
+                setIsReconnecting(false);
+            }, 2000);
+        }
     };
 
     // 获取状态颜色
