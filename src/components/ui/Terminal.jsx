@@ -6,7 +6,7 @@ import { Send, RotateCcw, Copy, CheckCheck, X, Terminal as TerminalIcon } from '
 import useMqttStore from '@/store/mqttStore';
 
 // 常量定义
-const HISTORY_MAX_LENGTH = 1000; // 历史记录最大条数
+const HISTORY_MAX_LENGTH = 200; // 历史记录最大条数
 const COMMAND_HISTORY_MAX = 50;  // 命令历史记录最大条数
 
 // 特殊键代码映射
@@ -27,6 +27,20 @@ const SPECIAL_KEYS = {
     DELETE: '\u001b[3~',
     PAGE_UP: '\u001b[5~',
     PAGE_DOWN: '\u001b[6~'
+};
+
+// 安全地克隆对象，避免循环引用
+const safeClone = (obj) => {
+    if (!obj) return obj;
+    if (typeof obj !== 'object') return obj;
+    
+    try {
+        return JSON.parse(JSON.stringify(obj));
+    } catch (e) {
+        // 如果有循环引用，则使用浅克隆
+        console.warn('无法深度克隆对象，使用浅克隆');
+        return Array.isArray(obj) ? [...obj] : {...obj};
+    }
 };
 
 /**
@@ -61,51 +75,89 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
     const outputRef = useRef(null);
     const autoScrollRef = useRef(true);
     const interruptTimerRef = useRef(null);
+    const isMountedRef = useRef(false);
 
     // 创建或恢复终端会话
     useEffect(() => {
         if (mqttConnected && agentUuid && isOnline) {
-            // 检查是否已有会话
-            const existingSession = Object.entries(terminalSessions)
-                .find(([id, session]) => session.agentUuid === agentUuid);
-
-            if (existingSession) {
-                // 恢复现有会话
-                console.log(`恢复终端会话: ${existingSession[0]}`);
-                setSessionId(existingSession[0]);
-                setHistory(existingSession[1].history || []);
-
-                if (existingSession[1].commandHistory) {
-                    setCommandHistory(existingSession[1].commandHistory);
+            try {
+                // 标记组件已挂载
+                isMountedRef.current = true;
+                
+                // 检查是否已有会话
+                let existingSessionId = null;
+                let existingSession = null;
+                
+                if (terminalSessions) {
+                    for (const [id, session] of Object.entries(terminalSessions)) {
+                        if (session && session.agentUuid === agentUuid) {
+                            existingSessionId = id;
+                            existingSession = session;
+                            break;
+                        }
+                    }
                 }
 
-                if (existingSession[1].interactiveMode) {
-                    setInteractiveMode(true);
-                }
-            } else {
-                // 创建新会话
-                const newSessionId = startTerminalSession(agentUuid);
-                console.log(`创建新终端会话: ${newSessionId}`);
-                setSessionId(newSessionId);
+                if (existingSessionId && existingSession) {
+                    // 恢复现有会话
+                    console.log(`恢复终端会话: ${existingSessionId}`);
+                    setSessionId(existingSessionId);
+                    
+                    // 安全地设置状态，避免直接使用引用
+                    if (existingSession.history) {
+                        setHistory(safeClone(existingSession.history) || []);
+                    }
 
-                // 添加欢迎消息
+                    if (existingSession.commandHistory) {
+                        setCommandHistory(safeClone(existingSession.commandHistory) || []);
+                    }
+
+                    if (existingSession.interactiveMode) {
+                        setInteractiveMode(true);
+                    }
+                } else {
+                    // 创建新会话
+                    const newSessionId = startTerminalSession(agentUuid);
+                    console.log(`创建新终端会话: ${newSessionId}`);
+                    setSessionId(newSessionId);
+
+                    // 添加欢迎消息
+                    setHistory([{
+                        type: 'system',
+                        text: `连接到代理 ${agentUuid} 的终端。\n` +
+                            `输入命令开始操作。输入 'help' 查看可用命令。\n` +
+                            `支持vim等交互式命令，按Ctrl+C可中断命令执行。`
+                    }]);
+                }
+            } catch (error) {
+                console.error('初始化终端会话时出错:', error);
                 setHistory([{
-                    type: 'system',
-                    text: `连接到代理 ${agentUuid} 的终端。\n` +
-                        `输入命令开始操作。输入 'help' 查看可用命令。\n` +
-                        `支持vim等交互式命令，按Ctrl+C可中断命令执行。`
+                    type: 'error',
+                    text: `初始化终端失败: ${error.message}`
                 }]);
             }
         }
 
-        // 组件卸载时保存会话状态
+        // 组件卸载时清理
         return () => {
+            // 标记组件已卸载
+            isMountedRef.current = false;
+            
+            // 保存会话状态前确保没有循环引用
             if (sessionId) {
-                useMqttStore.getState().updateTerminalSession(sessionId, {
-                    history,
-                    commandHistory,
-                    interactiveMode
-                });
+                try {
+                    // 安全地创建新的状态对象，不共享引用
+                    const safeHistory = safeClone(history).slice(-HISTORY_MAX_LENGTH);
+                    const safeCommandHistory = safeClone(commandHistory).slice(-COMMAND_HISTORY_MAX);
+                    
+                    useMqttStore.getState().updateTerminalSession(sessionId, {
+                        history: safeHistory,
+                        commandHistory: safeCommandHistory,
+                        interactiveMode
+                    });
+                } catch (error) {
+                    console.error('保存终端会话状态时出错:', error);
+                }
             }
 
             // 清除任何中断计时器
@@ -113,7 +165,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                 clearTimeout(interruptTimerRef.current);
             }
         };
-    }, [mqttConnected, agentUuid, isOnline, startTerminalSession, terminalSessions]);
+    }, [mqttConnected, agentUuid, isOnline, startTerminalSession]);
 
     // 强制滚动到底部的函数
     const scrollToBottom = useCallback(() => {
@@ -129,29 +181,38 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
 
     // 监听新的终端输出
     useEffect(() => {
-        if (!sessionId) return;
+        if (!sessionId || !isMountedRef.current) return;
 
         const session = terminalSessions[sessionId];
-        if (session && session.history) {
-            setHistory(session.history);
-            // 确保在收到新历史时滚动
-            setTimeout(scrollToBottom, 0);
-        }
+        if (!session) return;
 
-        // 命令完成后解除加载状态
-        if (session && !session.activeCommand && loading) {
-            setLoading(false);
-        }
+        try {
+            // 检查会话中的历史记录有无更新，并安全地克隆
+            if (session.history) {
+                const safeSessionHistory = safeClone(session.history);
+                setHistory(safeSessionHistory);
+                
+                // 确保在收到新历史时滚动
+                setTimeout(scrollToBottom, 0);
+            }
 
-        // 同步交互式模式状态
-        if (session && session.interactiveMode !== undefined) {
-            setInteractiveMode(session.interactiveMode);
+            // 命令完成后解除加载状态
+            if (session && !session.activeCommand && loading) {
+                setLoading(false);
+            }
+
+            // 同步交互式模式状态
+            if (session && session.interactiveMode !== undefined) {
+                setInteractiveMode(session.interactiveMode);
+            }
+        } catch (error) {
+            console.error('处理终端会话数据时出错:', error);
         }
     }, [terminalSessions, sessionId, loading, scrollToBottom]);
 
     // 发送交互式输入
     const sendInteractiveInput = useCallback(async (input) => {
-        if (!sessionId || !agentUuid) return;
+        if (!sessionId || !agentUuid || !isMountedRef.current) return;
 
         try {
             // 特殊处理Ctrl+C
@@ -175,6 +236,8 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                 // 备份方案: 直接发送Ctrl+C (3次尝试)
                 for (let i = 0; i < 3; i++) {
                     try {
+                        if (!isMountedRef.current) break;
+                        
                         await sendCommand(agentUuid, 'terminal_input', {
                             sessionId,
                             input: SPECIAL_KEYS.CTRL_C,
@@ -190,12 +253,11 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
 
                 // 延迟一段时间后检查交互模式状态
                 interruptTimerRef.current = setTimeout(() => {
+                    if (!isMountedRef.current) return;
+                    
                     const currentSession = terminalSessions[sessionId];
                     if (!currentSession || !currentSession.activeCommand) {
                         setInteractiveMode(false);
-                        useMqttStore.getState().updateTerminalSession(sessionId, {
-                            interactiveMode: false
-                        });
                     }
                 }, 500);
 
@@ -215,15 +277,20 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
             });
         } catch (error) {
             console.error('发送交互式输入失败:', error);
-            setHistory(prev => [...prev, {
-                type: 'error',
-                text: `发送输入失败: ${error.message}`
-            }]);
+            if (isMountedRef.current) {
+                setHistory(prev => [...prev, {
+                    type: 'error',
+                    text: `发送输入失败: ${error.message}`
+                }]);
+            }
         }
     }, [sessionId, agentUuid, terminalSessions, sendCommand, interruptCommand]);
 
     // 处理键盘事件
     const handleKeyDown = useCallback((e) => {
+        // 如果组件已卸载，不处理事件
+        if (!isMountedRef.current) return;
+        
         // 检查是否在终端区域内
         if (!terminalRef.current?.contains(e.target)) return;
 
@@ -305,6 +372,8 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
     // 全局键盘事件处理
     useEffect(() => {
         const handleGlobalKeyDown = (e) => {
+            if (!isMountedRef.current) return;
+            
             // 确保只处理终端内的按键事件
             if (!terminalRef.current?.contains(e.target) &&
                 !terminalRef.current?.contains(document.activeElement)) {
@@ -334,7 +403,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
     // 处理滚动事件
     useEffect(() => {
         const handleScroll = () => {
-            if (!outputRef.current) return;
+            if (!outputRef.current || !isMountedRef.current) return;
 
             const { scrollTop, scrollHeight, clientHeight } = outputRef.current;
             const isAtBottom = Math.abs(scrollHeight - scrollTop - clientHeight) < 10;
@@ -357,7 +426,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
     const handleSubmit = async (e) => {
         e?.preventDefault();
 
-        if (!command.trim() || !isOnline || !sessionId || loading) return;
+        if (!command.trim() || !isOnline || !sessionId || loading || !isMountedRef.current) return;
 
         // 重置历史索引
         setHistoryIndex(-1);
@@ -417,11 +486,6 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                 setInteractiveMode(true);
                 setInputBuffer('');
 
-                // 更新会话状态
-                useMqttStore.getState().updateTerminalSession(sessionId, {
-                    interactiveMode: true
-                });
-
                 // 添加提示消息
                 setHistory(prev => [...prev, {
                     type: 'system',
@@ -442,13 +506,15 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
             console.error('命令执行失败:', error);
 
             // 添加错误消息到历史记录
-            setHistory(prev => [...prev, {
-                type: 'error',
-                text: `执行错误: ${error.message || '未知错误'}`
-            }]);
+            if (isMountedRef.current) {
+                setHistory(prev => [...prev, {
+                    type: 'error',
+                    text: `执行错误: ${error.message || '未知错误'}`
+                }]);
 
-            setLoading(false);
-            setInteractiveMode(false);
+                setLoading(false);
+                setInteractiveMode(false);
+            }
         }
     };
 
@@ -474,7 +540,11 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
 
         navigator.clipboard.writeText(text);
         setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        setTimeout(() => {
+            if (isMountedRef.current) {
+                setCopied(false);
+            }
+        }, 2000);
     };
 
     return (
