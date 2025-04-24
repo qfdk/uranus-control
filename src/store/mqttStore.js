@@ -289,7 +289,7 @@ const useMqttStore = create((set, get) => {
                     }
                 } else if (topic.startsWith(TOPICS.RESPONSE)) {
                     console.log('收到响应消息:', JSON.stringify(payload));
-                    
+
                     // 处理命令响应
                     const requestId = payload.requestId;
 
@@ -301,7 +301,7 @@ const useMqttStore = create((set, get) => {
 
                         if (session) {
                             console.log(`处理会话 ${sessionId} 的响应，请求ID: ${requestId}`);
-                            
+
                             // 使用安全的状态更新方式
                             set(state => {
                                 // 创建新的会话对象和会话集合，避免修改原始状态
@@ -314,7 +314,7 @@ const useMqttStore = create((set, get) => {
                                 // 判断是流式输出还是最终输出
                                 if (payload.streaming) {
                                     console.log(`接收流式输出${payload.final ? '(最终)' : '(部分)'}: ${payload.output?.length || 0}字节`);
-                                    
+
                                     // 流式输出 - 追加到现有输出
                                     let newActiveCommand = null;
 
@@ -372,7 +372,7 @@ const useMqttStore = create((set, get) => {
                                     }
                                 } else {
                                     console.log(`收到一次性响应: ${payload.output?.length || 0}字节`);
-                                    
+
                                     // 一次性完整输出
                                     newSession.activeCommand = null;
                                     newSession.interactiveMode = false;
@@ -456,33 +456,23 @@ const useMqttStore = create((set, get) => {
         responseHandlers: {}, // 存储响应处理器
 
         // 订阅响应消息
-        subscribeToResponses: (callback) => {
-            if (!callback || typeof callback !== 'function') {
-                console.error('subscribeToResponses 需要一个回调函数');
-                return () => {}; // 返回空函数作为解除订阅函数
-            }
-            
-            // 创建唯一订阅ID
-            const subscriptionId = uuidv4();
-            
-            // 将回调添加到响应处理器列表
-            const responseHandlers = get().responseHandlers || {};
-            set({ responseHandlers: { ...responseHandlers, [subscriptionId]: callback } });
-            
-            console.log(`已添加MQTT响应订阅: ${subscriptionId}`);
-            
+        subscribeToResponses: (agentUuid, callback) => {
+            // 只订阅特定代理的主题
+            const topic = agentUuid ? `uranus/response/${agentUuid}` : 'uranus/response/#';
+            mqttClient.subscribe(topic, {qos: 0});
+
             // 返回解除订阅函数
+            const subscriptionId = uuidv4();
+            set({responseHandlers: {...get().responseHandlers, [subscriptionId]: callback}});
+
             return () => {
-                console.log(`正在移除MQTT响应订阅: ${subscriptionId}`);
-                const currentHandlers = get().responseHandlers || {};
-                if (currentHandlers[subscriptionId]) {
-                    const newHandlers = { ...currentHandlers };
-                    delete newHandlers[subscriptionId];
-                    set({ responseHandlers: newHandlers });
-                }
+                mqttClient.unsubscribe(topic);
+                // 移除处理器
+                const handlers = {...get().responseHandlers};
+                delete handlers[subscriptionId];
+                set({responseHandlers: handlers});
             };
         },
-
         // 初始化MQTT连接 - 防止重复连接
         connect: async () => {
             // 如果已连接，直接返回
@@ -632,7 +622,7 @@ const useMqttStore = create((set, get) => {
 
             console.log(`为代理 ${agentUuid} 创建新的终端会话`);
             const sessionId = uuidv4();
-            
+
             set(state => ({
                 terminalSessions: {
                     ...state.terminalSessions,
@@ -689,24 +679,24 @@ const useMqttStore = create((set, get) => {
                     // 检查会话是否存在
                     const currentSessions = {...state.terminalSessions};
                     const currentSession = currentSessions[sessionId];
-        
+
                     if (!currentSession) return state;
-        
+
                     // 创建新的会话对象
                     const newSession = {...currentSession};
-        
+
                     // 处理历史记录
                     if (updates.history) {
                         const historyLimit = 200;
                         newSession.history = updates.history.slice(-historyLimit);
                     }
-        
+
                     // 处理命令历史
                     if (updates.commandHistory) {
                         const commandLimit = 50;
                         newSession.commandHistory = updates.commandHistory.slice(-commandLimit);
                     }
-        
+
                     // 处理其他字段，忽略lastUpdated
                     Object.keys(updates).forEach(key => {
                         if (key !== 'history' && key !== 'commandHistory' && key !== 'lastUpdated') {
@@ -721,12 +711,12 @@ const useMqttStore = create((set, get) => {
                             }
                         }
                     });
-        
+
                     // 确保删除现有的lastUpdated字段
                     if (newSession.lastUpdated) {
                         delete newSession.lastUpdated;
                     }
-        
+
                     return {
                         terminalSessions: {
                             ...currentSessions,
@@ -813,7 +803,7 @@ const useMqttStore = create((set, get) => {
                     if (Object.keys(params).length > 0) {
                         // 特殊处理，防止与顶层字段冲突
                         commandMessage.params = {...params};
-                        
+
                         // 如果命令是'execute'，且params中有command，特殊处理
                         if (command === 'execute' && params.command) {
                             // 确保这是实际要执行的命令字符串
@@ -853,9 +843,9 @@ const useMqttStore = create((set, get) => {
                     const qos = command === 'terminal_input' || command === 'interrupt' || command === 'force_interrupt' ? 1 : 0;
 
                     mqttClient.publish(
-                        commandTopic, 
-                        JSON.stringify(commandMessage), 
-                        {qos}, 
+                        commandTopic,
+                        JSON.stringify(commandMessage),
+                        {qos},
                         (err) => {
                             if (err) {
                                 console.error(`发布命令失败: ${err.message}`);
@@ -870,7 +860,7 @@ const useMqttStore = create((set, get) => {
                 });
             });
         },
-        
+
         // Nginx相关命令 - 简化版，统一使用基础命令
         reloadNginx: (uuid) => get().sendCommand(uuid, 'reload'),
         restartNginx: (uuid) => get().sendCommand(uuid, 'restart'),
