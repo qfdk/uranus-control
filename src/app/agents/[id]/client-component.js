@@ -58,7 +58,6 @@ export default function AgentDetail({agent: initialAgent}) {
     const {connected: mqttConnected, subscribeToResponses, getAgentState} = useMqttStore();
     const {deleteAgent, upgradeAgent} = useAgentStore();
 
-    const [activeTab, setActiveTab] = useState('info');
     const [renderKey, setRenderKey] = useState(0);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isUpgrading, setIsUpgrading] = useState(false);
@@ -68,16 +67,29 @@ export default function AgentDetail({agent: initialAgent}) {
         show: false
     });
     const [agent, setAgent] = useState(initialAgent);
+    const statusTimeoutRef = useRef(null);
+
+    // 使用自定义Hook处理客户端挂载
+    const isMounted = useClientMount();
+
+    // 状态变量
+    const [activeTab, setActiveTab] = useState('info');
     const [commandMessage, setCommandMessage] = useState({
         type: '',
         content: '',
         show: false
     });
     const [isExecuting, setIsExecuting] = useState(false);
-    const statusTimeoutRef = useRef(null);
 
-    // 使用自定义Hook处理客户端挂载
-    const isMounted = useClientMount();
+    // 初始化MQTT连接
+    useEffect(() => {
+        if (isMounted && !mqttConnected) {
+            console.log('代理详情页面：尝试连接MQTT');
+            useMqttStore.getState().connect().catch(err => {
+                console.error('MQTT连接失败:', err);
+            });
+        }
+    }, [isMounted, mqttConnected]);
 
     // 监听MQTT实时状态更新
     useEffect(() => {
@@ -153,21 +165,6 @@ export default function AgentDetail({agent: initialAgent}) {
             throw error;
         }
     }, [agent?._id]);
-
-    // 处理标签切换
-    const handleTabChange = (tab) => {
-        setActiveTab(tab);
-
-        // 切换到信息标签时刷新代理数据
-        if (tab === 'info') {
-            refreshAgentData();
-        }
-
-        // 清除命令状态消息
-        if (tab !== 'nginx') {
-            clearMessage();
-        }
-    };
 
     // 处理删除代理
     const handleDeleteAgent = async () => {
@@ -334,6 +331,21 @@ export default function AgentDetail({agent: initialAgent}) {
             content: '',
             show: false
         });
+    };
+
+    // 处理标签切换
+    const handleTabChange = (tab) => {
+        setActiveTab(tab);
+
+        // 切换到信息标签时刷新代理数据
+        if (tab === 'info') {
+            refreshAgentData();
+        }
+
+        // 清除命令状态消息
+        if (tab !== 'nginx') {
+            clearMessage();
+        }
     };
 
     // Nginx命令
@@ -583,7 +595,6 @@ export default function AgentDetail({agent: initialAgent}) {
                                         ) : '未设置'}
                                     </p>
                                 </div>
-
 
                                 <div>
                                     <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">构建时间</h3>
