@@ -425,6 +425,20 @@ const useMqttStore = create((set, get) => {
                         }
                     }
                 }
+
+                // 调用订阅的响应处理器
+                if (get().responseHandlers && Object.keys(get().responseHandlers).length > 0) {
+                    // 对所有topic调用处理器，让处理器自己决定是否处理
+                    Object.values(get().responseHandlers).forEach(handler => {
+                        try {
+                            if (typeof handler === 'function') {
+                                handler(topic, payload);
+                            }
+                        } catch (handlerError) {
+                            console.error('响应处理器执行失败:', handlerError);
+                        }
+                    });
+                }
             } catch (err) {
                 console.error('解析MQTT消息失败:', err, message.toString());
             }
@@ -439,6 +453,35 @@ const useMqttStore = create((set, get) => {
         error: null,
         currentAgent: null,
         terminalSessions,  // 导出终端会话，允许组件访问
+        responseHandlers: {}, // 存储响应处理器
+
+        // 订阅响应消息
+        subscribeToResponses: (callback) => {
+            if (!callback || typeof callback !== 'function') {
+                console.error('subscribeToResponses 需要一个回调函数');
+                return () => {}; // 返回空函数作为解除订阅函数
+            }
+            
+            // 创建唯一订阅ID
+            const subscriptionId = uuidv4();
+            
+            // 将回调添加到响应处理器列表
+            const responseHandlers = get().responseHandlers || {};
+            set({ responseHandlers: { ...responseHandlers, [subscriptionId]: callback } });
+            
+            console.log(`已添加MQTT响应订阅: ${subscriptionId}`);
+            
+            // 返回解除订阅函数
+            return () => {
+                console.log(`正在移除MQTT响应订阅: ${subscriptionId}`);
+                const currentHandlers = get().responseHandlers || {};
+                if (currentHandlers[subscriptionId]) {
+                    const newHandlers = { ...currentHandlers };
+                    delete newHandlers[subscriptionId];
+                    set({ responseHandlers: newHandlers });
+                }
+            };
+        },
 
         // 初始化MQTT连接 - 防止重复连接
         connect: async () => {
