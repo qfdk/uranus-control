@@ -62,27 +62,50 @@ export default function AgentsClientPage() {
         return true;
     });
 
-    // 删除代理处理
     const handleDeleteAgent = async (agentId) => {
-        if (!confirm('确定要删除此代理吗？此操作不可撤销。')) {
-            return {success: false, canceled: true};
-        }
+        if (!agentId) return {success: false, canceled: true};
 
+        // 不使用confirm直接显示对话框，而是使用状态进行控制
         try {
-            setDeleteLoading(agentId);
-            const result = await deleteAgent(agentId);
-
-            if (!result.success && !result.canceled) {
-                alert('删除代理失败，请重试');
+            if (!confirm('确定要删除此代理吗？此操作不可撤销。')) {
+                return {success: false, canceled: true};
             }
 
-            return result;
-        } catch (error) {
-            console.error('删除代理失败:', error);
-            alert('删除代理失败，请重试');
-            return {success: false, error};
-        } finally {
+            // 设置加载状态
+            setDeleteLoading(agentId);
+
+            // 异步执行删除操作
+            return new Promise((resolve) => {
+                // 使用setTimeout避免长时间阻塞
+                setTimeout(async () => {
+                    try {
+                        // 调用删除API
+                        const result = await deleteAgent(agentId);
+
+                        // 删除完成
+                        setDeleteLoading(null);
+
+                        if (result.success) {
+                            // 刷新列表
+                            await fetchAgents(true);
+                            resolve(result);
+                        } else {
+                            if (!result.canceled) {
+                                alert('删除代理失败，请重试');
+                            }
+                            resolve(result);
+                        }
+                    } catch (error) {
+                        console.error('删除代理失败:', error);
+                        setDeleteLoading(null);
+                        resolve({success: false, error});
+                    }
+                }, 0);
+            });
+        } catch (err) {
+            console.error('删除操作出错:', err);
             setDeleteLoading(null);
+            return {success: false, error: err};
         }
     };
 
@@ -97,6 +120,22 @@ export default function AgentsClientPage() {
             setRefreshLoading(false);
         }
     };
+
+    useEffect(() => {
+        // 监听新代理注册事件
+        const handleAgentRegistered = (event) => {
+            console.log('检测到代理注册事件，刷新列表');
+            fetchAgents(true);
+        };
+
+        // 添加事件监听
+        window.addEventListener('mqtt-agent-registered', handleAgentRegistered);
+
+        // 清理函数
+        return () => {
+            window.removeEventListener('mqtt-agent-registered', handleAgentRegistered);
+        };
+    }, [fetchAgents]);
 
     const handleSearchChange = (e) => {
         setSearchTerm(e.target.value);

@@ -258,11 +258,14 @@ const useMqttStore = create((set, get) => {
                         const uuid = payload.uuid;
                         const timestamp = new Date();
 
-                        // 检查是否在已删除列表中
+                        // 即使代理在删除列表中，如果收到心跳也将其重新添加
                         if (deletedAgents.has(uuid)) {
-                            console.log(`忽略已删除代理的心跳: ${uuid}`);
-                            return;
+                            console.log(`检测到先前删除的代理心跳: ${uuid}，将重新添加`);
+                            deletedAgents.delete(uuid);
                         }
+
+                        // 检查是否是新代理或需要更新
+                        const isNewAgent = !agentState[uuid];
 
                         // 更新代理状态
                         agentState[uuid] = {
@@ -273,17 +276,65 @@ const useMqttStore = create((set, get) => {
                         };
 
                         // 通知状态变化
-                        set(state => ({mqttAgentState: {...agentState}}));
+                        set(state => ({
+                            mqttAgentState: {...agentState}
+                        }));
+
+                        // 如果是新代理，尝试自动注册 - 使用异步方式避免阻塞
+                        if (isNewAgent) {
+                            // 标记为MQTT发现的代理
+                            agentState[uuid]._mqttOnly = true;
+                            agentState[uuid]._autoRegister = true;
+
+                            // 异步注册
+                            Promise.resolve().then(async () => {
+                                try {
+                                    console.log(`尝试注册新发现的代理: ${uuid}`);
+
+                                    const response = await fetch('/api/agents', {
+                                        method: 'POST',
+                                        headers: {'Content-Type': 'application/json'},
+                                        body: JSON.stringify(payload)
+                                    });
+
+                                    if (response.ok) {
+                                        const data = await response.json();
+                                        console.log(`注册成功，服务器返回:`, data);
+
+                                        // 更新状态
+                                        if (agentState[uuid]) {
+                                            agentState[uuid]._id = data._id;
+                                            agentState[uuid]._autoRegister = false;
+                                            agentState[uuid]._mqttOnly = false;
+
+                                            // 通知状态变化
+                                            set(state => ({
+                                                mqttAgentState: {...agentState}
+                                            }));
+
+                                            // 触发自定义事件通知UI刷新
+                                            if (typeof window !== 'undefined') {
+                                                const event = new CustomEvent('mqtt-agent-registered', {
+                                                    detail: { uuid, agent: data }
+                                                });
+                                                window.dispatchEvent(event);
+                                            }
+                                        }
+                                    }
+                                } catch (error) {
+                                    console.error(`注册代理失败: ${uuid}`, error);
+                                }
+                            });
+                        }
                     }
                 } else if (topic === TOPICS.STATUS) {
                     // 处理状态消息（包括遗嘱消息）
                     if (payload.uuid && payload.status) {
                         const uuid = payload.uuid;
 
-                        // 检查是否在已删除列表中
+                        // 删除列表中的代理也需要处理状态更新
                         if (deletedAgents.has(uuid)) {
-                            console.log(`忽略已删除代理的状态更新: ${uuid}`);
-                            return;
+                            deletedAgents.delete(uuid);
                         }
 
                         // 更新状态
@@ -357,7 +408,8 @@ const useMqttStore = create((set, get) => {
         subscribeToResponses: (agentUuid, callback) => {
             if (!agentUuid || !callback) {
                 console.warn('订阅缺少代理UUID或回调函数');
-                return () => {};
+                return () => {
+                };
             }
 
             console.log(`正在订阅代理 ${agentUuid} 的响应`);
