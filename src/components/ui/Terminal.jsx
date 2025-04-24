@@ -36,8 +36,6 @@ const SPECIAL_INTERRUPT_COMMANDS = ['ping', 'traceroute', 'telnet', 'ssh', 'nc',
  * Web终端组件
  */
 export default function Terminal({ agentId, agentUuid, isOnline = true }) {
-    console.log('Terminal渲染，agentUuid:', agentUuid);
-    
     // MQTT Store相关功能
     const {
         connected: mqttConnected,
@@ -83,12 +81,9 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
     useEffect(() => {
         // 确保在挂载时连接MQTT
         if (isOnline && !mqttConnected) {
-            console.log('Terminal组件: 连接MQTT');
             connectMqtt().then(() => {
-                console.log('Terminal: MQTT连接成功');
                 setDebugInfo(prev => ({ ...prev, lastMqttEvent: 'MQTT连接成功' }));
             }).catch(err => {
-                console.error('Terminal: MQTT连接失败', err);
                 setInitError('MQTT连接失败，无法使用终端');
                 setDebugInfo(prev => ({ ...prev, lastMqttEvent: 'MQTT连接失败: ' + err.message }));
             });
@@ -97,103 +92,48 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
         }
     }, [isOnline, mqttConnected, connectMqtt]);
 
-    // 创建或恢复终端会话
+    // 创建终端会话，修复部分
     useEffect(() => {
         // 标记组件已挂载
         isMountedRef.current = true;
+        let mounted = true; // 用于防止在组件卸载后设置状态
 
-        // 异步初始化会话
+        // 异步初始化会话，只运行一次
         const initSession = async () => {
             if (!agentUuid || !isOnline || initAttempted) return;
 
-            setInitAttempted(true);
-            console.log('Terminal: 初始化会话，agentUuid:', agentUuid);
+            setInitAttempted(true); // 标记已尝试初始化
 
             try {
                 // 尝试确保MQTT已连接
                 if (!mqttConnected) {
-                    console.log('Terminal: MQTT未连接，尝试连接');
                     await connectMqtt();
-                    console.log('Terminal: MQTT连接成功');
                 }
 
-                // 检查是否已有会话
-                let existingSessionId = null;
-                let existingSession = null;
-
-                if (terminalSessions) {
-                    for (const [id, session] of Object.entries(terminalSessions)) {
-                        if (session && session.agentUuid === agentUuid) {
-                            existingSessionId = id;
-                            existingSession = session;
-                            console.log('找到现有会话:', existingSessionId);
-                            break;
-                        }
-                    }
-                }
-
-                if (existingSessionId && existingSession) {
-                    // 恢复现有会话
-                    console.log(`恢复终端会话: ${existingSessionId}`);
-                    setSessionId(existingSessionId);
-                    sessionRef.current = existingSessionId;
-                    setDebugInfo(prev => ({ 
-                        ...prev, 
-                        sessionId: existingSessionId,
-                        sessionFound: true
-                    }));
-
-                    // 安全地设置状态，避免直接使用引用
-                    if (existingSession.history) {
-                        console.log('恢复会话历史记录:', existingSession.history.length, '项');
-                        setHistory([...existingSession.history]);
-                    }
-
-                    if (existingSession.commandHistory) {
-                        setCommandHistory([...existingSession.commandHistory]);
-                    }
-
-                    if (existingSession.interactiveMode) {
-                        setInteractiveMode(true);
-                    }
-
-                    if (existingSession.currentCommandName) {
-                        setCurrentCommandName(existingSession.currentCommandName);
-                    }
-                } else {
-                    // 创建新会话
-                    try {
-                        const newSessionId = startTerminalSession(agentUuid);
-                        console.log(`创建新终端会话: ${newSessionId}`);
-                        setSessionId(newSessionId);
-                        sessionRef.current = newSessionId;
-                        setDebugInfo(prev => ({ 
-                            ...prev, 
-                            sessionId: newSessionId,
-                            sessionCreated: true
-                        }));
-
-                        // 添加欢迎消息
-                        setHistory([{
-                            type: 'system',
-                            text: `连接到代理 ${agentUuid} 的终端。\n` +
-                                `输入命令开始操作。输入 'help' 查看可用命令。\n` +
-                                `支持vim等交互式命令，按Ctrl+C可中断命令执行。`
-                        }]);
-                    } catch (sessionError) {
-                        console.error('创建终端会话失败:', sessionError);
-                        setInitError('创建终端会话失败，请刷新页面重试');
-                        setDebugInfo(prev => ({ ...prev, sessionError: sessionError.message }));
-                    }
+                // 创建新会话，不再查找现有会话
+                const newSessionId = startTerminalSession(agentUuid);
+                
+                if (mounted) {
+                    setSessionId(newSessionId);
+                    sessionRef.current = newSessionId;
+                    
+                    // 添加欢迎消息
+                    setHistory([{
+                        type: 'system',
+                        text: `连接到代理 ${agentUuid} 的终端。\n` +
+                            `输入命令开始操作。输入 'help' 查看可用命令。\n` +
+                            `支持vim等交互式命令，按Ctrl+C可中断命令执行。`
+                    }]);
                 }
             } catch (error) {
-                console.error('初始化终端会话时出错:', error);
-                setInitError(`初始化终端失败: ${error.message}`);
-                setHistory([{
-                    type: 'error',
-                    text: `初始化终端失败: ${error.message}`
-                }]);
-                setDebugInfo(prev => ({ ...prev, initError: error.message }));
+                if (mounted) {
+                    setInitError(`初始化终端失败: ${error.message}`);
+                    setHistory([{
+                        type: 'error',
+                        text: `初始化终端失败: ${error.message}`
+                    }]);
+                    setDebugInfo(prev => ({ ...prev, initError: error.message }));
+                }
             }
         };
 
@@ -204,33 +144,28 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
 
         // 组件卸载时清理
         return () => {
-            // 清除定时器
+            mounted = false; // 标记组件已卸载
             clearTimeout(timer);
+            
             if (savedSessionTimeoutRef.current) {
                 clearTimeout(savedSessionTimeoutRef.current);
             }
 
-            // 标记组件已卸载
             isMountedRef.current = false;
 
-            // 清除任何中断计时器
             if (interruptTimerRef.current) {
                 clearTimeout(interruptTimerRef.current);
             }
 
             // 保存会话状态
             if (sessionId) {
-                const simpleHistory = history.slice(-HISTORY_MAX_LENGTH);
-                const simpleCommandHistory = commandHistory.slice(-COMMAND_HISTORY_MAX);
-
                 try {
-                    // 确保store仍然可用
+                    // 简化保存逻辑
                     const store = useMqttStore.getState();
                     if (store && typeof store.updateTerminalSession === 'function') {
-                        // 更新会话状态
                         store.updateTerminalSession(sessionId, {
-                            history: simpleHistory,
-                            commandHistory: simpleCommandHistory,
+                            history: history.slice(-HISTORY_MAX_LENGTH),
+                            commandHistory: commandHistory.slice(-COMMAND_HISTORY_MAX),
                             interactiveMode,
                             currentCommandName
                         });
@@ -240,7 +175,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                 }
             }
         };
-    }, [mqttConnected, agentUuid, isOnline, startTerminalSession, terminalSessions, history, commandHistory, interactiveMode, sessionId, connectMqtt, initAttempted, currentCommandName]);
+    }, [mqttConnected, agentUuid, isOnline, connectMqtt, startTerminalSession]);
 
     // 强制滚动到底部的函数
     const scrollToBottom = useCallback(() => {
@@ -351,7 +286,6 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
             }]);
             
             setInputBuffer('');
-            console.log(`发送增强中断信号 #${attemptCount} - 命令: ${currentCommandName || 'unknown'}`);
 
             // 特殊命令需要更强力的中断手段
             const isSpecialCommand = currentCommandName && 
@@ -361,7 +295,6 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
             // 优先使用中断命令 API
             try {
                 await interruptCommand(sessionId);
-                console.log('已使用interruptCommand API');
             } catch (err) {
                 console.error('使用中断命令API失败:', err);
             }
@@ -375,8 +308,6 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
 
             // 对于特殊命令或重复中断，使用增强中断方法
             if (isSpecialCommand || attemptCount > 1) {
-                console.log(`使用增强中断方法 - 特殊命令: ${isSpecialCommand}, 尝试次数: ${attemptCount}`);
-                
                 // 发送 force_interrupt 命令 (最强力的中断)
                 await sendCommand(agentUuid, 'force_interrupt', {
                     sessionId,
@@ -415,7 +346,6 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                         setCurrentCommandName(null);
                     } else if (attemptCount < 3) {
                         // 如果三次尝试后仍在交互模式，则尝试更强力的中断
-                        console.log(`命令仍在运行，尝试更强力的中断方法`);
                         sendEnhancedInterrupt();
                     }
                 }, 500);
@@ -441,13 +371,6 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
             if (input !== SPECIAL_KEYS.CTRL_C) {
                 setInputBuffer(prev => prev + input);
             }
-
-            console.log(`发送交互式输入: "${input.replace('\r', '\\r').replace('\n', '\\n')}"`);
-            setDebugInfo(prev => ({ 
-                ...prev, 
-                lastInput: input.replace('\r', '\\r').replace('\n', '\\n'),
-                inputTime: new Date().toISOString() 
-            }));
 
             // 通过MQTT发送按键输入
             await sendCommand(agentUuid, 'terminal_input', {
@@ -566,7 +489,6 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                 if (interactiveMode || loading) {
                     e.preventDefault();
                     e.stopPropagation();
-                    console.log("检测到Ctrl+C，中断命令");
                     sendEnhancedInterrupt();
                     return false;
                 }
@@ -687,14 +609,6 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
         setLoading(true);
         setCommand('');
 
-        console.log('执行命令:', trimmedCommand);
-        setDebugInfo(prev => ({ 
-            ...prev, 
-            lastCommand: trimmedCommand,
-            commandName: cmdName,
-            commandTime: new Date().toISOString() 
-        }));
-
         try {
             // 内置命令处理
             if (trimmedCommand === 'clear') {
@@ -765,11 +679,8 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
 
             // 确保MQTT已连接
             if (!mqttConnected) {
-                console.log('命令执行前确保MQTT连接');
                 await connectMqtt();
             }
-
-            console.log(`发送命令到执行: ${trimmedCommand}, 会话ID: ${sessionId}, 交互式: ${isInteractive}`);
 
             // 生成请求ID
             const requestId = Math.random().toString(36).substring(2, 15);
@@ -784,8 +695,6 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                     requestId, // 传递请求ID确保能匹配响应
                     specialCommand: needsSpecialHandling // 标记是否为特殊命令
                 });
-
-                console.log('命令初始响应:', response);
                 
                 // 记录最后一条命令，用于跟踪响应
                 setLastCommand({
@@ -794,12 +703,6 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                     timestamp: Date.now()
                 });
 
-                setDebugInfo(prev => ({ 
-                    ...prev, 
-                    initialResponse: JSON.stringify(response),
-                    sentRequestId: requestId
-                }));
-
                 // 更新会话状态，记录当前命令名称
                 useMqttStore.getState().updateTerminalSession(sessionId, {
                     currentCommandName: cmdName
@@ -807,9 +710,6 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
 
                 // 直接处理首次响应
                 if (response && (response.output || response.message)) {
-                    console.log('处理首次响应输出:', 
-                        response.output?.length || 0, '字节');
-                    
                     // 添加到接收到的响应列表
                     setReceivedResponses(prev => [...prev, {
                         requestId: response.requestId || requestId,
@@ -885,7 +785,6 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
 
     // 重新初始化终端
     const reinitialize = () => {
-        console.log('重新初始化终端');
         setInitError(null);
         setInitAttempted(false);
         setSessionId(null);
@@ -906,7 +805,6 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                     // 创建新会话
                     if (agentUuid && isOnline) {
                         const newSessionId = startTerminalSession(agentUuid);
-                        console.log(`重新初始化：创建新终端会话: ${newSessionId}`);
                         setSessionId(newSessionId);
                         sessionRef.current = newSessionId;
                         setHistory([{
