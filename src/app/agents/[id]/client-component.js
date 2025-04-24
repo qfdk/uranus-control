@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {formatDistanceToNow} from 'date-fns';
 import Link from 'next/link';
@@ -26,6 +27,30 @@ import {useClientMount} from '@/hooks/useClientMount';
 import TerminalComponent from '@/components/ui/Terminal';
 import useAgentStore from '@/store/agentStore';
 import useMqttStore from '@/store/mqttStore';
+
+// 错误边界组件
+class ErrorBoundary extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = { hasError: false };
+    }
+
+    static getDerivedStateFromError(error) {
+        return { hasError: true };
+    }
+
+    componentDidCatch(error, errorInfo) {
+        console.error("终端组件错误:", error, errorInfo);
+    }
+
+    render() {
+        if (this.state.hasError) {
+            return this.props.fallback;
+        }
+
+        return this.props.children;
+    }
+}
 
 export default function AgentDetail({agent: initialAgent}) {
     const router = useRouter();
@@ -209,7 +234,7 @@ export default function AgentDetail({agent: initialAgent}) {
             setIsUpgrading(true);
             setUpgradeStatus({
                 type: 'loading',
-                message: '正在发送升级请求...',
+                content: '正在发送升级请求...',
                 show: true
             });
 
@@ -726,11 +751,33 @@ export default function AgentDetail({agent: initialAgent}) {
             {activeTab === 'terminal' && (
                 <div>
                     {agent.online ? (
-                        <TerminalComponent
-                            agentId={agent._id}
-                            agentUuid={agent.uuid}
-                            isOnline={agent.online}
-                        />
+                        <ErrorBoundary fallback={
+                            <div className="bg-white rounded-lg shadow dark:bg-gray-800 p-5 text-center">
+                                <div className="py-10">
+                                    <div
+                                        className="inline-flex items-center justify-center p-3 bg-red-100 dark:bg-red-900/30 rounded-full mb-4">
+                                        <XCircle className="w-8 h-8 text-red-500 dark:text-red-400"/>
+                                    </div>
+                                    <h3 className="text-lg font-medium text-gray-800 dark:text-white mb-2">终端组件错误</h3>
+                                    <p className="text-gray-500 dark:text-gray-400 mb-4">
+                                        加载终端组件时出现问题，请刷新页面重试
+                                    </p>
+                                    <Button
+                                        variant="primary"
+                                        onClick={() => handleTabChange('info')}
+                                    >
+                                        返回信息页面
+                                    </Button>
+                                </div>
+                            </div>
+                        }>
+                            <TerminalComponent
+                                agentId={agent._id}
+                                agentUuid={agent.uuid}
+                                isOnline={agent.online}
+                                key={`terminal-${agent.uuid}-${renderKey}`}
+                            />
+                        </ErrorBoundary>
                     ) : (
                         <div className="bg-white rounded-lg shadow dark:bg-gray-800 p-5 text-center">
                             <div className="py-10">
