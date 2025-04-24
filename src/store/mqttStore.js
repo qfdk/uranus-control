@@ -640,7 +640,6 @@ const useMqttStore = create((set, get) => {
             });
         },
 
-        // 安全地更新终端会话，避免直接修改嵌套对象
         updateTerminalSession: (sessionId, updates) => {
             set(state => {
                 try {
@@ -653,29 +652,26 @@ const useMqttStore = create((set, get) => {
                     // 创建新的会话对象
                     const newSession = {...currentSession};
         
-                    // 处理历史记录 - 简单复制，不用深度克隆
+                    // 处理历史记录
                     if (updates.history) {
                         const historyLimit = 200;
                         newSession.history = updates.history.slice(-historyLimit);
                     }
         
-                    // 处理命令历史 - 字符串数组，可以直接复制
+                    // 处理命令历史
                     if (updates.commandHistory) {
                         const commandLimit = 50;
                         newSession.commandHistory = updates.commandHistory.slice(-commandLimit);
                     }
         
-                    // 处理其他简单字段，忽略lastUpdated字段
+                    // 处理其他字段，忽略lastUpdated
                     Object.keys(updates).forEach(key => {
                         if (key !== 'history' && key !== 'commandHistory' && key !== 'lastUpdated') {
-                            // 对于简单类型直接赋值
                             if (updates[key] === null ||
                                 updates[key] === undefined ||
                                 typeof updates[key] !== 'object') {
                                 newSession[key] = updates[key];
-                            }
-                            // 对于对象类型使用浅拷贝
-                            else {
+                            } else {
                                 newSession[key] = Array.isArray(updates[key])
                                     ? [...updates[key]]
                                     : {...updates[key]};
@@ -683,7 +679,7 @@ const useMqttStore = create((set, get) => {
                         }
                     });
         
-                    // 返回新的状态对象，删除现有的lastUpdated字段
+                    // 确保删除现有的lastUpdated字段
                     if (newSession.lastUpdated) {
                         delete newSession.lastUpdated;
                     }
@@ -696,7 +692,7 @@ const useMqttStore = create((set, get) => {
                     };
                 } catch (error) {
                     console.error('更新终端会话状态失败:', error);
-                    return state; // 出错时返回原状态
+                    return state;
                 }
             });
         },
