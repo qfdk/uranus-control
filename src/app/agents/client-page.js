@@ -28,11 +28,8 @@ export default function AgentsClientPage() {
         getCombinedAgents
     } = useAgentStore();
 
-    // MQTT状态
-    const {
-        connected: mqttConnected,
-        getAgentState
-    } = useMqttStore();
+    // MQTT状态 - 只检查连接状态，不再直接使用MQTT状态
+    const {connected: mqttConnected} = useMqttStore();
 
     // 使用自定义Hook处理客户端挂载
     const isMounted = useClientMount();

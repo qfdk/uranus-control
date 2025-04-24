@@ -5,8 +5,8 @@ import {v4 as uuidv4} from 'uuid';
 
 // MQTT 主题
 const TOPICS = {
-    HEARTBEAT: 'uranus/heartbeat',    // 心跳主题
-    STATUS: 'uranus/status',          // 状态主题
+    HEARTBEAT: 'uranus/heartbeat',    // 心跳主题(全局订阅)
+    STATUS: 'uranus/status',          // 状态主题(全局订阅)
     COMMAND: 'uranus/command/',       // 命令主题前缀
     RESPONSE: 'uranus/response/'      // 响应主题前缀
 };
@@ -52,7 +52,7 @@ const getMqttConfig = () => {
 
 // 创建MQTT Store
 const useMqttStore = create((set, get) => {
-    // 静态变量 - 避免每次创建store时重新生成
+    // 静态变量
     let mqttClient = null;
     let clientId = null;
     let connectingPromise = null;
@@ -65,6 +65,10 @@ const useMqttStore = create((set, get) => {
 
     // 存储已删除的代理UUID，防止重新自动注册
     const deletedAgents = new Set();
+
+    // 存储每个代理的响应订阅
+    // 结构: { agentUuid: Map<subscriptionId, callback> }
+    const agentSubscriptions = new Map();
 
     // 中断命令功能
     const interruptCommand = (sessionId) => {
@@ -204,17 +208,19 @@ const useMqttStore = create((set, get) => {
             isConnecting = false;
             set({connected: true, error: null});
 
-            // 订阅必要主题
+            // 只订阅全局主题
             client.subscribe(TOPICS.HEARTBEAT, {qos: 0});
             client.subscribe(TOPICS.STATUS, {qos: 0});
+            console.log('已订阅全局主题: 心跳和状态');
 
-            // 如果有当前查看的代理，订阅其响应主题
-            const currentAgentUUID = get().currentAgent;
-            if (currentAgentUUID) {
-                const responseTopic = `${TOPICS.RESPONSE}${currentAgentUUID}`;
-                console.log(`订阅代理响应主题: ${responseTopic}`);
-                client.subscribe(responseTopic, {qos: 0});
-            }
+            // 恢复已保存的代理订阅
+            agentSubscriptions.forEach((handlers, agentUuid) => {
+                if (handlers.size > 0) {
+                    const responseTopic = `${TOPICS.RESPONSE}${agentUuid}`;
+                    console.log(`恢复代理订阅: ${responseTopic}`);
+                    client.subscribe(responseTopic, {qos: 0});
+                }
+            });
 
             // 恢复已保存的终端会话
             const sessions = get().terminalSessions;
@@ -288,120 +294,26 @@ const useMqttStore = create((set, get) => {
                         }
                     }
                 } else if (topic.startsWith(TOPICS.RESPONSE)) {
-                    console.log('收到响应消息:', JSON.stringify(payload));
+                    // 提取代理UUID
+                    const agentUuid = topic.substring(TOPICS.RESPONSE.length);
+                    console.log(`收到代理 ${agentUuid} 的响应`);
 
-                    // 处理命令响应
-                    const requestId = payload.requestId;
-
-                    // 检查是否与终端会话相关
-                    if (payload.sessionId) {
-                        const sessionId = payload.sessionId;
-                        const currentSessions = get().terminalSessions;
-                        const session = currentSessions[sessionId] ? {...currentSessions[sessionId]} : null;
-
-                        if (session) {
-                            console.log(`处理会话 ${sessionId} 的响应，请求ID: ${requestId}`);
-
-                            // 使用安全的状态更新方式
-                            set(state => {
-                                // 创建新的会话对象和会话集合，避免修改原始状态
-                                const newSessions = {...state.terminalSessions};
-                                const newSession = {...newSessions[sessionId]};
-
-                                // 更新会话属性
-                                newSession.lastResponse = new Date();
-
-                                // 判断是流式输出还是最终输出
-                                if (payload.streaming) {
-                                    console.log(`接收流式输出${payload.final ? '(最终)' : '(部分)'}: ${payload.output?.length || 0}字节`);
-
-                                    // 流式输出 - 追加到现有输出
-                                    let newActiveCommand = null;
-
-                                    if (!newSession.activeCommand) {
-                                        newActiveCommand = {
-                                            requestId,
-                                            output: '',
-                                            startTime: new Date()
-                                        };
-                                    } else {
-                                        newActiveCommand = {...newSession.activeCommand};
-                                    }
-
-                                    // 追加输出
-                                    const output = payload.output || payload.message || '';
-                                    newActiveCommand.output = (newActiveCommand.output || '') + output;
-                                    newSession.activeCommand = newActiveCommand;
-
-                                    // 更新历史记录
-                                    let newHistory = newSession.history ? [...newSession.history] : [];
-
-                                    // 查找或创建响应项
-                                    const responseIndex = newHistory.findIndex(
-                                        item => item.type === 'response' && item.requestId === requestId
-                                    );
-
-                                    if (responseIndex >= 0) {
-                                        // 更新现有响应
-                                        const updatedItem = {
-                                            ...newHistory[responseIndex],
-                                            text: (newHistory[responseIndex].text || '') + output
-                                        };
-                                        newHistory = [
-                                            ...newHistory.slice(0, responseIndex),
-                                            updatedItem,
-                                            ...newHistory.slice(responseIndex + 1)
-                                        ];
-                                    } else {
-                                        // 创建新的响应项
-                                        newHistory.push({
-                                            type: 'response',
-                                            requestId,
-                                            text: output,
-                                            success: payload.success !== false
-                                        });
-                                    }
-
-                                    newSession.history = newHistory;
-
-                                    // 如果是结束消息，标记命令完成
-                                    if (payload.final) {
-                                        console.log(`命令执行完成: ${requestId}`);
-                                        newSession.activeCommand = null;
-                                        newSession.interactiveMode = false;
-                                    }
-                                } else {
-                                    console.log(`收到一次性响应: ${payload.output?.length || 0}字节`);
-
-                                    // 一次性完整输出
-                                    newSession.activeCommand = null;
-                                    newSession.interactiveMode = false;
-
-                                    // 添加到历史记录
-                                    const newHistory = newSession.history ? [...newSession.history] : [];
-                                    newHistory.push({
-                                        type: 'response',
-                                        requestId,
-                                        text: payload.output || payload.message || '命令执行成功，无输出',
-                                        success: payload.success !== false
-                                    });
-                                    newSession.history = newHistory;
-                                }
-
-                                // 更新会话
-                                newSessions[sessionId] = newSession;
-
-                                return {terminalSessions: newSessions};
-                            });
-                        } else {
-                            console.warn(`收到未知会话 ${sessionId} 的响应`);
-                        }
-                    } else {
-                        console.log(`收到不包含会话ID的响应`);
+                    // 获取该代理的所有订阅处理器
+                    const handlers = agentSubscriptions.get(agentUuid);
+                    if (handlers && handlers.size > 0) {
+                        // 调用所有处理器
+                        handlers.forEach(callback => {
+                            try {
+                                callback(topic, payload);
+                            } catch (error) {
+                                console.error('响应处理器执行失败:', error);
+                            }
+                        });
                     }
 
                     // 处理挂起的命令响应
-                    if (pendingCommands.has(requestId)) {
+                    const requestId = payload.requestId;
+                    if (requestId && pendingCommands.has(requestId)) {
                         const {resolve, reject, timeoutId} = pendingCommands.get(requestId);
 
                         // 清除超时
@@ -417,27 +329,13 @@ const useMqttStore = create((set, get) => {
                             pendingCommands.delete(requestId);
 
                             // 处理响应
-                            if (payload.success) {
+                            if (payload.success !== false) {
                                 resolve(payload);
                             } else {
                                 reject(new Error(payload.message || '命令执行失败'));
                             }
                         }
                     }
-                }
-
-                // 调用订阅的响应处理器
-                if (get().responseHandlers && Object.keys(get().responseHandlers).length > 0) {
-                    // 对所有topic调用处理器，让处理器自己决定是否处理
-                    Object.values(get().responseHandlers).forEach(handler => {
-                        try {
-                            if (typeof handler === 'function') {
-                                handler(topic, payload);
-                            }
-                        } catch (handlerError) {
-                            console.error('响应处理器执行失败:', handlerError);
-                        }
-                    });
                 }
             } catch (err) {
                 console.error('解析MQTT消息失败:', err, message.toString());
@@ -452,28 +350,81 @@ const useMqttStore = create((set, get) => {
         connected: false,
         error: null,
         currentAgent: null,
-        terminalSessions,  // 导出终端会话，允许组件访问
-        responseHandlers: {}, // 存储响应处理器
+        mqttAgentState: {...agentState},  // 导出代理状态
+        terminalSessions,  // 导出终端会话
 
-        // 订阅响应消息
+        // 订阅特定代理的响应消息
         subscribeToResponses: (agentUuid, callback) => {
-            // 只订阅特定代理的主题
-            const topic = agentUuid ? `uranus/response/${agentUuid}` : 'uranus/response/#';
-            mqttClient.subscribe(topic, {qos: 0});
+            if (!agentUuid || !callback) {
+                console.warn('订阅缺少代理UUID或回调函数');
+                return () => {};
+            }
 
-            // 返回解除订阅函数
+            console.log(`正在订阅代理 ${agentUuid} 的响应`);
+
+            // 确保代理在订阅映射中
+            if (!agentSubscriptions.has(agentUuid)) {
+                agentSubscriptions.set(agentUuid, new Map());
+            }
+
+            // 生成唯一订阅ID
             const subscriptionId = uuidv4();
-            set({responseHandlers: {...get().responseHandlers, [subscriptionId]: callback}});
 
+            // 添加处理器
+            agentSubscriptions.get(agentUuid).set(subscriptionId, callback);
+
+            // 当第一个订阅者添加时，订阅MQTT主题
+            if (agentSubscriptions.get(agentUuid).size === 1) {
+                const topic = `${TOPICS.RESPONSE}${agentUuid}`;
+
+                if (mqttClient && mqttClient.connected) {
+                    console.log(`向MQTT订阅主题: ${topic}`);
+                    mqttClient.subscribe(topic, {qos: 0});
+                } else {
+                    console.log(`MQTT未连接，将在连接后订阅: ${topic}`);
+                }
+            }
+
+            // 返回取消订阅函数
             return () => {
-                mqttClient.unsubscribe(topic);
-                // 移除处理器
-                const handlers = {...get().responseHandlers};
-                delete handlers[subscriptionId];
-                set({responseHandlers: handlers});
+                console.log(`取消订阅代理 ${agentUuid} 的响应`);
+
+                // 获取代理的订阅
+                const subscriptions = agentSubscriptions.get(agentUuid);
+                if (!subscriptions) return;
+
+                // 移除订阅
+                subscriptions.delete(subscriptionId);
+
+                // 如果没有更多订阅，取消MQTT主题订阅
+                if (subscriptions.size === 0) {
+                    const topic = `${TOPICS.RESPONSE}${agentUuid}`;
+
+                    if (mqttClient && mqttClient.connected) {
+                        console.log(`从MQTT取消订阅主题: ${topic}`);
+                        mqttClient.unsubscribe(topic);
+                    }
+                }
             };
         },
-        // 初始化MQTT连接 - 防止重复连接
+
+        // 获取代理状态
+        getAgentState: (uuid) => {
+            if (uuid) {
+                return agentState[uuid] || null;
+            }
+            return {...agentState};
+        },
+
+        // 设置当前查看的代理
+        setCurrentAgent: (uuid) => {
+            if (!uuid || get().currentAgent === uuid) return;
+
+            console.log(`设置当前代理: ${uuid}`);
+            set({currentAgent: uuid});
+        },
+
+        // 初始化MQTT连接
         connect: async () => {
             // 如果已连接，直接返回
             if (get().connected && mqttClient && mqttClient.connected) {
@@ -507,21 +458,6 @@ const useMqttStore = create((set, get) => {
                         resolve(true);
                         return;
                     }
-
-                    // 设置定期清理
-                    if (cleanupInterval) clearInterval(cleanupInterval);
-                    cleanupInterval = setInterval(() => {
-                        const now = Date.now();
-                        pendingCommands.forEach(({timestamp, timeoutId}, requestId) => {
-                            // 清理超过30秒的命令
-                            if (now - timestamp > 30000) {
-                                if (timeoutId) {
-                                    clearTimeout(timeoutId);
-                                }
-                                pendingCommands.delete(requestId);
-                            }
-                        });
-                    }, 10000);
 
                     // 等待连接完成
                     const connectTimeout = setTimeout(() => {
@@ -579,27 +515,6 @@ const useMqttStore = create((set, get) => {
             }
         },
 
-        // 设置当前查看的代理
-        setCurrentAgent: (uuid) => {
-            if (!uuid || get().currentAgent === uuid) return;
-
-            console.log(`设置当前代理: ${uuid}`);
-            set({currentAgent: uuid});
-
-            if (mqttClient && mqttClient.connected) {
-                // 订阅该代理的响应主题
-                const responseTopic = `${TOPICS.RESPONSE}${uuid}`;
-                console.log(`订阅代理响应主题: ${responseTopic}`);
-                mqttClient.subscribe(responseTopic, {qos: 0}, (err) => {
-                    if (err) {
-                        console.error(`订阅主题 ${responseTopic} 失败:`, err);
-                    } else {
-                        console.log(`成功订阅主题: ${responseTopic}`);
-                    }
-                });
-            }
-        },
-
         // 标记代理为已删除
         markAgentDeleted: (uuid) => {
             if (!uuid) return;
@@ -640,13 +555,7 @@ const useMqttStore = create((set, get) => {
             if (mqttClient && mqttClient.connected) {
                 const responseTopic = `${TOPICS.RESPONSE}${agentUuid}`;
                 console.log(`为新会话订阅响应主题: ${responseTopic}`);
-                mqttClient.subscribe(responseTopic, {qos: 0}, (err) => {
-                    if (err) {
-                        console.error(`订阅主题 ${responseTopic} 失败:`, err);
-                    } else {
-                        console.log(`成功订阅主题: ${responseTopic}`);
-                    }
-                });
+                mqttClient.subscribe(responseTopic, {qos: 0});
             }
 
             return sessionId;
@@ -733,10 +642,7 @@ const useMqttStore = create((set, get) => {
         // 中断命令
         interruptCommand,
 
-        // 获取代理状态
-        getAgentState: () => ({...agentState}),
-
-        // 发送命令到代理 - 修复版，确保正确处理命令格式
+        // 发送命令到代理
         sendCommand: async (uuid, command, params = {}) => {
             // 检查MQTT连接
             if (!mqttClient || !mqttClient.connected) {
@@ -757,107 +663,61 @@ const useMqttStore = create((set, get) => {
             return new Promise((resolve, reject) => {
                 // 确保订阅了代理的响应主题
                 const responseTopic = `${TOPICS.RESPONSE}${uuid}`;
-                mqttClient.subscribe(responseTopic, {qos: 0}, (err) => {
-                    if (err) {
-                        console.error(`订阅响应主题失败: ${err.message}`);
-                        reject(new Error(`订阅响应主题失败: ${err.message}`));
-                        return;
-                    }
 
-                    console.log(`已订阅响应主题: ${responseTopic}`);
+                // 临时订阅响应主题(如果尚未订阅)
+                if (!agentSubscriptions.has(uuid) || agentSubscriptions.get(uuid).size === 0) {
+                    console.log(`临时订阅响应主题: ${responseTopic}`);
+                    mqttClient.subscribe(responseTopic, {qos: 0});
+                }
 
-                    // 创建请求ID
-                    const requestId = uuidv4();
+                // 创建请求ID
+                const requestId = params.requestId || uuidv4();
 
-                    // 构建命令消息
-                    const commandMessage = {
-                        command,              // 主命令，如'execute'
-                        requestId,            // 请求ID，用于匹配响应
-                        timestamp: Date.now(),
-                        clientId,
-                        sessionId: params.sessionId
-                    };
+                // 构建命令消息
+                const commandMessage = {
+                    command,
+                    requestId,
+                    timestamp: Date.now(),
+                    clientId
+                };
 
-                    // 保留一些关键字段在顶层
-                    if (params.sessionId) {
-                        commandMessage.sessionId = params.sessionId;
-                    }
-
-                    if (params.streaming !== undefined) {
-                        commandMessage.streaming = params.streaming;
-                    }
-
-                    if (params.interactive !== undefined) {
-                        commandMessage.interactive = params.interactive;
-                    }
-
-                    if (params.targetRequestId) {
-                        commandMessage.targetRequestId = params.targetRequestId;
-                    }
-
-                    if (params.input) {
-                        commandMessage.input = params.input;
-                    }
-
-                    // 如果需要发送命令参数，单独设置
-                    if (Object.keys(params).length > 0) {
-                        // 特殊处理，防止与顶层字段冲突
-                        commandMessage.params = {...params};
-
-                        // 如果命令是'execute'，且params中有command，特殊处理
-                        if (command === 'execute' && params.command) {
-                            // 确保这是实际要执行的命令字符串
-                            commandMessage.params = {...params};
-                        }
-                    }
-
-                    // 设置超时
-                    const timeoutId = setTimeout(() => {
-                        console.error(`命令请求超时: ${requestId}`);
-                        pendingCommands.delete(requestId);
-                        reject(new Error('命令请求超时'));
-                    }, 30000); // 30秒超时
-
-                    // 保存待处理命令
-                    pendingCommands.set(requestId, {
-                        resolve,
-                        reject,
-                        timeoutId,
-                        timestamp: Date.now()
-                    });
-
-                    // 针对终端输入命令，如果是Ctrl+C，优先使用中断命令
-                    if (command === 'terminal_input' && params.input === '\u0003' && params.sessionId) {
-                        try {
-                            interruptCommand(params.sessionId);
-                        } catch (e) {
-                            console.error('调用中断命令失败:', e);
-                        }
-                    }
-
-                    // 发布命令消息
-                    const commandTopic = `${TOPICS.COMMAND}${uuid}`;
-                    console.log(`发送命令到 ${commandTopic}:`, commandMessage);
-
-                    // 对于关键命令使用QoS 1
-                    const qos = command === 'terminal_input' || command === 'interrupt' || command === 'force_interrupt' ? 1 : 0;
-
-                    mqttClient.publish(
-                        commandTopic,
-                        JSON.stringify(commandMessage),
-                        {qos},
-                        (err) => {
-                            if (err) {
-                                console.error(`发布命令失败: ${err.message}`);
-                                clearTimeout(timeoutId);
-                                pendingCommands.delete(requestId);
-                                reject(new Error(`发送命令失败: ${err.message}`));
-                            } else {
-                                console.log(`命令已发送，等待响应: ${requestId}`);
-                            }
-                        }
-                    );
+                // 添加其他参数
+                Object.entries(params).forEach(([key, value]) => {
+                    commandMessage[key] = value;
                 });
+
+                // 设置超时
+                const timeoutId = setTimeout(() => {
+                    console.error(`命令请求超时: ${requestId}`);
+                    pendingCommands.delete(requestId);
+                    reject(new Error('命令请求超时'));
+                }, 30000); // 30秒超时
+
+                // 保存待处理命令
+                pendingCommands.set(requestId, {
+                    resolve,
+                    reject,
+                    timeoutId,
+                    timestamp: Date.now()
+                });
+
+                // 发布命令消息
+                const commandTopic = `${TOPICS.COMMAND}${uuid}`;
+                console.log(`发送命令到 ${commandTopic}:`, commandMessage);
+
+                mqttClient.publish(
+                    commandTopic,
+                    JSON.stringify(commandMessage),
+                    {qos: 0},
+                    (err) => {
+                        if (err) {
+                            console.error(`发布命令失败: ${err.message}`);
+                            clearTimeout(timeoutId);
+                            pendingCommands.delete(requestId);
+                            reject(new Error(`发送命令失败: ${err.message}`));
+                        }
+                    }
+                );
             });
         },
 

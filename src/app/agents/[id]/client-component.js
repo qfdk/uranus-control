@@ -55,7 +55,7 @@ class ErrorBoundary extends React.Component {
 export default function AgentDetail({agent: initialAgent}) {
     const router = useRouter();
     const {withLoading} = useAsyncLoading();
-    const {connected: mqttConnected, setCurrentAgent} = useMqttStore();
+    const {connected: mqttConnected, subscribeToResponses, getAgentState} = useMqttStore();
     const {deleteAgent, upgradeAgent} = useAgentStore();
 
     const [activeTab, setActiveTab] = useState('info');
@@ -79,31 +79,42 @@ export default function AgentDetail({agent: initialAgent}) {
     // 使用自定义Hook处理客户端挂载
     const isMounted = useClientMount();
 
-    // 合并MQTT代理数据
-    useEffect(() => {
-        if (agent && agent.uuid) {
-            setCurrentAgent(agent.uuid);
-        }
-    }, [agent?.uuid, setCurrentAgent]);
-
     // 监听MQTT实时状态更新
     useEffect(() => {
         if (!agent?.uuid || !mqttConnected) return;
 
-        // 从MQTT状态获取最新信息
-        const agentState = useMqttStore.getState().getAgentState();
-        if (agentState && agentState[agent.uuid]) {
-            const mqttAgentData = agentState[agent.uuid];
+        console.log('设置对代理的MQTT订阅:', agent.uuid);
 
-            // 更新关键状态
-            setAgent(prev => ({
-                ...prev,
-                online: mqttAgentData.online,
-                lastHeartbeat: mqttAgentData.lastHeartbeat || prev.lastHeartbeat,
-                _fromMqtt: true
-            }));
-        }
-    }, [agent?.uuid, mqttConnected]);
+        // 创建处理函数 - 处理代理状态更新
+        const handleAgentUpdate = (topic, message) => {
+            console.log('收到代理消息更新:', topic);
+
+            // 获取最新的代理状态
+            const mqttAgentData = getAgentState(agent.uuid);
+            if (mqttAgentData) {
+                setAgent(prev => ({
+                    ...prev,
+                    online: mqttAgentData.online,
+                    lastHeartbeat: mqttAgentData.lastHeartbeat || prev.lastHeartbeat,
+                    buildVersion: mqttAgentData.buildVersion || prev.buildVersion,
+                    buildTime: mqttAgentData.buildTime || prev.buildTime,
+                    commitId: mqttAgentData.commitId || prev.commitId,
+                    os: mqttAgentData.os || prev.os,
+                    memory: mqttAgentData.memory || prev.memory,
+                    _fromMqtt: true
+                }));
+            }
+        };
+
+        // 订阅该代理的消息
+        const unsubscribe = subscribeToResponses(agent.uuid, handleAgentUpdate);
+
+        // 组件卸载时取消订阅
+        return () => {
+            console.log('取消代理MQTT订阅:', agent.uuid);
+            unsubscribe();
+        };
+    }, [agent?.uuid, mqttConnected, subscribeToResponses, getAgentState]);
 
     // 自动清除状态消息
     useEffect(() => {
@@ -113,14 +124,6 @@ export default function AgentDetail({agent: initialAgent}) {
             }
         };
     }, []);
-
-    // 当切换到终端标签时设置当前代理
-    useEffect(() => {
-        if (activeTab === 'terminal' && agent?.uuid) {
-            console.log('终端标签已激活，设置当前代理:', agent.uuid);
-            setCurrentAgent(agent.uuid);
-        }
-    }, [activeTab, agent?.uuid, setCurrentAgent]);
 
     // 刷新代理数据
     const refreshAgentData = useCallback(async () => {
@@ -153,9 +156,6 @@ export default function AgentDetail({agent: initialAgent}) {
 
     // 处理标签切换
     const handleTabChange = (tab) => {
-        if (tab === 'terminal' && agent?.uuid) {
-            setCurrentAgent(agent.uuid);
-        }
         setActiveTab(tab);
 
         // 切换到信息标签时刷新代理数据
@@ -234,7 +234,7 @@ export default function AgentDetail({agent: initialAgent}) {
             setIsUpgrading(true);
             setUpgradeStatus({
                 type: 'loading',
-                content: '正在发送升级请求...',
+                message: '正在发送升级请求...',
                 show: true
             });
 

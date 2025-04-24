@@ -204,24 +204,20 @@ export default function TerminalComponent({  agentUuid, isOnline = true }) {
   }, [agentUuid, sessionId, isOnline, activeCommand, commandCounter, endTerminalSession, sendCommand]);
 
   // 接收MQTT消息更新
+// 接收MQTT消息更新
   useEffect(() => {
     if (!sessionId || !agentUuid) return;
 
-    // 创建响应处理器 - 只处理特定代理的消息
+    console.log(`终端组件: 订阅代理 ${agentUuid} 的响应`);
+
+    // 创建响应处理器 - 只处理当前代理的消息
     const handleMqttResponse = (topic, message) => {
       try {
-        // 只处理当前代理的响应
-        if (!topic.startsWith(`uranus/response/${agentUuid}`) || !message || !isMountedRef.current) {
-          return;
-        }
-
-        const payload = typeof message === 'string' ? JSON.parse(message) : message;
-
-        // 确保消息属于当前会话
-        if (!payload.sessionId || payload.sessionId !== sessionId) return;
+        // 只处理当前会话的响应
+        if (!message.sessionId || message.sessionId !== sessionId) return;
 
         // 从请求ID中提取命令ID
-        const requestId = payload.requestId || '';
+        const requestId = message.requestId || '';
         let commandId = null;
 
         if (requestId.startsWith('cmd-')) {
@@ -236,14 +232,14 @@ export default function TerminalComponent({  agentUuid, isOnline = true }) {
         }
 
         if (!commandId) {
-          console.warn('无法确定命令ID:', payload);
+          console.warn('无法确定命令ID:', message);
           return;
         }
 
         // 检查是否有输出或消息
-        if (payload.output !== undefined || payload.message !== undefined) {
+        if (message.output !== undefined || message.message !== undefined) {
           // 使用缓存存储完整输出，避免重复添加
-          const outputText = payload.output || payload.message || '';
+          const outputText = message.output || message.message || '';
 
           // 首次响应时初始化缓存
           if (!outputCache.current[commandId]) {
@@ -269,7 +265,7 @@ export default function TerminalComponent({  agentUuid, isOnline = true }) {
               updatedHistory[existingIndex] = {
                 ...updatedHistory[existingIndex],
                 text: currentOutput,
-                success: payload.success !== false
+                success: message.success !== false
               };
               return updatedHistory;
             } else {
@@ -278,34 +274,33 @@ export default function TerminalComponent({  agentUuid, isOnline = true }) {
                 type: 'response',
                 commandId,
                 text: currentOutput,
-                success: payload.success !== false
+                success: message.success !== false
               }];
             }
           });
         }
 
         // 当收到final标志时，重置命令状态
-        if (payload.final === true) {
+        if (message.final === true) {
           console.log(`命令 ${commandId} 执行完成，重置状态`);
           setActiveCommand(null);
         }
       } catch (err) {
         console.error('处理MQTT响应消息失败:', err);
-
         // 出错时也重置状态，防止界面卡住
         setActiveCommand(null);
       }
     };
 
-    // 设置订阅 - 指定当前代理UUID
-    const unsubscribe = useMqttStore.getState().subscribeToResponses(agentUuid,handleMqttResponse);
+    // 订阅特定代理的响应
+    const unsubscribe = useMqttStore.getState().subscribeToResponses(agentUuid, handleMqttResponse);
 
+    // 组件卸载时取消订阅
     return () => {
-      if (typeof unsubscribe === 'function') {
-        unsubscribe();
-      }
+      console.log(`终端组件: 取消订阅代理 ${agentUuid} 的响应`);
+      unsubscribe();
     };
-  }, [sessionId, agentUuid, activeCommand]);
+  }, [sessionId, agentUuid]);
 
   // 命令表单提交处理
   const handleSubmit = (e) => {
