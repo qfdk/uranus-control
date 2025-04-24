@@ -53,11 +53,11 @@ export default function TerminalComponent({ agentId, agentUuid, isOnline = true 
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [interactiveMode, setInteractiveMode] = useState(false);
   const [inputBuffer, setInputBuffer] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
-  const [currentCommand, setCurrentCommand] = useState(null);
   const [commandCounter, setCommandCounter] = useState(0);
+  
+  // 将loading改为activeCommand，更准确地追踪命令状态
+  const [activeCommand, setActiveCommand] = useState(null);
 
   // Refs
   const terminalRef = useRef(null);
@@ -68,7 +68,6 @@ export default function TerminalComponent({ agentId, agentUuid, isOnline = true 
   const isMountedRef = useRef(false);
   const interruptCountRef = useRef(0);
   const responseBufferRef = useRef({});
-  const pendingCommandRef = useRef(null);
 
   // 初始化终端会话
   useEffect(() => {
@@ -114,7 +113,7 @@ export default function TerminalComponent({ agentId, agentUuid, isOnline = true 
       // 结束终端会话
       if (sessionId) {
         try {
-          if (interactiveMode || loading) {
+          if (interactiveMode || activeCommand) {
             // 尝试中断正在执行的命令
             interruptCommand(sessionId).catch(err => 
               console.error('中断命令失败:', err)
@@ -158,14 +157,14 @@ export default function TerminalComponent({ agentId, agentUuid, isOnline = true 
     }
   }, []);
 
-  // 发送命令的核心方法
+  // 发送命令的核心方法 - 简化版
   const executeCommand = useCallback(async (cmdString) => {
     if (!cmdString.trim() || !isOnline || !sessionId || !isMountedRef.current) {
       return false;
     }
 
     // 防止并发执行
-    if (loading || pendingCommandRef.current) {
+    if (activeCommand) {
       console.log('命令正在执行中，请等待...');
       return false;
     }
@@ -187,8 +186,7 @@ export default function TerminalComponent({ agentId, agentUuid, isOnline = true 
       // 重置历史浏览索引
       setHistoryIndex(-1);
       
-      // 更新状态
-      setLoading(true);
+      // 清空输入框
       setCommand('');
       
       // 添加命令到历史记录
@@ -200,7 +198,6 @@ export default function TerminalComponent({ agentId, agentUuid, isOnline = true 
       // 处理内置命令
       if (trimmedCmd === 'clear') {
         setHistory([]);
-        setLoading(false);
         return true;
       }
 
@@ -212,7 +209,6 @@ export default function TerminalComponent({ agentId, agentUuid, isOnline = true 
         
         endTerminalSession(sessionId);
         setSessionId(null);
-        setLoading(false);
         return true;
       }
 
@@ -245,11 +241,11 @@ export default function TerminalComponent({ agentId, agentUuid, isOnline = true 
         interactive: isInteractive
       };
       
-      setCurrentCommand(commandObj);
-      pendingCommandRef.current = commandObj;
+      // 设置活动命令
+      setActiveCommand(commandObj);
 
       // 发送命令到代理
-      const response = await sendCommand(agentUuid, 'execute', {
+      await sendCommand(agentUuid, 'execute', {
         command: trimmedCmd,
         sessionId,
         streaming: true,
@@ -257,46 +253,6 @@ export default function TerminalComponent({ agentId, agentUuid, isOnline = true 
         requestId: `cmd-${cmdId}-${Date.now()}`,
         timestamp: Date.now()
       });
-
-      // 首次响应处理
-      if (response) {
-        const outputText = response.output || response.message || '';
-        
-        // 更新响应缓冲区
-        responseBufferRef.current[cmdId] = (responseBufferRef.current[cmdId] || '') + outputText;
-        
-        // 添加到历史记录
-        setHistory(prev => {
-          // 查找现有响应
-          const existingIndex = prev.findIndex(
-            item => item.type === 'response' && item.commandId === cmdId
-          );
-          
-          if (existingIndex >= 0) {
-            // 更新现有响应
-            const updatedHistory = [...prev];
-            updatedHistory[existingIndex].text = responseBufferRef.current[cmdId];
-            return updatedHistory;
-          } else {
-            // 创建新响应
-            return [...prev, {
-              type: 'response',
-              commandId: cmdId,
-              text: responseBufferRef.current[cmdId],
-              success: response.success !== false
-            }];
-          }
-        });
-
-        // 如果是最终响应，完成命令
-        if (response.final === true) {
-          console.log("收到最终响应，重置终端状态");
-          pendingCommandRef.current = null;
-          setCurrentCommand(null);
-          setLoading(false);
-          setInteractiveMode(false);
-        }
-      }
 
       return true;
     } catch (err) {
@@ -309,14 +265,12 @@ export default function TerminalComponent({ agentId, agentUuid, isOnline = true 
       }]);
       
       // 重置状态
-      pendingCommandRef.current = null;
-      setCurrentCommand(null);
-      setLoading(false);
+      setActiveCommand(null);
       setInteractiveMode(false);
       
       return false;
     }
-  }, [agentUuid, sessionId, isOnline, loading, commandCounter, endTerminalSession, sendCommand]);
+  }, [agentUuid, sessionId, isOnline, activeCommand, commandCounter, endTerminalSession, sendCommand]);
 
   // 交互式输入处理
   const sendInteractiveInput = useCallback(async (input) => {
@@ -403,8 +357,8 @@ export default function TerminalComponent({ agentId, agentUuid, isOnline = true 
       }
 
       // 如果多次尝试仍未成功，发送更强力的终止命令
-      if (attemptCount > 2 && currentCommand) {
-        const cmdParts = currentCommand.text.split(/\s+/);
+      if (attemptCount > 2 && activeCommand) {
+        const cmdParts = activeCommand.text.split(/\s+/);
         const baseCmd = cmdParts[0].toLowerCase();
         
         // 针对特定命令发送终止信号
@@ -417,25 +371,21 @@ export default function TerminalComponent({ agentId, agentUuid, isOnline = true 
         });
       }
 
-      // 在中断后重置终端状态
-      setLoading(false);
+      // 立即重置终端状态
+      setActiveCommand(null);
       setInteractiveMode(false);
-      pendingCommandRef.current = null;
-      setCurrentCommand(null);
 
       return true;
     } catch (err) {
       console.error('发送中断信号失败:', err);
       
       // 确保在错误情况下也重置状态
-      setLoading(false);
+      setActiveCommand(null);
       setInteractiveMode(false);
-      pendingCommandRef.current = null;
-      setCurrentCommand(null);
       
       return false;
     }
-  }, [sessionId, agentUuid, currentCommand, interruptCommand, sendCommand]);
+  }, [sessionId, agentUuid, activeCommand, interruptCommand, sendCommand]);
 
   // 处理键盘事件 - 改进版
   const handleKeyDown = useCallback((e) => {
@@ -449,7 +399,7 @@ export default function TerminalComponent({ agentId, agentUuid, isOnline = true 
     if (e.ctrlKey && (e.key === 'c' || e.keyCode === 67)) {
       e.preventDefault();
 
-      if (loading || interactiveMode) {
+      if (activeCommand || interactiveMode) {
         handleInterrupt();
         return;
       }
@@ -490,7 +440,7 @@ export default function TerminalComponent({ agentId, agentUuid, isOnline = true 
     // 非交互模式键盘处理
     
     // 命令提交 (Enter键)
-    if (e.key === 'Enter' && command.trim() && !loading) {
+    if (e.key === 'Enter' && command.trim() && !activeCommand) {
       e.preventDefault();
       executeCommand(command);
       return;
@@ -514,7 +464,7 @@ export default function TerminalComponent({ agentId, agentUuid, isOnline = true 
       e.preventDefault();
       inputRef.current?.focus();
     }
-  }, [command, historyIndex, commandHistory, loading, interactiveMode, executeCommand, sendInteractiveInput, handleInterrupt]);
+  }, [command, historyIndex, commandHistory, activeCommand, interactiveMode, executeCommand, sendInteractiveInput, handleInterrupt]);
 
   // 全局键盘事件处理
   useEffect(() => {
@@ -529,7 +479,7 @@ export default function TerminalComponent({ agentId, agentUuid, isOnline = true 
 
       // 特别处理Ctrl+C - 中断命令
       if (e.ctrlKey && (e.key === 'c' || e.keyCode === 67)) {
-        if (interactiveMode || loading) {
+        if (interactiveMode || activeCommand) {
           e.preventDefault();
           e.stopPropagation();
           handleInterrupt();
@@ -544,9 +494,9 @@ export default function TerminalComponent({ agentId, agentUuid, isOnline = true 
     // 使用捕获阶段确保能拦截事件
     document.addEventListener('keydown', handleGlobalKeyDown, true);
     return () => document.removeEventListener('keydown', handleGlobalKeyDown, true);
-  }, [handleKeyDown, interactiveMode, loading, handleInterrupt]);
+  }, [handleKeyDown, interactiveMode, activeCommand, handleInterrupt]);
 
-  // 接收MQTT消息更新
+  // 接收MQTT消息更新 - 简化版
   useEffect(() => {
     if (!sessionId) return;
     
@@ -559,23 +509,15 @@ export default function TerminalComponent({ agentId, agentUuid, isOnline = true 
         
         // 确保消息属于当前会话
         if (payload.sessionId && payload.sessionId === sessionId) {
-          // 检查命令状态
-          if (payload.command === 'execute' || (!payload.command && payload.output !== undefined)) {
+          console.log('收到响应:', payload);
+          
+          // 检查是否有输出或消息
+          if (payload.output !== undefined || payload.message !== undefined) {
             const outputText = payload.output || payload.message || '';
             const requestId = payload.requestId || '';
             const commandId = parseInt(requestId.split('-')[1]) || commandCounter;
             
-            // 更新响应缓冲区
-            responseBufferRef.current[commandId] = (responseBufferRef.current[commandId] || '') + outputText;
-            
-            // 命令完成状态
-            const isFinal = payload.final === true;
-            
-            // 输出调试信息
-            console.log(`收到命令响应 [${commandId}] final=${isFinal}, success=${payload.success}:`, 
-                        payload.output ? payload.output.substring(0, 100) + '...' : 'no output');
-            
-            // 更新历史记录
+            // 添加到历史记录
             setHistory(prev => {
               // 查找现有响应
               const existingIndex = prev.findIndex(
@@ -585,46 +527,40 @@ export default function TerminalComponent({ agentId, agentUuid, isOnline = true 
               if (existingIndex >= 0) {
                 // 更新现有响应
                 const updatedHistory = [...prev];
-                updatedHistory[existingIndex].text = responseBufferRef.current[commandId];
+                updatedHistory[existingIndex].text += outputText;
                 return updatedHistory;
               } else {
                 // 创建新响应
                 return [...prev, {
                   type: 'response',
                   commandId,
-                  text: responseBufferRef.current[commandId],
-                  final: isFinal,
+                  text: outputText,
                   success: payload.success !== false
                 }];
               }
             });
+          }
+          
+          // 关键：当收到final标志时，重置命令状态
+          if (payload.final === true) {
+            console.log('命令执行完成，重置状态', payload);
+            setActiveCommand(null);
             
-            // 如果是最终响应，完成命令 - 无论成功还是失败
-            if (isFinal) {
-              console.log(`命令 ${commandId} 已完成，重置终端状态`);
-              
-              if (pendingCommandRef.current && pendingCommandRef.current.id === commandId) {
-                pendingCommandRef.current = null;
-              }
-              
-              setCurrentCommand(null);
-              setLoading(false);
+            if (payload.interactiveMode === false) {
               setInteractiveMode(false);
             }
-            
-            // 交互式模式状态变更
-            if (payload.interactiveMode !== undefined) {
-              setInteractiveMode(!!payload.interactiveMode);
-            }
+          }
+          
+          // 交互式模式状态变更
+          if (payload.interactiveMode !== undefined) {
+            setInteractiveMode(!!payload.interactiveMode);
           }
         }
       } catch (err) {
-        console.error('处理MQTT响应消息失败:', err, message);
+        console.error('处理MQTT响应消息失败:', err);
         
-        // 出错时也要重置状态，防止终端卡住
-        pendingCommandRef.current = null;
-        setCurrentCommand(null);
-        setLoading(false);
+        // 出错时也重置状态，防止界面卡住
+        setActiveCommand(null);
         setInteractiveMode(false);
       }
     };
@@ -643,7 +579,7 @@ export default function TerminalComponent({ agentId, agentUuid, isOnline = true 
   const handleSubmit = (e) => {
     e?.preventDefault();
     
-    if (!command.trim() || loading || !isOnline || !sessionId) {
+    if (!command.trim() || activeCommand || !isOnline || !sessionId) {
       return;
     }
     
@@ -685,6 +621,7 @@ export default function TerminalComponent({ agentId, agentUuid, isOnline = true 
   };
 
   // 显示错误状态
+  const [error, setError] = useState(null);
   if (error) {
     return (
       <div className="rounded-lg border border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900/20 p-4 text-red-700 dark:text-red-300">
@@ -725,20 +662,14 @@ export default function TerminalComponent({ agentId, agentUuid, isOnline = true 
               交互式
             </span>
           )}
-          {loading && !interactiveMode && (
-            <span className="ml-2 text-xs px-1.5 py-0.5 bg-yellow-600 text-white rounded-full flex items-center">
-              <span className="animate-pulse mr-1">⚡</span>
-              执行中
-            </span>
-          )}
-          {currentCommand && (
+          {activeCommand && (
             <span className="ml-2 text-xs px-1.5 py-0.5 bg-gray-600 text-white rounded-full truncate max-w-32">
-              {currentCommand.text.split(/\s+/)[0]}
+              {activeCommand.text.split(/\s+/)[0]}
             </span>
           )}
         </div>
         <div className="flex space-x-2">
-          {(loading || interactiveMode) && (
+          {(activeCommand || interactiveMode) && (
             <button
               onClick={handleInterrupt}
               className="text-red-400 hover:text-red-300 p-1 rounded transition-colors"
@@ -766,9 +697,9 @@ export default function TerminalComponent({ agentId, agentUuid, isOnline = true 
         </div>
       </div>
 
-      {/* 终端输出区域 */}
+      {/* 终端输出区域 - 增加高度 */}
       <div
-        className="p-4 h-80 overflow-y-auto font-mono text-sm terminal-output"
+        className="p-4 h-[calc(100vh-350px)] min-h-[500px] overflow-y-auto font-mono text-sm terminal-output"
         style={{ backgroundColor: '#0D1117' }}
         ref={outputRef}
       >
@@ -828,23 +759,23 @@ export default function TerminalComponent({ agentId, agentUuid, isOnline = true 
           onChange={(e) => setCommand(e.target.value)}
           placeholder={
             isOnline
-              ? loading 
+              ? activeCommand 
                 ? "命令执行中..." 
                 : interactiveMode 
                   ? "交互模式中，使用键盘直接输入..." 
                   : "输入命令..."
               : "代理离线，无法执行命令"
           }
-          disabled={!isOnline || loading || interactiveMode || !sessionId}
+          disabled={!isOnline || activeCommand || interactiveMode || !sessionId}
           className="flex-1 bg-transparent border-none outline-none text-white placeholder-gray-500"
           autoComplete="off"
           spellCheck="false"
         />
         <button
           type="submit"
-          disabled={!command.trim() || !isOnline || loading || interactiveMode || !sessionId}
+          disabled={!command.trim() || !isOnline || activeCommand || interactiveMode || !sessionId}
           className={`ml-2 p-1 rounded ${
-            !command.trim() || !isOnline || loading || interactiveMode || !sessionId 
+            !command.trim() || !isOnline || activeCommand || interactiveMode || !sessionId 
               ? 'text-gray-500 cursor-not-allowed' 
               : 'text-blue-500 hover:text-blue-400'
           }`}
