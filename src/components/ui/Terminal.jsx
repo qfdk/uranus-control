@@ -287,14 +287,6 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
         const currentSession = terminalSessions[sessionId];
         if (!currentSession) return;
         
-        console.log('检测到会话状态变化:', { 
-            sessionId, 
-            historyLength: currentSession.history?.length,
-            lastUpdate: currentSession.lastUpdated,
-            hasActiveCommand: !!currentSession.activeCommand,
-            currentCommandName: currentSession.currentCommandName
-        });
-        
         // 更新当前命令名称
         if (currentSession.currentCommandName !== undefined && 
             currentSession.currentCommandName !== currentCommandName) {
