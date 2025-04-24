@@ -1,7 +1,7 @@
 // src/store/mqttStore.js
-import { create } from 'zustand';
+import {create} from 'zustand';
 import mqtt from 'mqtt';
-import { v4 as uuidv4 } from 'uuid';
+import {v4 as uuidv4} from 'uuid';
 
 // MQTT 主题
 const TOPICS = {
@@ -57,12 +57,12 @@ const useMqttStore = create((set, get) => {
     let clientId = null;
     let connectingPromise = null;
     let isConnecting = false;
-    
+
     const pendingCommands = new Map();
     const agentState = {};
     const terminalSessions = {};
     let cleanupInterval = null;
-    
+
     // 存储已删除的代理UUID，防止重新自动注册
     const deletedAgents = new Set();
 
@@ -82,15 +82,15 @@ const useMqttStore = create((set, get) => {
         set(state => {
             const currentSessions = {...state.terminalSessions};
             const currentSession = currentSessions[sessionId] ? {...currentSessions[sessionId]} : null;
-            
+
             if (!currentSession) return state;
-            
+
             currentSessions[sessionId] = {
                 ...currentSession,
                 interrupting: true
             };
-            
-            return { terminalSessions: currentSessions };
+
+            return {terminalSessions: currentSessions};
         });
 
         console.log(`尝试中断会话 ${sessionId} 的命令`);
@@ -109,7 +109,7 @@ const useMqttStore = create((set, get) => {
                             requestId: uuidv4(),
                             timestamp: Date.now()
                         }),
-                        { qos: 1 }
+                        {qos: 1}
                     );
                 }, i * 100); // 间隔100ms发送
             }
@@ -125,7 +125,7 @@ const useMqttStore = create((set, get) => {
                         targetRequestId: requestId,
                         timestamp: Date.now()
                     }),
-                    { qos: 1 }
+                    {qos: 1}
                 );
             }
 
@@ -139,7 +139,7 @@ const useMqttStore = create((set, get) => {
                         requestId: uuidv4(),
                         timestamp: Date.now()
                     }),
-                    { qos: 1 }
+                    {qos: 1}
                 );
             }, 300);
 
@@ -148,17 +148,17 @@ const useMqttStore = create((set, get) => {
                 set(state => {
                     const currentSessions = {...state.terminalSessions};
                     const currentSession = currentSessions[sessionId] ? {...currentSessions[sessionId]} : null;
-                    
+
                     if (!currentSession) return state;
-                    
+
                     currentSessions[sessionId] = {
                         ...currentSession,
                         interrupting: false,
                         interactiveMode: false,
                         activeCommand: null
                     };
-                    
-                    return { terminalSessions: currentSessions };
+
+                    return {terminalSessions: currentSessions};
                 });
             }, 800);
 
@@ -177,7 +177,7 @@ const useMqttStore = create((set, get) => {
 
         // 获取配置
         const config = getMqttConfig();
-        
+
         // 生成唯一客户端ID (仅首次)
         if (!clientId) {
             clientId = `${config.CLIENT_PREFIX}-${uuidv4()}-${Date.now()}`;
@@ -199,35 +199,35 @@ const useMqttStore = create((set, get) => {
         client.on('connect', () => {
             console.log('MQTT连接成功');
             isConnecting = false;
-            set({ connected: true, error: null });
+            set({connected: true, error: null});
 
             // 订阅必要主题
-            client.subscribe(TOPICS.HEARTBEAT, { qos: 0 });
-            client.subscribe(TOPICS.STATUS, { qos: 0 });
+            client.subscribe(TOPICS.HEARTBEAT, {qos: 0});
+            client.subscribe(TOPICS.STATUS, {qos: 0});
 
             // 如果有当前查看的代理，订阅其响应主题
             const currentAgentUUID = get().currentAgent;
             if (currentAgentUUID) {
-                client.subscribe(`${TOPICS.RESPONSE}${currentAgentUUID}`, { qos: 0 });
+                client.subscribe(`${TOPICS.RESPONSE}${currentAgentUUID}`, {qos: 0});
             }
 
             // 恢复已保存的终端会话
             const sessions = get().terminalSessions;
             Object.entries(sessions).forEach(([sessionId, session]) => {
                 if (session && session.agentUuid) {
-                    client.subscribe(`${TOPICS.RESPONSE}${session.agentUuid}`, { qos: 0 });
+                    client.subscribe(`${TOPICS.RESPONSE}${session.agentUuid}`, {qos: 0});
                 }
             });
         });
 
         client.on('error', (err) => {
             console.error('MQTT连接错误:', err);
-            set({ error: err.message });
+            set({error: err.message});
         });
 
         client.on('close', () => {
             console.log('MQTT连接关闭');
-            set({ connected: false });
+            set({connected: false});
         });
 
         client.on('reconnect', () => {
@@ -259,10 +259,9 @@ const useMqttStore = create((set, get) => {
                         };
 
                         // 通知状态变化
-                        set(state => ({ mqttAgentState: {...agentState} }));
+                        set(state => ({mqttAgentState: {...agentState}}));
                     }
-                }
-                else if (topic === TOPICS.STATUS) {
+                } else if (topic === TOPICS.STATUS) {
                     // 处理状态消息（包括遗嘱消息）
                     if (payload.uuid && payload.status) {
                         const uuid = payload.uuid;
@@ -277,11 +276,10 @@ const useMqttStore = create((set, get) => {
                         if (payload.status === 'offline' && agentState[uuid]) {
                             agentState[uuid].online = false;
                             // 通知状态变化
-                            set(state => ({ mqttAgentState: {...agentState} }));
+                            set(state => ({mqttAgentState: {...agentState}}));
                         }
                     }
-                }
-                else if (topic.startsWith(TOPICS.RESPONSE)) {
+                } else if (topic.startsWith(TOPICS.RESPONSE)) {
                     // 处理命令响应
                     const requestId = payload.requestId;
 
@@ -297,15 +295,15 @@ const useMqttStore = create((set, get) => {
                                 // 创建新的会话对象和会话集合，避免修改原始状态
                                 const newSessions = {...state.terminalSessions};
                                 const newSession = {...newSessions[sessionId]};
-                                
+
                                 // 更新会话属性
                                 newSession.lastResponse = new Date();
-                                
+
                                 // 判断是流式输出还是最终输出
                                 if (payload.streaming) {
                                     // 流式输出 - 追加到现有输出
                                     let newActiveCommand = null;
-                                    
+
                                     if (!newSession.activeCommand) {
                                         newActiveCommand = {
                                             requestId,
@@ -315,20 +313,20 @@ const useMqttStore = create((set, get) => {
                                     } else {
                                         newActiveCommand = {...newSession.activeCommand};
                                     }
-                                    
+
                                     // 追加输出
                                     const output = payload.output || payload.message || '';
                                     newActiveCommand.output = (newActiveCommand.output || '') + output;
                                     newSession.activeCommand = newActiveCommand;
-                                    
+
                                     // 更新历史记录
                                     let newHistory = newSession.history ? [...newSession.history] : [];
-                                    
+
                                     // 查找或创建响应项
                                     const responseIndex = newHistory.findIndex(
                                         item => item.type === 'response' && item.requestId === requestId
                                     );
-                                    
+
                                     if (responseIndex >= 0) {
                                         // 更新现有响应
                                         const updatedItem = {
@@ -349,9 +347,9 @@ const useMqttStore = create((set, get) => {
                                             success: payload.success !== false
                                         });
                                     }
-                                    
+
                                     newSession.history = newHistory;
-                                    
+
                                     // 如果是结束消息，标记命令完成
                                     if (payload.final) {
                                         newSession.activeCommand = null;
@@ -361,7 +359,7 @@ const useMqttStore = create((set, get) => {
                                     // 一次性完整输出
                                     newSession.activeCommand = null;
                                     newSession.interactiveMode = false;
-                                    
+
                                     // 添加到历史记录
                                     const newHistory = newSession.history ? [...newSession.history] : [];
                                     newHistory.push({
@@ -372,18 +370,18 @@ const useMqttStore = create((set, get) => {
                                     });
                                     newSession.history = newHistory;
                                 }
-                                
+
                                 // 更新会话
                                 newSessions[sessionId] = newSession;
-                                
-                                return { terminalSessions: newSessions };
+
+                                return {terminalSessions: newSessions};
                             });
                         }
                     }
 
                     // 处理挂起的命令响应
                     if (pendingCommands.has(requestId)) {
-                        const { resolve, reject, timeoutId } = pendingCommands.get(requestId);
+                        const {resolve, reject, timeoutId} = pendingCommands.get(requestId);
 
                         // 清除超时
                         if (timeoutId) {
@@ -428,31 +426,31 @@ const useMqttStore = create((set, get) => {
                 console.log('MQTT已连接，不需要重新连接');
                 return;
             }
-            
+
             // 如果正在连接中，返回等待中的Promise
             if (isConnecting && connectingPromise) {
                 console.log('MQTT正在连接中，等待连接完成');
                 return connectingPromise;
             }
-            
+
             // 设置连接状态
             isConnecting = true;
-            
+
             // 创建连接Promise
             connectingPromise = new Promise((resolve, reject) => {
                 try {
                     console.log('初始化MQTT连接...');
                     const config = getMqttConfig();
                     console.log(`连接到MQTT服务器: ${config.MQTT_BROKER}`);
-                    
+
                     // 初始化MQTT客户端
                     mqttClient = initializeMqttClient();
-                    
+
                     // 设置定期清理
                     if (cleanupInterval) clearInterval(cleanupInterval);
                     cleanupInterval = setInterval(() => {
                         const now = Date.now();
-                        pendingCommands.forEach(({ timestamp, timeoutId }, requestId) => {
+                        pendingCommands.forEach(({timestamp, timeoutId}, requestId) => {
                             // 清理超过30秒的命令
                             if (now - timestamp > 30000) {
                                 if (timeoutId) {
@@ -462,16 +460,16 @@ const useMqttStore = create((set, get) => {
                             }
                         });
                     }, 10000);
-                    
+
                     resolve();
                 } catch (error) {
                     console.error('MQTT连接初始化失败:', error);
-                    set({ error: error.message });
+                    set({error: error.message});
                     isConnecting = false;
                     reject(error);
                 }
             });
-            
+
             try {
                 await connectingPromise;
                 return true;
@@ -485,7 +483,7 @@ const useMqttStore = create((set, get) => {
         disconnect: () => {
             if (mqttClient && mqttClient.connected) {
                 mqttClient.end();
-                set({ connected: false });
+                set({connected: false});
 
                 // 清理定时器
                 if (cleanupInterval) clearInterval(cleanupInterval);
@@ -497,25 +495,25 @@ const useMqttStore = create((set, get) => {
         setCurrentAgent: (uuid) => {
             if (!uuid || get().currentAgent === uuid) return;
 
-            set({ currentAgent: uuid });
+            set({currentAgent: uuid});
 
             if (mqttClient && mqttClient.connected) {
                 // 订阅该代理的响应主题
-                mqttClient.subscribe(`${TOPICS.RESPONSE}${uuid}`, { qos: 0 });
+                mqttClient.subscribe(`${TOPICS.RESPONSE}${uuid}`, {qos: 0});
             }
         },
 
         // 标记代理为已删除
         markAgentDeleted: (uuid) => {
             if (!uuid) return;
-            
+
             console.log(`标记代理为已删除: ${uuid}`);
             deletedAgents.add(uuid);
-            
+
             // 清理该代理在agentState中的数据
             if (agentState[uuid]) {
                 delete agentState[uuid];
-                set(state => ({ mqttAgentState: {...agentState} }));
+                set(state => ({mqttAgentState: {...agentState}}));
             }
         },
 
@@ -537,7 +535,7 @@ const useMqttStore = create((set, get) => {
 
             // 确保订阅此代理的响应主题
             if (mqttClient && mqttClient.connected) {
-                mqttClient.subscribe(`${TOPICS.RESPONSE}${agentUuid}`, { qos: 0 });
+                mqttClient.subscribe(`${TOPICS.RESPONSE}${agentUuid}`, {qos: 0});
             }
 
             return sessionId;
@@ -546,7 +544,7 @@ const useMqttStore = create((set, get) => {
         endTerminalSession: (sessionId) => {
             // 获取会话信息
             const session = get().terminalSessions[sessionId];
-            
+
             // 如果会话有活动的命令，尝试中断
             if (session && session.activeCommand) {
                 try {
@@ -555,12 +553,12 @@ const useMqttStore = create((set, get) => {
                     console.error('中断会话命令失败:', e);
                 }
             }
-            
+
             // 移除会话
             set(state => {
-                const newSessions = { ...state.terminalSessions };
+                const newSessions = {...state.terminalSessions};
                 delete newSessions[sessionId];
-                return { terminalSessions: newSessions };
+                return {terminalSessions: newSessions};
             });
         },
 
@@ -571,45 +569,45 @@ const useMqttStore = create((set, get) => {
                     // 检查会话是否存在
                     const currentSessions = {...state.terminalSessions};
                     const currentSession = currentSessions[sessionId];
-                    
+
                     if (!currentSession) return state;
-                    
+
                     // 创建新的会话对象
                     const newSession = {...currentSession};
-                    
+
                     // 处理历史记录 - 简单复制，不用深度克隆
                     if (updates.history) {
                         const historyLimit = 200;
                         newSession.history = updates.history.slice(-historyLimit);
                     }
-                    
+
                     // 处理命令历史 - 字符串数组，可以直接复制
                     if (updates.commandHistory) {
                         const commandLimit = 50;
                         newSession.commandHistory = updates.commandHistory.slice(-commandLimit);
                     }
-                    
+
                     // 处理其他简单字段
                     Object.keys(updates).forEach(key => {
                         if (key !== 'history' && key !== 'commandHistory') {
                             // 对于简单类型直接赋值
-                            if (updates[key] === null || 
-                                updates[key] === undefined || 
+                            if (updates[key] === null ||
+                                updates[key] === undefined ||
                                 typeof updates[key] !== 'object') {
                                 newSession[key] = updates[key];
-                            } 
+                            }
                             // 对于对象类型使用浅拷贝
                             else {
-                                newSession[key] = Array.isArray(updates[key]) 
-                                    ? [...updates[key]] 
+                                newSession[key] = Array.isArray(updates[key])
+                                    ? [...updates[key]]
                                     : {...updates[key]};
                             }
                         }
                     });
-                    
+
                     // 添加最后更新时间
                     newSession.lastUpdated = new Date().toISOString();
-                    
+
                     // 返回新的状态对象
                     return {
                         terminalSessions: {
@@ -626,11 +624,14 @@ const useMqttStore = create((set, get) => {
 
         // 中断命令
         interruptCommand,
-        
+
         // 获取代理状态
-        getAgentState: () => ({ ...agentState }),
+        getAgentState: () => ({...agentState}),
 
         // 发送命令到代理
+// 修复前端 mqttStore.js 中的 sendCommand 函数
+// 只显示需要修改的部分
+
         sendCommand: async (uuid, command, params = {}) => {
             // 检查MQTT连接
             if (!mqttClient || !mqttClient.connected) {
@@ -649,7 +650,7 @@ const useMqttStore = create((set, get) => {
             return new Promise((resolve, reject) => {
                 // 确保订阅了代理的响应主题
                 const responseTopic = `${TOPICS.RESPONSE}${uuid}`;
-                mqttClient.subscribe(responseTopic, { qos: 0 }, (err) => {
+                mqttClient.subscribe(responseTopic, {qos: 0}, (err) => {
                     if (err) {
                         reject(new Error(`订阅响应主题失败: ${err.message}`));
                         return;
@@ -658,53 +659,55 @@ const useMqttStore = create((set, get) => {
                     // 创建请求ID
                     const requestId = uuidv4();
 
-                    // 构建命令消息
+                    // 构建命令消息 - 修改这部分
                     const commandMessage = {
-                        command,
+                        command,          // 保持原始命令名称，例如 'execute'
                         requestId,
                         timestamp: Date.now(),
                         clientId
                     };
 
-                    // 合并额外参数
-                    if (params && typeof params === 'object') {
-                        Object.assign(commandMessage, params);
+                    // 修复：确保params中的command不会覆盖外层command
+                    // 方法1: 如果params中有command字段，将其移到params对象内
+                    if (params.command) {
+                        // 创建一个新的params对象，确保原始params.command不会覆盖主命令
+                        commandMessage.params = {
+                            ...params,
+                            command: params.command  // 确保命令被正确传递
+                        };
+
+                        // 删除外层可能冲突的字段
+                        delete params.command;
+                    } else {
+                        // 如果没有命令冲突，正常添加params
+                        commandMessage.params = {...params};
+                    }
+
+                    // 添加其余参数（除了已处理的command）
+                    // 保留一些关键字段在顶层
+                    if (params.sessionId) {
+                        commandMessage.sessionId = params.sessionId;
+                    }
+
+                    if (params.streaming !== undefined) {
+                        commandMessage.streaming = params.streaming;
+                    }
+
+                    if (params.interactive !== undefined) {
+                        commandMessage.interactive = params.interactive;
+                    }
+
+                    if (params.targetRequestId) {
+                        commandMessage.targetRequestId = params.targetRequestId;
+                    }
+
+                    if (params.input) {
+                        commandMessage.input = params.input;
                     }
 
                     // 设置超时
                     const timeoutId = setTimeout(() => {
-                        if (pendingCommands.has(requestId)) {
-                            console.warn(`命令执行超时: ${command}, requestId: ${requestId}`);
-                            pendingCommands.delete(requestId);
-                            reject(new Error('命令执行超时'));
-
-                            // 如果有会话ID，更新会话状态
-                            const sessionId = params.sessionId;
-                            if (sessionId) {
-                                set(state => {
-                                    const currentSessions = {...state.terminalSessions};
-                                    const session = currentSessions[sessionId];
-                                    
-                                    if (!session) return state;
-                                    
-                                    const newSession = {...session};
-                                    newSession.activeCommand = null;
-                                    newSession.interactiveMode = false;
-                                    
-                                    // 创建新的历史记录数组
-                                    const newHistory = newSession.history ? [...newSession.history] : [];
-                                    newHistory.push({
-                                        type: 'error',
-                                        text: '命令执行超时'
-                                    });
-                                    newSession.history = newHistory;
-                                    
-                                    currentSessions[sessionId] = newSession;
-                                    
-                                    return { terminalSessions: currentSessions };
-                                });
-                            }
-                        }
+                        // 超时处理代码...
                     }, 30000); // 30秒超时
 
                     // 保存待处理命令
@@ -714,16 +717,6 @@ const useMqttStore = create((set, get) => {
                         timeoutId,
                         timestamp: Date.now()
                     });
-
-                    // 如果是会话命令，添加会话ID
-                    if (params.sessionId) {
-                        commandMessage.sessionId = params.sessionId;
-                    }
-
-                    // 如果是流式命令，添加标记
-                    if (params.streaming) {
-                        commandMessage.streaming = true;
-                    }
 
                     // 针对终端输入命令，如果是Ctrl+C，优先使用中断命令
                     if (command === 'terminal_input' && params.input === '\u0003' && params.sessionId) {
@@ -737,7 +730,7 @@ const useMqttStore = create((set, get) => {
                     // 对于关键命令使用QoS 1
                     const qos = command === 'terminal_input' || command === 'interrupt' || command === 'force_interrupt' ? 1 : 0;
 
-                    mqttClient.publish(commandTopic, JSON.stringify(commandMessage), { qos }, (err) => {
+                    mqttClient.publish(commandTopic, JSON.stringify(commandMessage), {qos}, (err) => {
                         if (err) {
                             clearTimeout(timeoutId);
                             pendingCommands.delete(requestId);
@@ -747,7 +740,6 @@ const useMqttStore = create((set, get) => {
                 });
             });
         },
-
         // Nginx相关命令 - 简化版，统一使用基础命令
         reloadNginx: (uuid) => get().sendCommand(uuid, 'reload'),
         restartNginx: (uuid) => get().sendCommand(uuid, 'restart'),
