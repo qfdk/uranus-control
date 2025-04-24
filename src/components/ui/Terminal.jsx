@@ -437,7 +437,7 @@ export default function TerminalComponent({agentUuid, isOnline = true}) {
 
             {/* 终端输出区域 */}
             <div
-                className="p-4 h-[calc(100vh-350px)] min-h-[500px] overflow-y-auto font-mono text-sm terminal-output"
+                className="p-4 h-[calc(50vh)] min-h-[300px] overflow-y-auto font-mono text-sm terminal-output"
                 style={{backgroundColor: '#0D1117'}}
                 ref={outputRef}
             >
