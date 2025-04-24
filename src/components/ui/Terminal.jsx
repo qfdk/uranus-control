@@ -58,6 +58,8 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
     const [initAttempted, setInitAttempted] = useState(false);
     const [initError, setInitError] = useState(null);
     const [debugInfo, setDebugInfo] = useState({ lastMqttEvent: null });
+    const [lastCommand, setLastCommand] = useState(null);
+    const [receivedResponses, setReceivedResponses] = useState([]);
 
     // DOM引用
     const terminalRef = useRef(null);
@@ -69,6 +71,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
     const isMountedRef = useRef(false);
     const savedSessionTimeoutRef = useRef(null);
     const isUpdatingFromStore = useRef(false);
+    const sessionRef = useRef(null);
 
     // 确保MQTT连接
     useEffect(() => {
@@ -127,6 +130,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                     // 恢复现有会话
                     console.log(`恢复终端会话: ${existingSessionId}`);
                     setSessionId(existingSessionId);
+                    sessionRef.current = existingSessionId;
                     setDebugInfo(prev => ({ 
                         ...prev, 
                         sessionId: existingSessionId,
@@ -135,6 +139,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
 
                     // 安全地设置状态，避免直接使用引用
                     if (existingSession.history) {
+                        console.log('恢复会话历史记录:', existingSession.history.length, '项');
                         setHistory([...existingSession.history]);
                     }
 
@@ -151,6 +156,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                         const newSessionId = startTerminalSession(agentUuid);
                         console.log(`创建新终端会话: ${newSessionId}`);
                         setSessionId(newSessionId);
+                        sessionRef.current = newSessionId;
                         setDebugInfo(prev => ({ 
                             ...prev, 
                             sessionId: newSessionId,
@@ -264,74 +270,84 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
         scrollToBottom();
     }, [history, interactiveMode, inputBuffer, scrollToBottom]);
 
-    // 监听新的终端输出
+    // 直接监听终端会话状态变化
     useEffect(() => {
-        if (!sessionId || !isMountedRef.current || !terminalSessions) return;
-
-        // 如果正在从store更新状态，跳过此次效果执行
-        if (isUpdatingFromStore.current) return;
-
-        const session = terminalSessions[sessionId];
-        if (!session) return;
-
-        try {
-            // 标记正在从store更新
-            isUpdatingFromStore.current = true;
-
-            // 打印会话当前状态
-            console.log('当前会话状态:', JSON.stringify({
-                sessionId,
-                hasHistory: !!session.history,
-                historyLength: session.history?.length || 0,
-                interactiveMode: session.interactiveMode,
-                activeCommand: session.activeCommand ? '有活动命令' : '无活动命令'
-            }));
-
-            // 更新本地状态，但仅在确实有变化时
-            if (session.history) {
-                // 比较当前历史记录和新的历史记录
-                let shouldUpdate = false;
-                if (history.length !== session.history.length) {
-                    shouldUpdate = true;
-                    console.log('历史记录长度变化:', history.length, '->', session.history.length);
-                } else if (session.history.length > 0 &&
-                    history.length > 0 &&
-                    JSON.stringify(session.history[session.history.length-1]) !==
-                    JSON.stringify(history[history.length-1])) {
-                    shouldUpdate = true;
-                    console.log('历史记录最后一项变化');
-                }
-
-                if (shouldUpdate) {
-                    console.log('更新历史记录');
-                    setHistory([...session.history]);
-                    // 确保滚动到底部
-                    setTimeout(scrollToBottom, 0);
-                }
-            }
-
-            // 更新其他状态，仅在确实有变化时
-            if (session && !session.activeCommand && loading) {
-                console.log('命令执行完成，取消加载状态');
+        if (!sessionId || !terminalSessions) return;
+        
+        const currentSession = terminalSessions[sessionId];
+        if (!currentSession) return;
+        
+        console.log('检测到会话状态变化:', { 
+            sessionId, 
+            historyLength: currentSession.history?.length,
+            lastUpdate: currentSession.lastUpdated,
+            hasActiveCommand: !!currentSession.activeCommand
+        });
+        
+        // 检查历史记录是否有更新
+        if (currentSession.history && currentSession.history.length > 0) {
+            // 直接更新本地历史记录状态
+            setHistory([...currentSession.history]);
+            
+            // 检查是否需要结束loading状态
+            if (!currentSession.activeCommand && loading) {
                 setLoading(false);
             }
-
-            if (session && session.interactiveMode !== undefined &&
-                session.interactiveMode !== interactiveMode) {
-                console.log('交互模式变化:', interactiveMode, '->', session.interactiveMode);
-                setInteractiveMode(session.interactiveMode);
+            
+            // 更新交互模式状态
+            if (currentSession.interactiveMode !== undefined && 
+                currentSession.interactiveMode !== interactiveMode) {
+                setInteractiveMode(currentSession.interactiveMode);
             }
-
-            // 避免阻塞渲染 - 使用微任务重置标志
-            Promise.resolve().then(() => {
-                isUpdatingFromStore.current = false;
-            });
-        } catch (error) {
-            console.error('处理终端会话数据时出错:', error);
-            setDebugInfo(prev => ({ ...prev, sessionProcessError: error.message }));
-            isUpdatingFromStore.current = false;
+            
+            // 确保滚动到底部
+            setTimeout(scrollToBottom, 0);
         }
-    }, [terminalSessions, sessionId, loading, scrollToBottom, history, interactiveMode]);
+    }, [terminalSessions, sessionId, loading, scrollToBottom, interactiveMode]);
+
+    // 监听接收到的响应
+    useEffect(() => {
+        if (lastCommand && receivedResponses.length > 0) {
+            // 找到最新响应
+            const latestResponse = receivedResponses[receivedResponses.length - 1];
+            
+            // 检查是否是最后一条命令的响应
+            if (latestResponse.requestId === lastCommand.requestId) {
+                // 添加响应到本地历史
+                setHistory(prev => {
+                    // 检查是否已有此响应
+                    const existingIndex = prev.findIndex(
+                        item => item.type === 'response' && item.requestId === latestResponse.requestId
+                    );
+                    
+                    if (existingIndex >= 0) {
+                        // 更新现有响应
+                        const updated = [...prev];
+                        updated[existingIndex] = {
+                            ...updated[existingIndex],
+                            text: latestResponse.text,
+                            success: latestResponse.success
+                        };
+                        return updated;
+                    } else {
+                        // 添加新响应
+                        return [...prev, {
+                            type: 'response',
+                            requestId: latestResponse.requestId,
+                            text: latestResponse.text,
+                            success: latestResponse.success
+                        }];
+                    }
+                });
+                
+                // 命令完成
+                if (latestResponse.final) {
+                    setLoading(false);
+                    setLastCommand(null);
+                }
+            }
+        }
+    }, [receivedResponses, lastCommand]);
 
     // 发送交互式输入
     const sendInteractiveInput = useCallback(async (input) => {
@@ -549,6 +565,49 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
         }
     }, []);
 
+    // 处理MQTT消息传递 - 直接监听处理MQTT响应
+    useEffect(() => {
+        // 设置一个消息处理函数
+        const handleMqttResponse = (topic, message) => {
+            try {
+                if (!topic.startsWith('uranus/response/') || !message) return;
+                
+                const payload = typeof message === 'string' ? JSON.parse(message) : message;
+                
+                // 只处理与当前会话相关的消息
+                if (payload.sessionId && payload.sessionId === sessionRef.current) {
+                    console.log('收到会话相关响应:', {
+                        requestId: payload.requestId,
+                        hasOutput: !!payload.output,
+                        outputLength: payload.output?.length || 0,
+                        isFinal: payload.final
+                    });
+                    
+                    // 添加到接收到的响应列表
+                    setReceivedResponses(prev => [...prev, {
+                        requestId: payload.requestId,
+                        text: payload.output || payload.message || '',
+                        success: payload.success !== false,
+                        final: payload.final,
+                        timestamp: Date.now()
+                    }]);
+                }
+            } catch (err) {
+                console.error('处理MQTT响应失败:', err);
+            }
+        };
+
+        // 如果MQTT已连接，订阅响应主题
+        if (mqttConnected && sessionId && agentUuid) {
+            const store = useMqttStore.getState();
+            if (store && typeof store.subscribeToResponses === 'function') {
+                // 注册消息处理器
+                const unsubscribe = store.subscribeToResponses(handleMqttResponse);
+                return () => unsubscribe();
+            }
+        }
+    }, [mqttConnected, sessionId, agentUuid]);
+
     // 检测交互式命令
     const isInteractiveCommand = (cmd) => {
         return /^(vim|vi|nano|emacs|less|more|top|htop|mysql|psql|mongo|ssh|telnet|tmux|screen)/i.test(cmd.trim());
@@ -606,6 +665,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                     endTerminalSession(sessionId);
                 }
                 setSessionId(null);
+                sessionRef.current = null;
                 setLoading(false);
                 return;
             }
@@ -651,21 +711,57 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
 
             console.log(`发送命令到执行: ${trimmedCommand}, 会话ID: ${sessionId}, 交互式: ${isInteractive}`);
 
-            // 发送命令执行请求 - 关键修复：确保命令格式正确
-            const response = await sendCommand(agentUuid, 'execute', {
-                command: trimmedCommand,
-                sessionId,
-                streaming: true,
-                interactive: isInteractive
-            });
+            // 生成请求ID
+            const requestId = Math.random().toString(36).substring(2, 15);
+            
+            // 发送命令执行请求
+            try {
+                const response = await sendCommand(agentUuid, 'execute', {
+                    command: trimmedCommand,
+                    sessionId,
+                    streaming: true,
+                    interactive: isInteractive,
+                    requestId // 传递请求ID确保能匹配响应
+                });
 
-            console.log('命令初始响应:', response);
-            setDebugInfo(prev => ({ 
-                ...prev, 
-                initialResponse: JSON.stringify(response)
-            }));
+                console.log('命令初始响应:', response);
+                
+                // 记录最后一条命令，用于跟踪响应
+                setLastCommand({
+                    command: trimmedCommand,
+                    requestId: requestId || response.requestId,
+                    timestamp: Date.now()
+                });
 
-            // 响应由MQTT推送更新，不需要额外处理
+                setDebugInfo(prev => ({ 
+                    ...prev, 
+                    initialResponse: JSON.stringify(response),
+                    sentRequestId: requestId
+                }));
+
+                // 直接处理首次响应
+                if (response && (response.output || response.message)) {
+                    console.log('处理首次响应输出:', 
+                        response.output?.length || 0, '字节');
+                    
+                    // 添加到接收到的响应列表
+                    setReceivedResponses(prev => [...prev, {
+                        requestId: response.requestId || requestId,
+                        text: response.output || response.message || '',
+                        success: response.success !== false,
+                        final: response.final,
+                        timestamp: Date.now()
+                    }]);
+                }
+            } catch (err) {
+                console.error('发送命令失败:', err);
+                // 添加错误消息到历史记录
+                setHistory(prev => [...prev, {
+                    type: 'error',
+                    text: `命令发送失败: ${err.message}`
+                }]);
+                setLoading(false);
+            }
         } catch (error) {
             console.error('命令执行失败:', error);
             setDebugInfo(prev => ({ ...prev, commandError: error.message }));
@@ -733,9 +829,12 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
         setInitError(null);
         setInitAttempted(false);
         setSessionId(null);
+        sessionRef.current = null;
         setHistory([]);
         setInteractiveMode(false);
         setLoading(false);
+        setLastCommand(null);
+        setReceivedResponses([]);
         setDebugInfo({});
         
         // 延迟初始化
@@ -748,6 +847,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                         const newSessionId = startTerminalSession(agentUuid);
                         console.log(`重新初始化：创建新终端会话: ${newSessionId}`);
                         setSessionId(newSessionId);
+                        sessionRef.current = newSessionId;
                         setHistory([{
                             type: 'system',
                             text: `连接到代理 ${agentUuid} 的终端。\n输入命令开始操作。`
@@ -866,7 +966,7 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                     </div>
                 ) : (
                     history.map((item, index) => (
-                        <div key={index} className="mb-2">
+                        <div key={`${index}-${item.type}-${item.requestId || ''}`} className="mb-2">
                             {item.type === 'command' ? (
                                 <div className="flex items-start">
                                     <span className="text-green-400 mr-2">$</span>
@@ -932,6 +1032,11 @@ export default function Terminal({ agentId, agentUuid, isOnline = true }) {
                             <p>MQTT连接: {mqttConnected ? '已连接' : '未连接'}</p>
                             <p>代理UUID: {agentUuid}</p>
                             <p>交互模式: {interactiveMode ? '是' : '否'}</p>
+                            <p>历史条数: {history.length}</p>
+                            <p>接收响应数: {receivedResponses.length}</p>
+                            {lastCommand && (
+                                <p>最后命令: {lastCommand.command} (ID: {lastCommand.requestId.substring(0, 8)})</p>
+                            )}
                             {Object.keys(debugInfo).length > 0 && (
                                 <pre className="mt-2 p-2 bg-gray-700 rounded overflow-auto max-h-40 text-gray-300">
                                     {JSON.stringify(debugInfo, null, 2)}
