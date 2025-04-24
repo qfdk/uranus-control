@@ -259,7 +259,7 @@ export default function TerminalComponent({ agentId, agentUuid, isOnline = true 
       });
 
       // 首次响应处理
-      if (response && (response.output || response.message)) {
+      if (response) {
         const outputText = response.output || response.message || '';
         
         // 更新响应缓冲区
@@ -289,7 +289,8 @@ export default function TerminalComponent({ agentId, agentUuid, isOnline = true 
         });
 
         // 如果是最终响应，完成命令
-        if (response.final) {
+        if (response.final === true) {
+          console.log("收到最终响应，重置终端状态");
           pendingCommandRef.current = null;
           setCurrentCommand(null);
           setLoading(false);
@@ -416,34 +417,25 @@ export default function TerminalComponent({ agentId, agentUuid, isOnline = true 
         });
       }
 
-      // 设置延迟检查交互模式
-      setTimeout(() => {
-        if (!isMountedRef.current) return;
-        
-        // 如果仍在交互模式，可能需要进一步操作
-        if (interactiveMode && attemptCount < 3) {
-          // 大于3次中断尝试，强行退出交互模式
-          if (attemptCount >= 3) {
-            setInteractiveMode(false);
-            setLoading(false);
-            setCurrentCommand(null);
-            pendingCommandRef.current = null;
-            
-            // 添加强制终止消息
-            setHistory(prev => [...prev, {
-              type: 'system',
-              text: `命令已强制终止。`
-            }]);
-          }
-        }
-      }, 500);
+      // 在中断后重置终端状态
+      setLoading(false);
+      setInteractiveMode(false);
+      pendingCommandRef.current = null;
+      setCurrentCommand(null);
 
       return true;
     } catch (err) {
       console.error('发送中断信号失败:', err);
+      
+      // 确保在错误情况下也重置状态
+      setLoading(false);
+      setInteractiveMode(false);
+      pendingCommandRef.current = null;
+      setCurrentCommand(null);
+      
       return false;
     }
-  }, [sessionId, agentUuid, currentCommand, interactiveMode, interruptCommand, sendCommand]);
+  }, [sessionId, agentUuid, currentCommand, interruptCommand, sendCommand]);
 
   // 处理键盘事件 - 改进版
   const handleKeyDown = useCallback((e) => {
@@ -568,7 +560,7 @@ export default function TerminalComponent({ agentId, agentUuid, isOnline = true 
         // 确保消息属于当前会话
         if (payload.sessionId && payload.sessionId === sessionId) {
           // 检查命令状态
-          if (payload.command === 'execute' || (!payload.command && payload.output)) {
+          if (payload.command === 'execute' || (!payload.command && payload.output !== undefined)) {
             const outputText = payload.output || payload.message || '';
             const requestId = payload.requestId || '';
             const commandId = parseInt(requestId.split('-')[1]) || commandCounter;
@@ -578,6 +570,10 @@ export default function TerminalComponent({ agentId, agentUuid, isOnline = true 
             
             // 命令完成状态
             const isFinal = payload.final === true;
+            
+            // 输出调试信息
+            console.log(`收到命令响应 [${commandId}] final=${isFinal}, success=${payload.success}:`, 
+                        payload.output ? payload.output.substring(0, 100) + '...' : 'no output');
             
             // 更新历史记录
             setHistory(prev => {
@@ -603,22 +599,33 @@ export default function TerminalComponent({ agentId, agentUuid, isOnline = true 
               }
             });
             
-            // 如果是最终响应，完成命令
-            if (isFinal && pendingCommandRef.current && pendingCommandRef.current.id === commandId) {
-              pendingCommandRef.current = null;
+            // 如果是最终响应，完成命令 - 无论成功还是失败
+            if (isFinal) {
+              console.log(`命令 ${commandId} 已完成，重置终端状态`);
+              
+              if (pendingCommandRef.current && pendingCommandRef.current.id === commandId) {
+                pendingCommandRef.current = null;
+              }
+              
               setCurrentCommand(null);
               setLoading(false);
               setInteractiveMode(false);
             }
-          }
-          
-          // 交互式模式状态变更
-          if (payload.interactiveMode !== undefined) {
-            setInteractiveMode(!!payload.interactiveMode);
+            
+            // 交互式模式状态变更
+            if (payload.interactiveMode !== undefined) {
+              setInteractiveMode(!!payload.interactiveMode);
+            }
           }
         }
       } catch (err) {
-        console.error('处理MQTT响应消息失败:', err);
+        console.error('处理MQTT响应消息失败:', err, message);
+        
+        // 出错时也要重置状态，防止终端卡住
+        pendingCommandRef.current = null;
+        setCurrentCommand(null);
+        setLoading(false);
+        setInteractiveMode(false);
       }
     };
     
