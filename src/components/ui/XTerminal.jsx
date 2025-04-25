@@ -7,8 +7,8 @@ import { FitAddon } from 'xterm-addon-fit';
 import { WebLinksAddon } from 'xterm-addon-web-links';
 import { SearchAddon } from 'xterm-addon-search';
 import { WebglAddon } from 'xterm-addon-webgl';
-import 'xterm/css/xterm.css';
 import useMqttStore from '@/store/mqttStore';
+import 'xterm/css/xterm.css';
 
 export default function XTerminal({ agentUuid, isOnline = true }) {
     // 终端和插件的引用
@@ -24,6 +24,11 @@ export default function XTerminal({ agentUuid, isOnline = true }) {
     const [error, setError] = useState(null);
     const [isTerminalReady, setIsTerminalReady] = useState(false);
     const [terminalSize, setTerminalSize] = useState({ cols: 80, rows: 24 });
+    const [inputPending, setInputPending] = useState(false);
+
+    // 输入队列，防止快速输入导致问题
+    const inputQueueRef = useRef([]);
+    const processingInputRef = useRef(false);
 
     // MQTT 状态和方法
     const {
@@ -51,6 +56,75 @@ export default function XTerminal({ agentUuid, isOnline = true }) {
             };
         }
     }, []);
+
+    // 处理输入队列，确保按顺序发送
+    const processInputQueue = async () => {
+        if (processingInputRef.current || inputQueueRef.current.length === 0) {
+            return;
+        }
+
+        processingInputRef.current = true;
+
+        try {
+            while (inputQueueRef.current.length > 0) {
+                const data = inputQueueRef.current.shift();
+                await sendTerminalInput(data);
+                // 添加小延迟确保稳定性
+                await new Promise(r => setTimeout(r, 10));
+            }
+        } catch (error) {
+            console.error('处理输入队列出错:', error);
+            if (xtermRef.current) {
+                xtermRef.current.write('\r\n\x1b[31m输入处理错误，请重试\x1b[0m\r\n');
+            }
+        } finally {
+            processingInputRef.current = false;
+        }
+    };
+
+    // 发送终端输入，改进错误处理
+    const sendTerminalInput = async (data) => {
+        if (!sessionId || !mqttConnected) {
+            throw new Error('会话未建立或MQTT未连接');
+        }
+
+        setInputPending(true);
+
+        try {
+            // 检测特殊控制字符
+            if (data.length === 1 && data.charCodeAt(0) === 3) {
+                // Ctrl+C
+                console.log('检测到Ctrl+C，发送中断信号');
+                await sendCommand(agentUuid, 'terminal_signal', {
+                    sessionId: sessionId,
+                    signal: 'CTRL_C',
+                    requestId: `signal-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+                });
+            } else if (data.length === 1 && data.charCodeAt(0) === 4) {
+                // Ctrl+D (EOF)
+                console.log('检测到Ctrl+D，发送EOF信号');
+                await sendCommand(agentUuid, 'terminal_signal', {
+                    sessionId: sessionId,
+                    signal: 'EOF',
+                    requestId: `signal-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+                });
+            } else {
+                // 普通数据
+                await sendCommand(agentUuid, 'terminal_input', {
+                    sessionId: sessionId,
+                    input: data,
+                    requestId: `input-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+                });
+            }
+
+            return true;
+        } catch (error) {
+            console.error('发送终端输入失败:', error);
+            throw error;
+        } finally {
+            setInputPending(false);
+        }
+    };
 
     // 初始化终端 - 仅在容器就绪时执行
     useEffect(() => {
@@ -168,7 +242,7 @@ export default function XTerminal({ agentUuid, isOnline = true }) {
             }
 
             // 创建会话ID (生成唯一标识)
-            const newSessionId = `term-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            const newSessionId = `term-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
             setSessionId(newSessionId);
 
             // 发送创建会话命令
@@ -182,14 +256,27 @@ export default function XTerminal({ agentUuid, isOnline = true }) {
             setConnected(true);
 
             // 订阅终端输出
-            subscribeToResponses(agentUuid, handleTerminalOutput);
+            const unsubscribe = subscribeToResponses(agentUuid, handleTerminalOutput);
 
-            // 设置终端输入处理
-            xtermRef.current.onData(data => {
-                if (newSessionId && mqttConnected) {
-                    sendTerminalInput(newSessionId, data);
+            // 确保会话建立后再设置输入处理
+            setTimeout(() => {
+                if (xtermRef.current) {
+                    // 设置终端输入处理
+                    xtermRef.current.onData(data => {
+                        if (!sessionId || inputPending) {
+                            return; // 忽略没有会话或正在处理输入时的新输入
+                        }
+
+                        // 将输入添加到队列
+                        inputQueueRef.current.push(data);
+
+                        // 处理队列
+                        if (!processingInputRef.current) {
+                            processInputQueue();
+                        }
+                    });
                 }
-            });
+            }, 500);
 
             // 通知服务器终端大小
             notifyTerminalResize(newSessionId);
@@ -214,19 +301,12 @@ export default function XTerminal({ agentUuid, isOnline = true }) {
         const { cols, rows } = terminalSize;
 
         // 使用execute命令发送窗口大小信息
-        sendCommand(agentUuid, 'execute', {
-            command: `stty rows ${rows} cols ${cols}`,
+        sendCommand(agentUuid, 'terminal_resize', {
             sessionId: sid,
-            silent: true  // 不需要响应
+            cols,
+            rows,
+            requestId: `resize-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
         }).catch(err => console.error('终端大小调整失败:', err));
-    };
-
-    // 发送终端输入
-    const sendTerminalInput = (sid, data) => {
-        sendCommand(agentUuid, 'terminal_input', {
-            sessionId: sid,
-            input: data
-        }).catch(err => console.error('发送终端输入失败:', err));
     };
 
     // 处理终端输出
@@ -240,6 +320,12 @@ export default function XTerminal({ agentUuid, isOnline = true }) {
             if (output) {
                 xtermRef.current.write(output);
             }
+
+            // 如果收到final标记，表示命令结束
+            if (message.final) {
+                console.log('终端命令执行完成');
+                // 可以在这里添加命令完成后的逻辑
+            }
         }
     };
 
@@ -250,7 +336,8 @@ export default function XTerminal({ agentUuid, isOnline = true }) {
                 // 发送退出命令
                 sendCommand(agentUuid, 'terminal_input', {
                     sessionId: sessionId,
-                    input: '\u0004'  // Ctrl+D (EOF)
+                    input: '\u0004',  // Ctrl+D (EOF)
+                    requestId: `exit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
                 }).catch(console.error);
 
                 setSessionId(null);
@@ -261,13 +348,33 @@ export default function XTerminal({ agentUuid, isOnline = true }) {
         }
     };
 
+    // 发送中断信号 (Ctrl+C)
+    const sendInterrupt = async () => {
+        if (!sessionId || !agentUuid) return;
+
+        try {
+            await sendCommand(agentUuid, 'terminal_signal', {
+                sessionId: sessionId,
+                signal: 'CTRL_C',
+                requestId: `signal-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+            });
+
+            if (xtermRef.current) {
+                // 显示中断提示，但不换行
+                xtermRef.current.write('^C');
+            }
+        } catch (err) {
+            console.error('发送中断信号失败:', err);
+        }
+    };
+
     return (
         <div className="terminal-container h-full flex flex-col">
             {error && (
-                <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4">
+                <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 dark:bg-red-900/30 dark:text-red-300 dark:border-red-600">
                     <p>{error}</p>
                     <button
-                        className="mt-2 bg-red-200 hover:bg-red-300 text-red-700 px-3 py-1 rounded"
+                        className="mt-2 bg-red-200 hover:bg-red-300 text-red-700 px-3 py-1 rounded dark:bg-red-800 dark:hover:bg-red-700 dark:text-red-300"
                         onClick={() => {
                             setError(null);
                             initTerminalSession();
@@ -295,8 +402,15 @@ export default function XTerminal({ agentUuid, isOnline = true }) {
             终端大小: {terminalSize.cols}x{terminalSize.rows}
           </span>
                 </div>
-                <div>
-                    按 Ctrl+C 中断命令 | Ctrl+L 清屏
+                <div className="flex space-x-2">
+                    <button
+                        onClick={sendInterrupt}
+                        className="px-2 py-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 rounded transition-colors"
+                        disabled={!connected || inputPending}
+                    >
+                        发送 Ctrl+C
+                    </button>
+                    <div>按 Ctrl+C 中断命令 | Ctrl+L 清屏</div>
                 </div>
             </div>
         </div>
