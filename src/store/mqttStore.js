@@ -904,7 +904,84 @@ const useMqttStore = create((set, get) => {
 
         // 中断命令
         interruptCommand,
-        
+        // 发送命令到代理 - 通用方法
+        sendCommand: async (uuid, command, params = {}) => {
+            // 检查MQTT连接
+            if (!mqttClient || !mqttClient.connected) {
+                // 尝试重新连接
+                try {
+                    console.log('MQTT未连接，尝试连接');
+                    await get().connect();
+                } catch (error) {
+                    console.error('MQTT连接失败:', error);
+                    throw new Error('MQTT客户端未连接');
+                }
+            }
+
+            if (!uuid) {
+                throw new Error('代理UUID是必需的');
+            }
+
+            return new Promise((resolve, reject) => {
+                // 确保订阅了代理的响应主题
+                const responseTopic = `${TOPICS.RESPONSE}${uuid}`;
+
+                // 临时订阅响应主题(如果尚未订阅)
+                if (!agentSubscriptions.has(uuid) || agentSubscriptions.get(uuid).size === 0) {
+                    console.log(`临时订阅响应主题: ${responseTopic}`);
+                    mqttClient.subscribe(responseTopic, {qos: 0});
+                }
+
+                // 创建请求ID
+                const requestId = params.requestId || `cmd-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+                // 构建命令消息
+                const commandMessage = {
+                    command,
+                    requestId,
+                    timestamp: Date.now(),
+                    clientId
+                };
+
+                // 添加其他参数
+                Object.entries(params).forEach(([key, value]) => {
+                    commandMessage[key] = value;
+                });
+
+                // 设置超时
+                const timeoutId = setTimeout(() => {
+                    console.error(`命令请求超时: ${requestId}`);
+                    pendingCommands.delete(requestId);
+                    reject(new Error('命令请求超时'));
+                }, 30000); // 30秒超时
+
+                // 保存待处理命令
+                pendingCommands.set(requestId, {
+                    resolve,
+                    reject,
+                    timeoutId,
+                    timestamp: Date.now()
+                });
+
+                // 发布命令消息
+                const commandTopic = `${TOPICS.COMMAND}${uuid}`;
+                console.log(`发送命令到 ${commandTopic}: ${command}`);
+
+                mqttClient.publish(
+                    commandTopic,
+                    JSON.stringify(commandMessage),
+                    {qos: 1}, // 增加QoS级别确保消息送达
+                    (err) => {
+                        if (err) {
+                            console.error(`发布命令失败: ${err.message}`);
+                            clearTimeout(timeoutId);
+                            pendingCommands.delete(requestId);
+                            reject(new Error(`发送命令失败: ${err.message}`));
+                        }
+                    }
+                );
+            });
+        },
 // handleTerminalInput 函数 - 使用更可靠的错误处理
         handleTerminalInput: (agentUuid, sessionId, input) => {
             if (!agentUuid || !sessionId) {
