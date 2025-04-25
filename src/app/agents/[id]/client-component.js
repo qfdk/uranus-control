@@ -1,7 +1,6 @@
 'use client';
 
-import React from 'react';
-import {useCallback, useEffect, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {formatDistanceToNow} from 'date-fns';
 import Link from 'next/link';
 import {
@@ -22,12 +21,10 @@ import {
 import Button from '@/components/ui/Button';
 import StatusMessage from '@/components/ui/StatusMessage';
 import {useRouter} from 'next/navigation';
-import {useAsyncLoading} from '@/lib/loading-hooks';
 import {useClientMount} from '@/hooks/useClientMount';
-import TerminalComponent from '@/components/ui/Terminal';
 import useAgentStore from '@/store/agentStore';
 import useMqttStore from '@/store/mqttStore';
-import XTerminal from "@/components/ui/XTerminal.jsx";
+import XTerminal from '@/components/ui/XTerminal.jsx';
 
 // 错误边界组件
 class ErrorBoundary extends React.Component {
@@ -41,7 +38,7 @@ class ErrorBoundary extends React.Component {
     }
 
     componentDidCatch(error, errorInfo) {
-        console.error("终端组件错误:", error, errorInfo);
+        console.error('终端组件错误:', error, errorInfo);
     }
 
     render() {
@@ -55,7 +52,6 @@ class ErrorBoundary extends React.Component {
 
 export default function AgentDetail({agent: initialAgent}) {
     const router = useRouter();
-    const {withLoading} = useAsyncLoading();
     const {connected: mqttConnected, subscribeToResponses, getAgentState} = useMqttStore();
     const {deleteAgent, upgradeAgent} = useAgentStore();
 

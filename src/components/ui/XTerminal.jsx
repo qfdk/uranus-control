@@ -1,16 +1,16 @@
 // src/components/ui/XTerminal.jsx
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
-import { Terminal } from 'xterm';
-import { FitAddon } from 'xterm-addon-fit';
-import { WebLinksAddon } from 'xterm-addon-web-links';
-import { SearchAddon } from 'xterm-addon-search';
-import { WebglAddon } from 'xterm-addon-webgl';
+import React, {useEffect, useRef, useState} from 'react';
+import {Terminal} from 'xterm';
+import {FitAddon} from 'xterm-addon-fit';
+import {WebLinksAddon} from 'xterm-addon-web-links';
+import {SearchAddon} from 'xterm-addon-search';
+import {WebglAddon} from 'xterm-addon-webgl';
 import useMqttStore from '@/store/mqttStore';
 import 'xterm/css/xterm.css';
 
-export default function XTerminal({ agentUuid, isOnline = true }) {
+export default function XTerminal({agentUuid, isOnline = true}) {
     // 终端和插件的引用
     const terminalRef = useRef(null);
     const xtermRef = useRef(null);
@@ -23,7 +23,7 @@ export default function XTerminal({ agentUuid, isOnline = true }) {
     const [connected, setConnected] = useState(false);
     const [error, setError] = useState(null);
     const [isTerminalReady, setIsTerminalReady] = useState(false);
-    const [terminalSize, setTerminalSize] = useState({ cols: 80, rows: 24 });
+    const [terminalSize, setTerminalSize] = useState({cols: 80, rows: 24});
     const [inputPending, setInputPending] = useState(false);
 
     // 输入队列，防止快速输入导致问题
@@ -44,7 +44,7 @@ export default function XTerminal({ agentUuid, isOnline = true }) {
         if (terminalRef.current) {
             // 使用ResizeObserver监控容器大小变化
             const resizeObserver = new ResizeObserver(entries => {
-                const { width, height } = entries[0].contentRect;
+                const {width, height} = entries[0].contentRect;
                 if (width > 0 && height > 0 && !isTerminalReady) {
                     setIsTerminalReady(true);
                 }
@@ -175,7 +175,7 @@ export default function XTerminal({ agentUuid, isOnline = true }) {
                 background: '#0D1117',
                 foreground: '#E5E9F0',
                 cursor: '#F8F8F8',
-                selection: 'rgba(128, 203, 196, 0.3)',
+                selection: 'rgba(128, 203, 196, 0.3)'
             },
             allowTransparency: true,
             scrollback: 10000
@@ -213,8 +213,8 @@ export default function XTerminal({ agentUuid, isOnline = true }) {
             if (fitAddonRef.current) {
                 try {
                     fitAddonRef.current.fit();
-                    const { cols, rows } = terminal;
-                    setTerminalSize({ cols, rows });
+                    const {cols, rows} = terminal;
+                    setTerminalSize({cols, rows});
                 } catch (e) {
                     console.error('调整终端大小失败:', e);
                 }
@@ -245,11 +245,11 @@ export default function XTerminal({ agentUuid, isOnline = true }) {
             if (fitAddonRef.current && xtermRef.current) {
                 try {
                     fitAddonRef.current.fit();
-                    const { cols, rows } = xtermRef.current;
+                    const {cols, rows} = xtermRef.current;
 
                     // 只有大小真正变化时才通知
                     if (terminalSize.cols !== cols || terminalSize.rows !== rows) {
-                        setTerminalSize({ cols, rows });
+                        setTerminalSize({cols, rows});
 
                         // 通知服务器
                         if (sessionId && connected) {
@@ -498,7 +498,8 @@ export default function XTerminal({ agentUuid, isOnline = true }) {
     return (
         <div className="terminal-container h-full flex flex-col">
             {error && (
-                <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 dark:bg-red-900/30 dark:text-red-300 dark:border-red-600">
+                <div
+                    className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 dark:bg-red-900/30 dark:text-red-300 dark:border-red-600">
                     <p>{error}</p>
                     <button
                         className="mt-2 bg-red-200 hover:bg-red-300 text-red-700 px-3 py-1 rounded dark:bg-red-800 dark:hover:bg-red-700 dark:text-red-300"
@@ -512,7 +513,7 @@ export default function XTerminal({ agentUuid, isOnline = true }) {
             <div
                 ref={terminalRef}
                 className="flex-grow bg-[#0D1117] rounded-lg overflow-hidden"
-                style={{ height: 'calc(60vh - 80px)', width: '100%' }}
+                style={{height: 'calc(60vh - 80px)', width: '100%'}}
             />
 
             <div className="mt-2 flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
