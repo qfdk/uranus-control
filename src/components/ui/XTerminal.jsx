@@ -29,6 +29,7 @@ export default function XTerminal({ agentUuid, isOnline = true }) {
     // 输入队列，防止快速输入导致问题
     const inputQueueRef = useRef([]);
     const processingInputRef = useRef(false);
+    const unsubscribeRef = useRef(null);
 
     // MQTT 状态和方法
     const {
@@ -82,7 +83,7 @@ export default function XTerminal({ agentUuid, isOnline = true }) {
         }
     };
 
-    // 发送终端输入，改进错误处理
+    // 发送终端输入
     const sendTerminalInput = async (data) => {
         if (!sessionId || !mqttConnected) {
             throw new Error('会话未建立或MQTT未连接');
@@ -126,8 +127,43 @@ export default function XTerminal({ agentUuid, isOnline = true }) {
         }
     };
 
-    // 初始化终端 - 仅在容器就绪时执行
-    useEffect(() => {
+    // 执行简单命令
+    const executeSimpleCommand = async (cmd) => {
+        if (!agentUuid || !mqttConnected) {
+            console.error('无法执行命令: 代理未连接或MQTT未连接');
+            return false;
+        }
+
+        try {
+            xtermRef.current.write(`${cmd}\r\n`);
+
+            // 使用独立的requestId，不与会话绑定
+            const requestId = `cmd-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+            // 修正：execute命令应发送正确的command参数
+            const response = await sendCommand(agentUuid, 'execute', {
+                command: cmd,  // 关键修复：直接使用command字段
+                requestId: requestId,
+                streaming: true
+            });
+
+            if (response && response.output) {
+                xtermRef.current.write(response.output);
+                return true;
+            }
+
+            return false;
+        } catch (error) {
+            console.error(`执行命令 ${cmd} 失败:`, error);
+            if (xtermRef.current) {
+                xtermRef.current.write(`\r\n\x1b[31m执行错误: ${error.message}\x1b[0m\r\n`);
+            }
+            return false;
+        }
+    };
+
+    // 初始化终端
+    const initTerminal = async () => {
         if (!isTerminalReady || !terminalRef.current) return;
 
         // 创建终端实例
@@ -188,17 +224,37 @@ export default function XTerminal({ agentUuid, isOnline = true }) {
             initTerminalSession();
         }, 100);
 
+        // 设置输入处理
+        terminal.onData(data => {
+            // 只有在会话存在且没有挂起输入时接受输入
+            if (!sessionId || inputPending) {
+                return;
+            }
+
+            // 加入输入队列
+            inputQueueRef.current.push(data);
+
+            // 处理队列
+            if (!processingInputRef.current) {
+                processInputQueue();
+            }
+        });
+
         // 监听窗口大小变化
         const handleResize = () => {
             if (fitAddonRef.current && xtermRef.current) {
                 try {
                     fitAddonRef.current.fit();
                     const { cols, rows } = xtermRef.current;
-                    setTerminalSize({ cols, rows });
 
-                    // 向服务器通知终端大小变化
-                    if (sessionId && connected) {
-                        notifyTerminalResize();
+                    // 只有大小真正变化时才通知
+                    if (terminalSize.cols !== cols || terminalSize.rows !== rows) {
+                        setTerminalSize({ cols, rows });
+
+                        // 通知服务器
+                        if (sessionId && connected) {
+                            notifyTerminalResize();
+                        }
                     }
                 } catch (e) {
                     console.error('窗口大小变化时调整终端失败:', e);
@@ -208,11 +264,168 @@ export default function XTerminal({ agentUuid, isOnline = true }) {
 
         window.addEventListener('resize', handleResize);
 
-        // 清理函数
         return () => {
             window.removeEventListener('resize', handleResize);
-            cleanupTerminalSession();
+        };
+    };
 
+    // 处理终端输出
+    const handleTerminalOutput = (topic, message) => {
+        if (!xtermRef.current) return;
+        // 无条件显示所有输出内容
+        const output = message?.output || message?.message || '';
+        if (output) xtermRef.current.write(output);
+        // 强制显示错误信息
+        if (message?.success === false) {
+            const errorMsg = `错误: ${message.message || '执行失败'}\r\n`;
+            xtermRef.current.write(`\r\n\x1b[31m${errorMsg}\x1b[0m`);
+        }
+    };
+
+    // 初始化终端会话
+    const initTerminalSession = async () => {
+        if (!agentUuid || !isOnline || !xtermRef.current) {
+            setError('代理离线或终端未就绪');
+            return;
+        }
+
+        try {
+            // 清理旧会话
+            if (unsubscribeRef.current) {
+                unsubscribeRef.current();
+                unsubscribeRef.current = null;
+            }
+
+            // 确保MQTT连接
+            if (!mqttConnected) {
+                xtermRef.current.writeln('\x1b[33m正在连接MQTT...\x1b[0m');
+                await connectMqtt();
+                xtermRef.current.writeln('\x1b[32mMQTT已连接\x1b[0m');
+            }
+
+            // 创建唯一会话ID
+            const newSessionId = `term-${Date.now()}`;
+            setSessionId(newSessionId);
+
+            // 初始化订阅 - 必须在执行命令前设置
+            unsubscribeRef.current = subscribeToResponses(agentUuid, handleTerminalOutput);
+
+            // 初始化会话状态
+            setConnected(false);
+            setInputPending(false);
+
+            // 显示正在连接消息
+            xtermRef.current.writeln('\x1b[33m正在创建终端会话...\x1b[0m');
+
+            // 修正：创建会话使用正确的command格式
+            try {
+                const response = await sendCommand(agentUuid, 'execute', {
+                    command: 'bash', // 关键修复：直接使用command字段
+                    sessionId: newSessionId,
+                    streaming: true,
+                    interactive: true,
+                    requestId: `session-${Date.now()}`
+                });
+
+                // 检查响应
+                if (response && response.success === false) {
+                    throw new Error(response.message || '创建会话失败');
+                }
+
+                // 会话创建成功
+                setConnected(true);
+                xtermRef.current.writeln('\x1b[32m终端会话已建立\x1b[0m\r\n');
+
+                // 通知终端大小
+                await notifyTerminalResize();
+
+                // 获取当前工作目录
+                await executeSimpleCommand('pwd');
+
+            } catch (error) {
+                console.error('创建交互式会话失败，尝试备用方法:', error);
+                xtermRef.current.writeln(`\x1b[31m创建交互式会话失败: ${error.message}\x1b[0m`);
+
+                // 备用方法：使用非交互式模式
+                try {
+                    xtermRef.current.writeln('\x1b[33m尝试使用非交互模式...\x1b[0m');
+
+                    // 修正：使用正确的command格式执行简单命令
+                    await executeSimpleCommand('echo "Using fallback mode - Type commands and press Enter"');
+                    await executeSimpleCommand('pwd');
+
+                    // 标记为连接成功但使用备用模式
+                    setConnected(true);
+
+                } catch (fallbackError) {
+                    console.error('备用模式也失败:', fallbackError);
+                    xtermRef.current.writeln(`\x1b[31m备用模式也失败: ${fallbackError.message}\x1b[0m`);
+                    setError('无法创建终端会话，请检查服务器状态');
+                }
+            }
+
+        } catch (error) {
+            console.error('初始化终端会话完全失败:', error);
+            if (xtermRef.current) {
+                xtermRef.current.writeln(`\x1b[31m终端初始化失败: ${error.message}\x1b[0m`);
+                xtermRef.current.writeln('\x1b[33m请尝试刷新页面或联系管理员\x1b[0m');
+            }
+            setError('终端会话初始化失败');
+        }
+    };
+
+    // 通知终端大小变化
+    const notifyTerminalResize = async () => {
+        if (!sessionId || !agentUuid) return false;
+
+        try {
+            console.log(`通知终端大小变化: ${terminalSize.cols}x${terminalSize.rows}`);
+
+            // 修正：使用正确的terminal_resize命令格式
+            const result = await sendCommand(agentUuid, 'terminal_resize', {
+                sessionId: sessionId,
+                cols: terminalSize.cols,
+                rows: terminalSize.rows,
+                requestId: `resize-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+            });
+
+            // 检查响应
+            if (result && result.success === false) {
+                console.warn('直接调整大小失败，尝试stty命令');
+
+                // 备用方案：使用stty命令
+                await sendCommand(agentUuid, 'execute', {
+                    command: `stty rows ${terminalSize.rows} cols ${terminalSize.cols}`, // 修正：使用正确的command字段
+                    sessionId: sessionId,
+                    requestId: `stty-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+                    silent: true
+                });
+            }
+
+            return true;
+        } catch (error) {
+            console.error('调整终端大小失败:', error);
+            return false;
+        }
+    };
+
+    // 组件挂载时初始化终端
+    useEffect(() => {
+        if (isTerminalReady && !xtermRef.current) {
+            initTerminal();
+        }
+    }, [isTerminalReady]);
+
+    // 卸载时清理资源
+    useEffect(() => {
+        return () => {
+            // 取消订阅
+            if (unsubscribeRef.current) {
+                unsubscribeRef.current();
+                unsubscribeRef.current = null;
+            }
+
+            // 清理终端资源
             if (webglAddonRef.current) {
                 try {
                     webglAddonRef.current.dispose();
@@ -229,124 +442,20 @@ export default function XTerminal({ agentUuid, isOnline = true }) {
                 }
             }
         };
-    }, [isTerminalReady]);
+    }, []);
 
-    // 初始化终端会话
-    const initTerminalSession = async () => {
-        if (!agentUuid || !isOnline || !xtermRef.current) return;
-
-        try {
-            // 确保MQTT连接
-            if (!mqttConnected) {
-                await connectMqtt();
-            }
-
-            // 创建会话ID (生成唯一标识)
-            const newSessionId = `term-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-            setSessionId(newSessionId);
-
-            // 发送创建会话命令
-            await sendCommand(agentUuid, 'execute', {
-                command: 'bash',
-                sessionId: newSessionId,
-                streaming: true,
-                interactive: true
-            });
-
-            setConnected(true);
-
-            // 订阅终端输出
-            const unsubscribe = subscribeToResponses(agentUuid, handleTerminalOutput);
-
-            // 确保会话建立后再设置输入处理
-            setTimeout(() => {
-                if (xtermRef.current) {
-                    // 设置终端输入处理
-                    xtermRef.current.onData(data => {
-                        if (!sessionId || inputPending) {
-                            return; // 忽略没有会话或正在处理输入时的新输入
-                        }
-
-                        // 将输入添加到队列
-                        inputQueueRef.current.push(data);
-
-                        // 处理队列
-                        if (!processingInputRef.current) {
-                            processInputQueue();
-                        }
-                    });
-                }
-            }, 500);
-
-            // 通知服务器终端大小
-            notifyTerminalResize(newSessionId);
-
-            xtermRef.current.writeln('\x1b[1;32m终端会话已建立.\x1b[0m');
-            xtermRef.current.writeln('');
-
-        } catch (err) {
-            console.error('初始化终端会话失败:', err);
-            setError('终端会话初始化失败: ' + (err.message || '未知错误'));
-
+    // 监听代理在线状态变化
+    useEffect(() => {
+        if (!isOnline && connected) {
+            // 代理离线显示消息
             if (xtermRef.current) {
-                xtermRef.current.writeln('\x1b[1;31m终端连接错误: ' + (err.message || '未知错误') + '\x1b[0m');
+                xtermRef.current.writeln('\r\n\x1b[31m代理已离线，终端连接已断开\x1b[0m\r\n');
             }
+            // 设置连接状态
+            setConnected(false);
+            setSessionId(null);
         }
-    };
-
-    // 向服务器通知终端大小变化
-    const notifyTerminalResize = (sid = sessionId) => {
-        if (!sid || !xtermRef.current) return;
-
-        const { cols, rows } = terminalSize;
-
-        // 使用execute命令发送窗口大小信息
-        sendCommand(agentUuid, 'terminal_resize', {
-            sessionId: sid,
-            cols,
-            rows,
-            requestId: `resize-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
-        }).catch(err => console.error('终端大小调整失败:', err));
-    };
-
-    // 处理终端输出
-    const handleTerminalOutput = (topic, message) => {
-        if (!message || !xtermRef.current) return;
-
-        // 过滤当前会话的输出
-        if (message.sessionId && message.sessionId === sessionId) {
-            // 优先使用output字段，如果没有则使用message字段
-            const output = message.output || message.message || '';
-            if (output) {
-                xtermRef.current.write(output);
-            }
-
-            // 如果收到final标记，表示命令结束
-            if (message.final) {
-                console.log('终端命令执行完成');
-                // 可以在这里添加命令完成后的逻辑
-            }
-        }
-    };
-
-    // 清理终端会话
-    const cleanupTerminalSession = () => {
-        if (sessionId && agentUuid) {
-            try {
-                // 发送退出命令
-                sendCommand(agentUuid, 'terminal_input', {
-                    sessionId: sessionId,
-                    input: '\u0004',  // Ctrl+D (EOF)
-                    requestId: `exit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
-                }).catch(console.error);
-
-                setSessionId(null);
-                setConnected(false);
-            } catch (err) {
-                console.error('终端会话清理失败:', err);
-            }
-        }
-    };
+    }, [isOnline, connected]);
 
     // 发送中断信号 (Ctrl+C)
     const sendInterrupt = async () => {
@@ -360,12 +469,30 @@ export default function XTerminal({ agentUuid, isOnline = true }) {
             });
 
             if (xtermRef.current) {
-                // 显示中断提示，但不换行
+                // 显示中断提示
                 xtermRef.current.write('^C');
             }
         } catch (err) {
             console.error('发送中断信号失败:', err);
         }
+    };
+
+    // 重新连接终端
+    const retryConnection = () => {
+        setError(null);
+
+        // 重置状态
+        setSessionId(null);
+        setConnected(false);
+
+        // 清理终端显示
+        if (xtermRef.current) {
+            xtermRef.current.clear();
+            xtermRef.current.writeln('\x1b[33m正在重新连接...\x1b[0m');
+        }
+
+        // 重新初始化终端会话
+        initTerminalSession();
     };
 
     return (
@@ -375,10 +502,7 @@ export default function XTerminal({ agentUuid, isOnline = true }) {
                     <p>{error}</p>
                     <button
                         className="mt-2 bg-red-200 hover:bg-red-300 text-red-700 px-3 py-1 rounded dark:bg-red-800 dark:hover:bg-red-700 dark:text-red-300"
-                        onClick={() => {
-                            setError(null);
-                            initTerminalSession();
-                        }}
+                        onClick={retryConnection}
                     >
                         重试连接
                     </button>
@@ -399,8 +523,8 @@ export default function XTerminal({ agentUuid, isOnline = true }) {
                         <span className="text-red-500 dark:text-red-400">● 未连接</span>
                     )}
                     <span className="ml-2">
-            终端大小: {terminalSize.cols}x{terminalSize.rows}
-          </span>
+                        终端大小: {terminalSize.cols}x{terminalSize.rows}
+                    </span>
                 </div>
                 <div className="flex space-x-2">
                     <button
@@ -409,6 +533,12 @@ export default function XTerminal({ agentUuid, isOnline = true }) {
                         disabled={!connected || inputPending}
                     >
                         发送 Ctrl+C
+                    </button>
+                    <button
+                        onClick={retryConnection}
+                        className="px-2 py-1 bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/30 dark:hover:bg-blue-800/40 rounded transition-colors text-blue-700 dark:text-blue-300"
+                    >
+                        重新连接
                     </button>
                     <div>按 Ctrl+C 中断命令 | Ctrl+L 清屏</div>
                 </div>

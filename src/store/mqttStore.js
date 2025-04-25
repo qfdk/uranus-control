@@ -324,7 +324,7 @@ const useMqttStore = create((set, get) => {
 
         client.on('message', (topic, message) => {
             try {
-                console.log(`收到MQTT消息，主题: ${topic}, 长度: ${message.length}字节`);
+                // console.log(`收到MQTT消息，主题: ${topic}, 长度: ${message.length}字节`);
                 const payload = JSON.parse(message.toString());
 
                 if (topic === TOPICS.HEARTBEAT) {
@@ -453,9 +453,6 @@ const useMqttStore = create((set, get) => {
                                     }
                                 }
                             });
-                        } else if (!isNewAgent && isInHttpList) {
-                            // 已知代理在列表中，只更新状态，无需刷新列表
-                            console.log(`更新已知代理状态: ${uuid}`);
                         }
                     }
                 } else if (topic === TOPICS.STATUS) {
@@ -659,14 +656,6 @@ const useMqttStore = create((set, get) => {
             return {...agentState};
         },
 
-        // 设置当前查看的代理
-        setCurrentAgent: (uuid) => {
-            if (!uuid || get().currentAgent === uuid) return;
-
-            console.log(`设置当前代理: ${uuid}`);
-            set({currentAgent: uuid});
-        },
-
         // 初始化MQTT连接
         connect: async () => {
             // 如果已连接，直接返回
@@ -823,89 +812,9 @@ const useMqttStore = create((set, get) => {
 
             return sessionId;
         },
-
-        endTerminalSession: (sessionId) => {
-            // 获取会话信息
-            const session = get().terminalSessions[sessionId];
-
-            // 如果会话有活动的命令，尝试中断
-            if (session && session.activeCommand) {
-                try {
-                    interruptCommand(sessionId);
-                } catch (e) {
-                    console.error('中断会话命令失败:', e);
-                }
-            }
-
-            // 移除会话
-            set(state => {
-                const newSessions = {...state.terminalSessions};
-                delete newSessions[sessionId];
-                return {terminalSessions: newSessions};
-            });
-        },
-
-        updateTerminalSession: (sessionId, updates) => {
-            set(state => {
-                try {
-                    // 检查会话是否存在
-                    const currentSessions = {...state.terminalSessions};
-                    const currentSession = currentSessions[sessionId];
-
-                    if (!currentSession) return state;
-
-                    // 创建新的会话对象
-                    const newSession = {...currentSession};
-
-                    // 处理历史记录
-                    if (updates.history) {
-                        const historyLimit = 200;
-                        newSession.history = updates.history.slice(-historyLimit);
-                    }
-
-                    // 处理命令历史
-                    if (updates.commandHistory) {
-                        const commandLimit = 50;
-                        newSession.commandHistory = updates.commandHistory.slice(-commandLimit);
-                    }
-
-                    // 处理其他字段，忽略lastUpdated
-                    Object.keys(updates).forEach(key => {
-                        if (key !== 'history' && key !== 'commandHistory' && key !== 'lastUpdated') {
-                            if (updates[key] === null ||
-                                updates[key] === undefined ||
-                                typeof updates[key] !== 'object') {
-                                newSession[key] = updates[key];
-                            } else {
-                                newSession[key] = Array.isArray(updates[key])
-                                    ? [...updates[key]]
-                                    : {...updates[key]};
-                            }
-                        }
-                    });
-
-                    // 确保删除现有的lastUpdated字段
-                    if (newSession.lastUpdated) {
-                        delete newSession.lastUpdated;
-                    }
-
-                    return {
-                        terminalSessions: {
-                            ...currentSessions,
-                            [sessionId]: newSession
-                        }
-                    };
-                } catch (error) {
-                    console.error('更新终端会话状态失败:', error);
-                    return state;
-                }
-            });
-        },
-
         // 中断命令
         interruptCommand,
-        // 发送命令到代理 - 通用方法
-        sendCommand: async (uuid, command, params = {}) => {
+        sendCommand: async (uuid, commandType, params = {}) => {
             // 检查MQTT连接
             if (!mqttClient || !mqttClient.connected) {
                 // 尝试重新连接
@@ -914,7 +823,7 @@ const useMqttStore = create((set, get) => {
                     await get().connect();
                 } catch (error) {
                     console.error('MQTT连接失败:', error);
-                    throw new Error('MQTT客户端未连接');
+                    throw new Error(`MQTT未连接: ${error.message}`);
                 }
             }
 
@@ -935,17 +844,29 @@ const useMqttStore = create((set, get) => {
                 // 创建请求ID
                 const requestId = params.requestId || `cmd-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
-                // 构建命令消息
+                // 构建命令消息 - 修复execute命令格式
                 const commandMessage = {
-                    command,
+                    command: commandType,
                     requestId,
                     timestamp: Date.now(),
                     clientId
                 };
 
+                // 特殊处理execute命令 - 修复关键点
+                if (commandType === 'execute') {
+                    if (!params.command) {
+                        return reject(new Error('execute命令必须提供command参数'));
+                    }
+                    // 直接将command参数设置到最上层
+                    commandMessage.command = params.command;
+                }
+
                 // 添加其他参数
                 Object.entries(params).forEach(([key, value]) => {
-                    commandMessage[key] = value;
+                    // 跳过command参数(已经处理过)
+                    if (key !== 'command' || commandType !== 'execute') {
+                        commandMessage[key] = value;
+                    }
                 });
 
                 // 设置超时
@@ -965,11 +886,21 @@ const useMqttStore = create((set, get) => {
 
                 // 发布命令消息
                 const commandTopic = `${TOPICS.COMMAND}${uuid}`;
-                console.log(`发送命令到 ${commandTopic}: ${command}`);
+                console.log(`发送命令到 ${commandTopic}:`, commandMessage);
+
+                // 确保序列化成功
+                let messageText;
+                try {
+                    messageText = JSON.stringify(commandMessage);
+                } catch (err) {
+                    clearTimeout(timeoutId);
+                    pendingCommands.delete(requestId);
+                    return reject(new Error(`序列化命令失败: ${err.message}`));
+                }
 
                 mqttClient.publish(
                     commandTopic,
-                    JSON.stringify(commandMessage),
+                    messageText,
                     {qos: 1}, // 增加QoS级别确保消息送达
                     (err) => {
                         if (err) {
@@ -982,137 +913,7 @@ const useMqttStore = create((set, get) => {
                 );
             });
         },
-// handleTerminalInput 函数 - 使用更可靠的错误处理
-        handleTerminalInput: (agentUuid, sessionId, input) => {
-            if (!agentUuid || !sessionId) {
-                console.error('无法发送终端输入: 参数不完整');
-                return Promise.reject(new Error('参数不完整'));
-            }
 
-            if (!mqttClient || !mqttClient.connected) {
-                console.error('无法发送终端输入: MQTT未连接');
-                return Promise.reject(new Error('MQTT未连接'));
-            }
-
-            return new Promise((resolve, reject) => {
-                try {
-                    const requestId = `term-input-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-                    const commandTopic = `${TOPICS.COMMAND}${agentUuid}`;
-                    const message = {
-                        command: 'terminal_input',
-                        sessionId: sessionId,
-                        input: input,
-                        requestId: requestId,
-                        timestamp: Date.now()
-                    };
-
-                    console.log(`向代理 ${agentUuid} 发送终端输入命令, sessionId: ${sessionId}`);
-
-                    mqttClient.publish(
-                        commandTopic,
-                        JSON.stringify(message),
-                        {qos: 1},
-                        (err) => {
-                            if (err) {
-                                console.error(`发布终端输入失败: ${err.message}`);
-                                reject(new Error(`发送终端输入失败: ${err.message}`));
-                                return;
-                            }
-                            resolve(true);
-                        }
-                    );
-                } catch (err) {
-                    console.error('准备终端输入消息时出错:', err);
-                    reject(new Error(`准备终端输入消息失败: ${err.message}`));
-                }
-            });
-        },
-
-// 添加终端大小调整函数 - 用于支持调整终端大小
-        resizeTerminal: (agentUuid, sessionId, cols, rows) => {
-            if (!agentUuid || !sessionId) {
-                console.error('无法调整终端大小: 参数不完整');
-                return Promise.reject(new Error('参数不完整'));
-            }
-
-            if (!mqttClient || !mqttClient.connected) {
-                console.error('无法调整终端大小: MQTT未连接');
-                return Promise.reject(new Error('MQTT未连接'));
-            }
-
-            // 使用兼容方式调整终端大小 - 使用execute命令发送stty命令
-            return get().sendCommand(agentUuid, 'execute', {
-                command: `stty rows ${rows} cols ${cols}`,
-                sessionId: sessionId,
-                requestId: `resize-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-                silent: true
-            });
-        },
-
-// 发送终端信号函数 - 用于处理Ctrl+C等控制信号
-        sendTerminalSignal: (agentUuid, sessionId, signal) => {
-            if (!agentUuid || !sessionId) {
-                console.error('无法发送终端信号: 参数不完整');
-                return Promise.reject(new Error('参数不完整'));
-            }
-
-            if (!mqttClient || !mqttClient.connected) {
-                console.error('无法发送终端信号: MQTT未连接');
-                return Promise.reject(new Error('MQTT未连接'));
-            }
-
-            // 区分不同的信号类型，使用兼容的方式发送
-            switch (signal) {
-                case 'CTRL_C':
-                case 'SIGINT':
-                    // 首先尝试使用terminal_input发送Ctrl+C字符
-                    return get().sendCommand(agentUuid, 'terminal_input', {
-                        sessionId: sessionId,
-                        input: '\u0003', // Ctrl+C
-                        requestId: `signal-input-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
-                    })
-                        .then(() => {
-                            // 接着使用execute命令发送kill命令作为备份方法
-                            return get().sendCommand(agentUuid, 'execute', {
-                                command: 'kill -INT -$$',  // 向当前进程组发送SIGINT
-                                sessionId: sessionId,
-                                requestId: `signal-exec-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-                                silent: true
-                            });
-                        })
-                        .catch(err => {
-                            console.error('发送SIGINT信号失败:', err);
-                            // 尝试另一种兼容方法
-                            return get().sendCommand(agentUuid, 'execute', {
-                                command: 'pkill -INT -g $$',  // 尝试使用pkill
-                                sessionId: sessionId,
-                                requestId: `signal-pkill-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-                                silent: true
-                            });
-                        });
-
-                case 'CTRL_D':
-                case 'EOF':
-                    // EOF信号只需要发送字符即可
-                    return get().sendCommand(agentUuid, 'terminal_input', {
-                        sessionId: sessionId,
-                        input: '\u0004', // Ctrl+D
-                        requestId: `signal-eof-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
-                    });
-
-                case 'SIGTERM':
-                    // 使用execute命令发送SIGTERM
-                    return get().sendCommand(agentUuid, 'execute', {
-                        command: 'kill -TERM -$$',  // 向当前进程组发送SIGTERM
-                        sessionId: sessionId,
-                        requestId: `signal-term-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-                        silent: true
-                    });
-
-                default:
-                    return Promise.reject(new Error(`不支持的信号类型: ${signal}`));
-            }
-        },
         // Nginx相关命令 - 简化版，统一使用基础命令
         reloadNginx: (uuid) => get().sendCommand(uuid, 'reload'),
         restartNginx: (uuid) => get().sendCommand(uuid, 'restart'),
