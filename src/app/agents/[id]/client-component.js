@@ -24,7 +24,6 @@ import {useRouter} from 'next/navigation';
 import {useClientMount} from '@/hooks/useClientMount';
 import useAgentStore from '@/store/agentStore';
 import useMqttStore from '@/store/mqttStore';
-import XTerminal from '@/components/ui/XTerminal.jsx';
 
 // 错误边界组件
 class ErrorBoundary extends React.Component {
@@ -755,7 +754,6 @@ export default function AgentDetail({agent: initialAgent}) {
                 </div>
             )}
 
-            {/* 终端选项卡 */}
             {activeTab === 'terminal' && (
                 <div>
                     {agent.online ? (
@@ -779,12 +777,11 @@ export default function AgentDetail({agent: initialAgent}) {
                                 </div>
                             </div>
                         }>
-                            {/* 关键：只有当标签页激活时才渲染终端 */}
-                            <XTerminal
-                                agentId={agent._id}
-                                agentUuid={agent.uuid}
-                                isOnline={agent.online}
-                                key={`terminal-${agent.uuid}-${renderKey}-${activeTab}`}
+                            <iframe
+                                src={`/api/terminal?uuid=${agent.uuid}`}
+                                className="w-full h-[400px] rounded-lg border-0 shadow-lg"
+                                title="终端"
+                                key={`term-frame-${Date.now()}`}
                             />
                         </ErrorBoundary>
                     ) : (
