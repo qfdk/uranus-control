@@ -428,7 +428,7 @@ const useMqttStore = create((set, get) => {
                                             // 触发自定义事件通知UI刷新
                                             if (typeof window !== 'undefined') {
                                                 const event = new CustomEvent('mqtt-agent-registered', {
-                                                    detail: { uuid, agent: data, isNew: true }
+                                                    detail: {uuid, agent: data, isNew: true}
                                                 });
                                                 window.dispatchEvent(event);
                                             }
@@ -599,7 +599,8 @@ const useMqttStore = create((set, get) => {
         subscribeToResponses: (agentUuid, callback) => {
             if (!agentUuid || !callback) {
                 console.warn('订阅缺少代理UUID或回调函数');
-                return () => {};
+                return () => {
+                };
             }
 
             console.log(`正在订阅代理 ${agentUuid} 的响应`);
@@ -905,6 +906,9 @@ const useMqttStore = create((set, get) => {
         interruptCommand,
 
         // 发送命令到代理
+// 在 src/store/mqttStore.js 中添加或更新以下部分
+
+// sendCommand 方法 - 确保能正确处理不同类型的命令
         sendCommand: async (uuid, command, params = {}) => {
             // 检查MQTT连接
             if (!mqttClient || !mqttClient.connected) {
@@ -983,6 +987,40 @@ const useMqttStore = create((set, get) => {
             });
         },
 
+        // terminal_input 命令专用处理
+        handleTerminalInput: (agentUuid, sessionId, input) => {
+            if (!agentUuid || !sessionId || !mqttClient || !mqttClient.connected) {
+                console.error('无法发送终端输入: 参数不完整或MQTT未连接');
+                return false;
+            }
+
+            try {
+                const commandTopic = `${TOPICS.COMMAND}${agentUuid}`;
+                const message = {
+                    command: 'terminal_input',
+                    sessionId: sessionId,
+                    input: input,
+                    requestId: uuidv4(),
+                    timestamp: Date.now()
+                };
+
+                mqttClient.publish(
+                    commandTopic,
+                    JSON.stringify(message),
+                    {qos: 1},
+                    (err) => {
+                        if (err) {
+                            console.error(`发布终端输入失败: ${err.message}`);
+                            return false;
+                        }
+                    }
+                );
+                return true;
+            } catch (err) {
+                console.error('发送终端输入时出错:', err);
+                return false;
+            }
+        },
         // Nginx相关命令 - 简化版，统一使用基础命令
         reloadNginx: (uuid) => get().sendCommand(uuid, 'reload'),
         restartNginx: (uuid) => get().sendCommand(uuid, 'restart'),

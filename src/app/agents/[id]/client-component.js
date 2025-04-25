@@ -27,16 +27,17 @@ import {useClientMount} from '@/hooks/useClientMount';
 import TerminalComponent from '@/components/ui/Terminal';
 import useAgentStore from '@/store/agentStore';
 import useMqttStore from '@/store/mqttStore';
+import XTerminal from "@/components/ui/XTerminal.jsx";
 
 // 错误边界组件
 class ErrorBoundary extends React.Component {
     constructor(props) {
         super(props);
-        this.state = { hasError: false };
+        this.state = {hasError: false};
     }
 
     static getDerivedStateFromError(error) {
-        return { hasError: true };
+        return {hasError: true};
     }
 
     componentDidCatch(error, errorInfo) {
@@ -782,11 +783,12 @@ export default function AgentDetail({agent: initialAgent}) {
                                 </div>
                             </div>
                         }>
-                            <TerminalComponent
+                            {/* 关键：只有当标签页激活时才渲染终端 */}
+                            <XTerminal
                                 agentId={agent._id}
                                 agentUuid={agent.uuid}
                                 isOnline={agent.online}
-                                key={`terminal-${agent.uuid}-${renderKey}`}
+                                key={`terminal-${agent.uuid}-${renderKey}-${activeTab}`}
                             />
                         </ErrorBoundary>
                     ) : (
