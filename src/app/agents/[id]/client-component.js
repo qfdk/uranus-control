@@ -24,30 +24,8 @@ import {useRouter} from 'next/navigation';
 import {useClientMount} from '@/hooks/useClientMount';
 import useAgentStore from '@/store/agentStore';
 import useMqttStore from '@/store/mqttStore';
-
-// 错误边界组件
-class ErrorBoundary extends React.Component {
-    constructor(props) {
-        super(props);
-        this.state = {hasError: false};
-    }
-
-    static getDerivedStateFromError(error) {
-        return {hasError: true};
-    }
-
-    componentDidCatch(error, errorInfo) {
-        console.error('终端组件错误:', error, errorInfo);
-    }
-
-    render() {
-        if (this.state.hasError) {
-            return this.props.fallback;
-        }
-
-        return this.props.children;
-    }
-}
+import CommandExecutor from '@/components/ui/CommandExecutor.jsx';
+import toast from 'react-hot-toast';
 
 export default function AgentDetail({agent: initialAgent}) {
     const router = useRouter();
@@ -170,11 +148,7 @@ export default function AgentDetail({agent: initialAgent}) {
 
         try {
             setIsDeleting(true);
-            setUpgradeStatus({
-                type: 'loading',
-                message: '正在删除代理...',
-                show: true
-            });
+            toast.loading('正在删除代理...');
 
             const result = await deleteAgent(agent._id);
 
@@ -182,36 +156,20 @@ export default function AgentDetail({agent: initialAgent}) {
             setIsDeleting(false);
 
             if (result.success) {
-                setUpgradeStatus({
-                    type: 'success',
-                    message: '代理已成功删除',
-                    show: true
-                });
+                toast.success('代理已成功删除');
 
-                // 延迟跳转，让用户看到成功消息
-                statusTimeoutRef.current = setTimeout(() => {
+                // 延迟跳转
+                setTimeout(() => {
                     router.push('/agents');
                 }, 1500);
             } else if (result.canceled) {
-                setUpgradeStatus({
-                    type: '',
-                    message: '',
-                    show: false
-                });
+                toast.dismiss();
             } else {
-                setUpgradeStatus({
-                    type: 'error',
-                    message: result.error?.message || '删除代理失败，请重试',
-                    show: true
-                });
+                toast.error(result.error?.message || '删除代理失败，请重试');
             }
         } catch (error) {
             console.error('删除代理失败:', error);
-            setUpgradeStatus({
-                type: 'error',
-                message: '删除代理失败: ' + error.message,
-                show: true
-            });
+            toast.error('删除代理失败: ' + error.message);
         }
     };
 
@@ -757,33 +715,7 @@ export default function AgentDetail({agent: initialAgent}) {
             {activeTab === 'terminal' && (
                 <div>
                     {agent.online ? (
-                        <ErrorBoundary fallback={
-                            <div className="bg-white rounded-lg shadow dark:bg-gray-800 p-5 text-center">
-                                <div className="py-10">
-                                    <div
-                                        className="inline-flex items-center justify-center p-3 bg-red-100 dark:bg-red-900/30 rounded-full mb-4">
-                                        <XCircle className="w-8 h-8 text-red-500 dark:text-red-400"/>
-                                    </div>
-                                    <h3 className="text-lg font-medium text-gray-800 dark:text-white mb-2">终端组件错误</h3>
-                                    <p className="text-gray-500 dark:text-gray-400 mb-4">
-                                        加载终端组件时出现问题，请刷新页面重试
-                                    </p>
-                                    <Button
-                                        variant="primary"
-                                        onClick={() => handleTabChange('info')}
-                                    >
-                                        返回信息页面
-                                    </Button>
-                                </div>
-                            </div>
-                        }>
-                            <iframe
-                                src={`/api/terminal?uuid=${agent.uuid}`}
-                                className="w-full h-[400px] rounded-lg border-0 shadow-lg"
-                                title="终端"
-                                key={`term-frame-${Date.now()}`}
-                            />
-                        </ErrorBoundary>
+                        <CommandExecutor agentUuid={agent.uuid} isActive={activeTab === 'terminal'}/>
                     ) : (
                         <div className="bg-white rounded-lg shadow dark:bg-gray-800 p-5 text-center">
                             <div className="py-10">
@@ -793,7 +725,7 @@ export default function AgentDetail({agent: initialAgent}) {
                                 </div>
                                 <h3 className="text-lg font-medium text-gray-800 dark:text-white mb-2">代理当前离线</h3>
                                 <p className="text-gray-500 dark:text-gray-400 mb-4">
-                                    无法访问终端，请等待代理重新上线后再试
+                                    无法执行命令，请等待代理重新上线后再试
                                 </p>
                                 <Button
                                     variant="primary"

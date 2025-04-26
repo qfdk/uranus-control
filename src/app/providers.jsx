@@ -1,4 +1,3 @@
-// src/app/providers.jsx
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
@@ -8,6 +7,7 @@ import { LoadingProvider } from './contexts/LoadingContext';
 import LoadingOverlay from '@/components/ui/LoadingOverlay';
 import useAgentStore from '@/store/agentStore';
 import useMqttStore from '@/store/mqttStore';
+import { Toaster } from 'react-hot-toast';
 
 export function AppProviders({ children }) {
     const pathname = usePathname();
@@ -36,18 +36,18 @@ export function AppProviders({ children }) {
         // 只在非登录页面初始化MQTT，且仅尝试一次
         if (pathname !== '/login' && !mqttInitializedRef.current && !mqttInitAttempted) {
             setMqttInitAttempted(true);
-            
+
             // 延迟初始化MQTT，确保页面渲染完成
             const timer = setTimeout(async () => {
                 console.log('初始化MQTT连接...');
                 mqttInitializedRef.current = true;
-                
+
                 try {
                     await connectMqtt();
                     console.log('MQTT连接成功初始化');
                 } catch (error) {
                     console.error('MQTT初始化失败:', error);
-                    
+
                     // 如果初始连接失败，稍后再尝试一次
                     setTimeout(async () => {
                         console.log('尝试MQTT重新连接...');
@@ -60,7 +60,7 @@ export function AppProviders({ children }) {
                     }, 5000); // 5秒后重试
                 }
             }, 1500); // 延迟1.5秒初始化MQTT
-            
+
             return () => clearTimeout(timer);
         }
     }, [pathname, connectMqtt, mqttInitAttempted]);
@@ -68,6 +68,12 @@ export function AppProviders({ children }) {
     return (
         <AuthProvider>
             <LoadingProvider>
+                <Toaster
+                    position="top-right"
+                    toastOptions={{
+                        duration: 3000
+                    }}
+                />
                 <LoadingOverlay />
                 {children}
             </LoadingProvider>

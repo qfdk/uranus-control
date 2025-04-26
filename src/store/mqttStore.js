@@ -68,114 +68,11 @@ const useMqttStore = create((set, get) => {
     const deletedAgents = new Set();
 
     // 存储每个代理的响应订阅
-    // 结构: { agentUuid: Map<subscriptionId, callback> }
     const agentSubscriptions = new Map();
 
     // 设置连接重试计数
     let reconnectCount = 0;
     const MAX_RECONNECT_ATTEMPTS = 5;
-
-    // 中断命令功能
-    const interruptCommand = (sessionId) => {
-        // 获取会话
-        const session = get().terminalSessions[sessionId];
-        if (!session || !session.agentUuid) return false;
-
-        const agentUuid = session.agentUuid;
-        const requestId = session.activeCommand?.requestId;
-
-        // 已经尝试中断
-        if (session.interrupting) return true;
-
-        // 标记正在尝试中断
-        set(state => {
-            const currentSessions = {...state.terminalSessions};
-            const currentSession = currentSessions[sessionId] ? {...currentSessions[sessionId]} : null;
-
-            if (!currentSession) return state;
-
-            currentSessions[sessionId] = {
-                ...currentSession,
-                interrupting: true
-            };
-
-            return {terminalSessions: currentSessions};
-        });
-
-        console.log(`尝试中断会话 ${sessionId} 的命令`);
-
-        // 发送中断命令
-        if (mqttClient && mqttClient.connected) {
-            // 1. 发送Ctrl+C多次 (增加送达成功率)
-            for (let i = 0; i < 3; i++) {
-                setTimeout(() => {
-                    mqttClient.publish(
-                        `${TOPICS.COMMAND}${agentUuid}`,
-                        JSON.stringify({
-                            command: 'terminal_input',
-                            sessionId,
-                            input: '\u0003', // Ctrl+C
-                            requestId: uuidv4(),
-                            timestamp: Date.now()
-                        }),
-                        {qos: 1}
-                    );
-                }, i * 100); // 间隔100ms发送
-            }
-
-            // 2. 如果有请求ID，发送interrupt命令
-            if (requestId) {
-                mqttClient.publish(
-                    `${TOPICS.COMMAND}${agentUuid}`,
-                    JSON.stringify({
-                        command: 'interrupt',
-                        sessionId,
-                        requestId: uuidv4(),
-                        targetRequestId: requestId,
-                        timestamp: Date.now()
-                    }),
-                    {qos: 1}
-                );
-            }
-
-            // 3. 最后发送force_interrupt命令作为后备
-            setTimeout(() => {
-                mqttClient.publish(
-                    `${TOPICS.COMMAND}${agentUuid}`,
-                    JSON.stringify({
-                        command: 'force_interrupt',
-                        sessionId,
-                        requestId: uuidv4(),
-                        timestamp: Date.now()
-                    }),
-                    {qos: 1}
-                );
-            }, 300);
-
-            // 重置会话状态
-            setTimeout(() => {
-                set(state => {
-                    const currentSessions = {...state.terminalSessions};
-                    const currentSession = currentSessions[sessionId] ? {...currentSessions[sessionId]} : null;
-
-                    if (!currentSession) return state;
-
-                    currentSessions[sessionId] = {
-                        ...currentSession,
-                        interrupting: false,
-                        interactiveMode: false,
-                        activeCommand: null
-                    };
-
-                    return {terminalSessions: currentSessions};
-                });
-            }, 800);
-
-            return true;
-        }
-
-        return false;
-    };
 
     // 初始化MQTT客户端并处理消息
     const initializeMqttClient = () => {
@@ -741,19 +638,6 @@ const useMqttStore = create((set, get) => {
                 connectingPromise = null;
             }
         },
-
-        // 断开MQTT连接
-        disconnect: () => {
-            if (mqttClient && mqttClient.connected) {
-                mqttClient.end();
-                set({connected: false});
-
-                // 清理定时器
-                if (cleanupInterval) clearInterval(cleanupInterval);
-                cleanupInterval = null;
-            }
-        },
-
         // 重连方法
         reconnect,
 
@@ -781,39 +665,20 @@ const useMqttStore = create((set, get) => {
             }
         },
 
-        // 终端会话管理
-        startTerminalSession: (agentUuid) => {
-            if (!agentUuid) {
-                throw new Error('代理UUID不能为空');
+        // 执行命令
+        executeCommand: async (uuid, command) => {
+            if (!uuid || !command) {
+                throw new Error('代理UUID和命令内容不能为空');
             }
 
-            console.log(`为代理 ${agentUuid} 创建新的终端会话`);
-            const sessionId = uuidv4();
-
-            set(state => ({
-                terminalSessions: {
-                    ...state.terminalSessions,
-                    [sessionId]: {
-                        agentUuid,
-                        startTime: new Date(),
-                        history: [],
-                        commandHistory: [],
-                        activeCommand: null
-                    }
-                }
-            }));
-
-            // 确保订阅此代理的响应主题
-            if (mqttClient && mqttClient.connected) {
-                const responseTopic = `${TOPICS.RESPONSE}${agentUuid}`;
-                console.log(`为新会话订阅响应主题: ${responseTopic}`);
-                mqttClient.subscribe(responseTopic, {qos: 0});
-            }
-
-            return sessionId;
+            return get().sendCommand(uuid, 'execute', {
+                command: command
+            });
         },
-        // 中断命令
-        interruptCommand,
+
+        // 更新 sendCommand 方法确保正确处理 execute 命令
+// 更新sendCommand方法 - 移除不必要的timestamp参数
+
         sendCommand: async (uuid, commandType, params = {}) => {
             // 检查MQTT连接
             if (!mqttClient || !mqttClient.connected) {
@@ -844,30 +709,33 @@ const useMqttStore = create((set, get) => {
                 // 创建请求ID
                 const requestId = params.requestId || `cmd-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
-                // 构建命令消息 - 修复execute命令格式
-                const commandMessage = {
-                    command: commandType,
-                    requestId,
-                    timestamp: Date.now(),
-                    clientId
-                };
+                // 构建命令消息
+                let commandMessage;
 
-                // 特殊处理execute命令 - 修复关键点
+                // 特殊处理execute命令
                 if (commandType === 'execute') {
                     if (!params.command) {
                         return reject(new Error('execute命令必须提供command参数'));
                     }
-                    // 直接将command参数设置到最上层
-                    commandMessage.command = params.command;
-                }
 
-                // 添加其他参数
-                Object.entries(params).forEach(([key, value]) => {
-                    // 跳过command参数(已经处理过)
-                    if (key !== 'command' || commandType !== 'execute') {
-                        commandMessage[key] = value;
-                    }
-                });
+                    // execute命令特殊格式
+                    commandMessage = {
+                        command: "execute",
+                        requestId,
+                        clientId,
+                        params: {
+                            command: params.command
+                        }
+                    };
+                } else {
+                    // 其他常规命令
+                    commandMessage = {
+                        command: commandType,
+                        requestId,
+                        clientId,
+                        ...params
+                    };
+                }
 
                 // 设置超时
                 const timeoutId = setTimeout(() => {
@@ -881,7 +749,7 @@ const useMqttStore = create((set, get) => {
                     resolve,
                     reject,
                     timeoutId,
-                    timestamp: Date.now()
+                    timestamp: Date.now() // 只在客户端记录发送时间
                 });
 
                 // 发布命令消息
@@ -913,7 +781,6 @@ const useMqttStore = create((set, get) => {
                 );
             });
         },
-
         // Nginx相关命令 - 简化版，统一使用基础命令
         reloadNginx: (uuid) => get().sendCommand(uuid, 'reload'),
         restartNginx: (uuid) => get().sendCommand(uuid, 'restart'),
