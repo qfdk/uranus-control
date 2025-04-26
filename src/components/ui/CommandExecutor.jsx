@@ -131,7 +131,7 @@ export default function CommandExecutor({ agentUuid, isActive = false }) {
     // 复制输出到剪贴板
     const copyToClipboard = () => {
         if (!output) return;
-
+        console.log(output);
         navigator.clipboard.writeText(output)
             .then(() => {
                 toast.success('已复制到剪贴板');
