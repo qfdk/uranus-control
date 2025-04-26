@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Send, Clipboard, RefreshCw, Terminal, XCircle } from 'lucide-react';
+import React, {useEffect, useRef, useState} from 'react';
+import {Clipboard, RefreshCw, Send, Terminal, XCircle} from 'lucide-react';
 import Button from '@/components/ui/Button';
 import useMqttStore from '@/store/mqttStore';
 import toast from 'react-hot-toast';
 
-export default function CommandExecutor({ agentUuid, isActive = false }) {
+export default function CommandExecutor({agentUuid, isActive = false}) {
     // 状态管理
     const [command, setCommand] = useState('');
     const [output, setOutput] = useState('');
@@ -17,7 +17,7 @@ export default function CommandExecutor({ agentUuid, isActive = false }) {
     const commandInputRef = useRef(null);
 
     // MQTT连接状态
-    const { connected: mqttConnected, connect, sendCommand } = useMqttStore();
+    const {connected: mqttConnected, connect, sendCommand} = useMqttStore();
     const [isConnecting, setIsConnecting] = useState(false);
 
     // 当组件变为活动状态时初始化MQTT连接并聚焦输入框
@@ -131,8 +131,7 @@ export default function CommandExecutor({ agentUuid, isActive = false }) {
     // 复制输出到剪贴板
     const copyToClipboard = () => {
         if (!output) return;
-        console.log(output);
-        navigator.clipboard.writeText(output)
+        navigator.clipboard.writeText(output.split('\n').slice(1).join('\n'))
             .then(() => {
                 toast.success('已复制到剪贴板');
             })
@@ -184,7 +183,7 @@ export default function CommandExecutor({ agentUuid, isActive = false }) {
             {/* 命令输入区 */}
             <div className="mb-4">
                 <div className="flex items-center mb-2">
-                    <Terminal className="w-5 h-5 mr-2 text-gray-500 dark:text-gray-400" />
+                    <Terminal className="w-5 h-5 mr-2 text-gray-500 dark:text-gray-400"/>
                     <h3 className="text-lg font-medium text-gray-800 dark:text-white">命令执行</h3>
                 </div>
 
@@ -201,7 +200,7 @@ export default function CommandExecutor({ agentUuid, isActive = false }) {
                             disabled={isExecuting || !mqttConnected}
                         />
                         {isExecuting && (
-                            <RefreshCw className="absolute right-3 top-2 h-5 w-5 text-blue-500 animate-spin" />
+                            <RefreshCw className="absolute right-3 top-2 h-5 w-5 text-blue-500 animate-spin"/>
                         )}
                     </div>
                     <Button
@@ -209,7 +208,7 @@ export default function CommandExecutor({ agentUuid, isActive = false }) {
                         disabled={isExecuting || !command.trim() || !mqttConnected}
                         variant="primary"
                     >
-                        <Send className="w-4 h-4 mr-1" />
+                        <Send className="w-4 h-4 mr-1"/>
                         执行
                     </Button>
                 </div>
@@ -235,14 +234,14 @@ export default function CommandExecutor({ agentUuid, isActive = false }) {
                                 className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
                                 title="复制到剪贴板"
                             >
-                                <Clipboard className="w-4 h-4" />
+                                <Clipboard className="w-4 h-4"/>
                             </button>
                             <button
                                 onClick={clearOutput}
                                 className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
                                 title="清空输出"
                             >
-                                <XCircle className="w-4 h-4" />
+                                <XCircle className="w-4 h-4"/>
                             </button>
                         </div>
                     </div>
