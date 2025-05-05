@@ -1,0 +1,184 @@
+/* 终端内边距调整 */
+.xterm .xterm-screen {
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+}
+
+/* 增强终端滚动条样式 */
+.xterm .xterm-viewport::-webkit-scrollbar {
+  width: 10px;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* 确保终端充满容器 */
+.xterm {
+  width: 100% !important;
+  height: 100% !important;
+  background-color: #1e1e1e;
+  border-radius: 0.375rem;
+  overflow: hidden;
+}
+
+.xterm-screen, .xterm-viewport {
+  width: 100% !important;
+  height: 100% !important;
+  overflow: hidden;
+}
+
+/* 全屏样式 */
+.fullscreen-terminal {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 9999 !important;
+  border-radius: 0 !important;
+  background-color: #1e1e1e !important;
+  padding: 20px !important;
+}
+
+.terminal-fullscreen-mode {
+  overflow: hidden !important;
+}
+
+.fullscreen-terminal .terminal-controls {
+  right: 24px;
+  top: 24px;
+}
+
+/* 全屏模式下的内边距 */
+.fixed.inset-0 .xterm .xterm-screen {
+  padding: 0;
+}
+
+/* 控制按钮组 */
+.terminal-controls {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  display: flex;
+  gap: 4px;
+  z-index: 50; /* 确保在xterm内容之上 */
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.terminal-controls:hover {
+  opacity: 1;
+}
+
+.terminal-controls button {
+  background-color: rgba(40, 40, 40, 0.8);
+  color: #f0f0f0;
+  border: none;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.terminal-controls button:hover {
+  background-color: rgba(60, 60, 60, 0.9);
+  transform: scale(1.05);
+}
+
+/* 状态指示器 */
+.terminal-status {
+  position: absolute;
+  right: 8px;
+  top: 44px; /* 置于控制按钮下方 */
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background-color: rgba(20, 20, 20, 0.6);
+  border-radius: 12px;
+  font-size: 12px;
+  color: #ccc;
+  z-index: 50; /* 与控制按钮保持一致 */
+  transition: opacity 0.2s ease;
+  opacity: 0.7;
+}
+
+.terminal-status:hover {
+  opacity: 1;
+}
+
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.status-indicator.connected {
+  background-color: #10b981;
+}
+
+.status-indicator.disconnected {
+  background-color: #ef4444;
+}
+
+.status-indicator.typing {
+  background-color: #10b981;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* 连接按钮样式 */
+.connect-button {
+  margin-right: 4px;
+  padding: 4px 12px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.connect-button.connect {
+  background-color: #2563eb;
+  color: white;
+}
+
+.connect-button.connect:hover {
+  background-color: #1d4ed8;
+}
+
+.connect-button.disconnect {
+  background-color: #4b5563;
+  color: white;
+}
+
+.connect-button.disconnect:hover {
+  background-color: #374151;
+}
