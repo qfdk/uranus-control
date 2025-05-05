@@ -1,0 +1,442 @@
+'use client';
+
+import React, { useEffect, useRef, useState } from 'react';
+import { Terminal } from 'xterm';
+import { FitAddon } from 'xterm-addon-fit';
+import { WebLinksAddon } from 'xterm-addon-web-links';
+import { SearchAddon } from 'xterm-addon-search';
+import { v4 as uuidv4 } from 'uuid';
+import useMqttStore from '@/store/mqttStore';
+import { AlertCircle, XCircle } from 'lucide-react';
+import 'xterm/css/xterm.css';
+import toast from 'react-hot-toast';
+
+const MqttTerminal = ({ agentUuid, isActive = true }) => {
+  // 终端DOM引用
+  const terminalRef = useRef(null);
+  const fitAddonRef = useRef(null);
+  const searchAddonRef = useRef(null);
+  const terminalInstanceRef = useRef(null);
+  const resizeObserverRef = useRef(null);
+
+  // 状态管理
+  const [error, setError] = useState(null);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [sessionId, setSessionId] = useState(null);
+  const [isReady, setIsReady] = useState(false);
+  const [resizing, setResizing] = useState(false);
+  const [firstCommand, setFirstCommand] = useState(true);
+  
+  // 用于防止重复处理消息
+  const processedMessagesRef = useRef(new Set());
+  // 用于跟踪最后收到的输出
+  const lastOutputRef = useRef("");
+
+  // MQTT连接状态
+  const { connected: mqttConnected, connect } = useMqttStore();
+
+  // 初始化xterm
+  useEffect(() => {
+    let terminal = null;
+    let fitAddon = null;
+    let searchAddon = null;
+    let webLinksAddon = null;
+
+    // 只在组件激活时初始化终端
+    if (isActive && terminalRef.current && !terminalInstanceRef.current) {
+      console.log('初始化xterm终端');
+      
+      // 创建终端实例
+      terminal = new Terminal({
+        cursorBlink: true,
+        cursorStyle: 'block',
+        fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+        fontSize: 14,
+        lineHeight: 1.2,
+        convertEol: true,
+        theme: {
+          background: '#1e1e1e',
+          foreground: '#f0f0f0',
+          cursor: '#f0f0f0',
+          selection: 'rgba(255, 255, 255, 0.3)',
+          black: '#000000',
+          red: '#cd3131',
+          green: '#0dbc79',
+          yellow: '#e5e510',
+          blue: '#2472c8',
+          magenta: '#bc3fbc',
+          cyan: '#11a8cd',
+          white: '#e5e5e5',
+          brightBlack: '#666666',
+          brightRed: '#f14c4c',
+          brightGreen: '#23d18b',
+          brightYellow: '#f5f543',
+          brightBlue: '#3b8eea',
+          brightMagenta: '#d670d6',
+          brightCyan: '#29b8db',
+          brightWhite: '#ffffff'
+        }
+      });
+
+      // 创建插件
+      fitAddon = new FitAddon();
+      searchAddon = new SearchAddon();
+      webLinksAddon = new WebLinksAddon();
+
+      // 加载插件
+      terminal.loadAddon(fitAddon);
+      terminal.loadAddon(searchAddon);
+      terminal.loadAddon(webLinksAddon);
+
+      // 打开终端
+      terminal.open(terminalRef.current);
+      try {
+        fitAddon.fit();
+      } catch (e) {
+        console.error('初始调整终端大小失败:', e);
+      }
+
+      // 存储引用
+      terminalInstanceRef.current = terminal;
+      fitAddonRef.current = fitAddon;
+      searchAddonRef.current = searchAddon;
+
+      // 设置初始化完成标志
+      setIsReady(true);
+
+      // 创建调整大小的观察器
+      const resizeObserver = new ResizeObserver(debounce(() => {
+        if (fitAddonRef.current && !resizing) {
+          try {
+            setResizing(true);
+            fitAddonRef.current.fit();
+            
+            // 如果已连接，发送调整大小命令
+            if (sessionId && mqttConnected) {
+              const { cols, rows } = terminalInstanceRef.current;
+              sendResizeCommand(cols, rows);
+            }
+            
+            setResizing(false);
+          } catch (error) {
+            console.error('调整终端大小失败:', error);
+            setResizing(false);
+          }
+        }
+      }, 200));
+
+      resizeObserver.observe(terminalRef.current);
+      resizeObserverRef.current = resizeObserver;
+
+      // 写入欢迎信息
+      terminal.writeln('\x1b[1;34m欢迎使用MQTT终端\x1b[0m');
+      terminal.writeln('正在连接到代理...');
+    }
+
+    // 卸载时清理
+    return () => {
+      if (resizeObserverRef.current) {
+        resizeObserverRef.current.disconnect();
+      }
+      
+      // 关闭会话
+      if (sessionId && mqttConnected) {
+        closeTerminalSession();
+      }
+      
+      // 清理终端实例
+      if (terminalInstanceRef.current) {
+        try {
+          terminalInstanceRef.current.dispose();
+          terminalInstanceRef.current = null;
+        } catch (e) {
+          console.error('清理终端实例失败:', e);
+        }
+      }
+      
+      // 清理处理过的消息集合
+      processedMessagesRef.current.clear();
+    };
+  }, [isActive]);
+
+  // 初始化MQTT连接
+  useEffect(() => {
+    // 只有在组件激活和终端准备好的情况下才连接
+    if (isActive && isReady && agentUuid && !isConnecting && !sessionId) {
+      initializeConnection();
+    }
+  }, [isActive, isReady, agentUuid, mqttConnected]);
+
+  // 检查输出是否包含命令提示符
+  const containsPrompt = (text) => {
+    // 检测常见的命令提示符模式
+    const promptPatterns = [
+      /\$\s*$/,                // $ 
+      />\s*$/,                 // >
+      /#\s*$/,                 // #
+      /\w+@\w+:.*\$\s*$/,      // user@host:path$
+      /\w+@\w+:.*#\s*$/,       // user@host:path#
+      /\[\w+@\w+.*\]\$\s*$/,   // [user@host path]$
+      /\[\w+@\w+.*\]#\s*$/     // [user@host path]#
+    ];
+    
+    return promptPatterns.some(pattern => pattern.test(text));
+  };
+
+  // 处理MQTT终端消息
+  useEffect(() => {
+    if (!sessionId) return;
+    
+    // 设置终端消息处理回调
+    const unsubscribe = useMqttStore.getState().setTerminalCallback(sessionId, (message) => {
+      if (!terminalInstanceRef.current) return;
+      
+      // 生成消息唯一标识（使用类型和时间戳）
+      const messageId = `${message.type}-${message.timestamp}`;
+      
+      // 检查是否是重复消息
+      if (processedMessagesRef.current.has(messageId)) {
+        console.log('忽略重复消息:', messageId);
+        return;
+      }
+      
+      // 添加到已处理消息集合
+      processedMessagesRef.current.add(messageId);
+      
+      // 设置一个定时器，一段时间后从已处理集合中删除，避免集合无限增长
+      setTimeout(() => {
+        processedMessagesRef.current.delete(messageId);
+      }, 5000);
+      
+      if (message.type === 'output' && message.data) {
+        const outputData = message.data;
+        
+        // 检查是否包含命令提示符
+        const hasPrompt = containsPrompt(outputData);
+        const isFirstPrompt = firstCommand && hasPrompt;
+        
+        // 如果是首次命令提示符，确保有换行
+        if (isFirstPrompt) {
+          // 确保在第一个命令提示符前有换行
+          if (!outputData.startsWith('\r\n') && !outputData.startsWith('\n')) {
+            terminalInstanceRef.current.write('\r\n');
+          }
+          setFirstCommand(false);
+        }
+        
+        // 记录最后的输出
+        lastOutputRef.current = outputData;
+        
+        // 写入输出数据
+        terminalInstanceRef.current.write(outputData);
+      } else if (message.type === 'error') {
+        // 写入错误信息
+        terminalInstanceRef.current.writeln(`\r\n\x1b[31m错误: ${message.data || '未知错误'}\x1b[0m`);
+        setError(message.data || '终端错误');
+      } else if (message.type === 'closed') {
+        // 会话已关闭
+        terminalInstanceRef.current.writeln('\r\n\x1b[33m会话已关闭\x1b[0m');
+        setSessionId(null);
+      }
+    });
+    
+    // 组件卸载时清除回调
+    return () => {
+      unsubscribe();
+    };
+  }, [sessionId, firstCommand]);
+
+  // 初始化连接
+  const initializeConnection = async () => {
+    if (isConnecting || !agentUuid) return;
+
+    setIsConnecting(true);
+    setError(null);
+    setFirstCommand(true);
+
+    try {
+      // 确保MQTT已连接
+      if (!mqttConnected) {
+        await connect();
+      }
+
+      // 创建唯一会话ID
+      const newSessionId = `term-${uuidv4()}`;
+      setSessionId(newSessionId);
+
+      // 写入连接信息
+      if (terminalInstanceRef.current) {
+        terminalInstanceRef.current.writeln('\r\n\x1b[33m正在创建终端会话...\x1b[0m');
+      }
+
+      // 发送创建会话命令
+      const result = await useMqttStore.getState().createTerminalSession(agentUuid, newSessionId);
+
+      if (result && result.success) {
+        if (terminalInstanceRef.current) {
+          terminalInstanceRef.current.writeln('\x1b[32m终端会话已创建！\x1b[0m\r\n');
+        }
+        
+        // 设置终端输入处理
+        setupTerminalInput(newSessionId);
+        
+        // 发送初始的调整大小命令
+        if (terminalInstanceRef.current) {
+          const { cols, rows } = terminalInstanceRef.current;
+          sendResizeCommand(cols, rows);
+        }
+        
+        toast.success('终端会话已创建');
+      } else {
+        throw new Error(result?.message || '创建终端会话失败');
+      }
+    } catch (error) {
+      console.error('初始化终端连接失败:', error);
+      setError(error.message || '连接失败');
+      toast.error(`连接失败: ${error.message || '未知错误'}`);
+      
+      if (terminalInstanceRef.current) {
+        terminalInstanceRef.current.writeln(`\r\n\x1b[31m错误: ${error.message || '连接失败'}\x1b[0m`);
+      }
+      
+      setSessionId(null);
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  // 设置终端输入处理
+  const setupTerminalInput = (termSessionId) => {
+    if (!terminalInstanceRef.current || !termSessionId) return;
+    
+    // 监听终端输入
+    terminalInstanceRef.current.onData(data => {
+      // 如果是回车键，可能是发送命令
+      if (data === '\r') {
+        setFirstCommand(false);
+      }
+      
+      // 发送输入数据到MQTT
+      if (mqttConnected) {
+        useMqttStore.getState().sendTerminalInput(agentUuid, termSessionId, data)
+          .catch(error => {
+            // 忽略会话ID已存在的错误，因为可能是重复发送
+            if (!error.message.includes('会话ID已存在')) {
+              console.error('发送终端输入失败:', error);
+            }
+          });
+      }
+    });
+  };
+
+  // 发送调整大小命令
+  const sendResizeCommand = (cols, rows) => {
+    if (!sessionId || !mqttConnected || !agentUuid) return;
+    
+    console.log(`调整终端大小: ${cols}x${rows}`);
+    
+    useMqttStore.getState().resizeTerminal(agentUuid, sessionId, cols, rows)
+      .catch(error => {
+        // 忽略会话ID已存在的错误，因为可能是重复发送
+        if (!error.message.includes('会话ID已存在')) {
+          console.error('发送调整大小命令失败:', error);
+        }
+      });
+  };
+
+  // 关闭终端会话
+  const closeTerminalSession = async () => {
+    if (!sessionId || !mqttConnected || !agentUuid) return;
+    
+    try {
+      await useMqttStore.getState().closeTerminalSession(agentUuid, sessionId);
+      
+      if (terminalInstanceRef.current) {
+        terminalInstanceRef.current.writeln('\r\n\x1b[33m正在关闭会话...\x1b[0m');
+      }
+      
+      console.log('终端会话已关闭:', sessionId);
+      toast.success('终端会话已关闭');
+    } catch (error) {
+      console.error('关闭终端会话失败:', error);
+      toast.error(`关闭会话失败: ${error.message || '未知错误'}`);
+    }
+  };
+
+  // 重新连接
+  const reconnect = async () => {
+    if (sessionId) {
+      await closeTerminalSession();
+    }
+    
+    // 清空终端
+    if (terminalInstanceRef.current) {
+      terminalInstanceRef.current.clear();
+    }
+    
+    // 清理处理过的消息集合
+    processedMessagesRef.current.clear();
+    
+    // 重置首次命令标记
+    setFirstCommand(true);
+    
+    setError(null);
+    initializeConnection();
+  };
+
+  // 防抖函数
+  function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        clearTimeout(timeout);
+        func(...args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  }
+
+  // 只有在组件激活时渲染
+  if (!isActive) return null;
+
+  return (
+    <div className="relative w-full h-full bg-gray-800 rounded-lg overflow-hidden flex flex-col">
+      {/* 错误提示 */}
+      {error && (
+        <div className="absolute top-0 left-0 right-0 bg-red-500 text-white px-4 py-2 flex items-center justify-between z-10">
+          <div className="flex items-center">
+            <AlertCircle className="w-4 h-4 mr-2" />
+            <span>{error}</span>
+          </div>
+          <button 
+            onClick={reconnect}
+            className="ml-2 bg-red-600 hover:bg-red-700 text-white py-1 px-2 rounded text-xs"
+          >
+            重新连接
+          </button>
+        </div>
+      )}
+      
+      {/* 终端容器 */}
+      <div 
+        ref={terminalRef} 
+        className={`flex-grow ${error ? 'pt-10' : ''}`}
+        style={{ width: '100%', height: '100%' }}
+      />
+      
+      {/* 关闭按钮 */}
+      <div className="absolute top-2 right-2 z-20">
+        <button
+          onClick={closeTerminalSession}
+          className="text-gray-400 hover:text-white bg-gray-700 hover:bg-gray-600 rounded-full p-1"
+          title="关闭终端会话"
+        >
+          <XCircle className="w-5 h-5" />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export default MqttTerminal;

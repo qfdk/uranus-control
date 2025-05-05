@@ -1,36 +1,113 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Uranus Control
 
-## Getting Started
+本项目是Uranus系统的控制前端，使用Next.js实现。
 
-First, run the development server:
+## MQTT终端实现说明
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+本项目中实现了基于MQTT的远程终端功能，类似于GoTTY，但使用MQTT代替WebSocket进行通信。
+
+### 实现原理
+
+1. **前端**:
+   - 使用xterm.js创建终端界面
+   - 通过MQTT协议发送终端命令和接收输出
+   - 管理终端会话的生命周期
+
+2. **后端**:
+   - MQTT服务处理终端命令
+   - 创建终端会话并执行命令
+   - 将命令输出通过MQTT发送回前端
+
+3. **通信流程**:
+   - 客户端建立MQTT连接并创建会话
+   - 客户端将终端输入通过MQTT发送到服务器
+   - 服务器执行命令并将输出通过MQTT发送回客户端
+   - 客户端在终端中显示输出
+
+### MQTT主题设计
+
+- `uranus/command/{代理UUID}`: 发送命令到指定代理
+- `uranus/response/{代理UUID}`: 接收来自代理的响应
+- `uranus/heartbeat`: 心跳主题
+- `uranus/status`: 状态主题
+
+### 终端会话命令
+
+1. **创建会话**:
+   ```json
+   {
+     "command": "terminal",
+     "type": "create",
+     "sessionId": "唯一会话ID", 
+     "requestId": "请求ID"
+   }
+   ```
+
+2. **发送输入**:
+   ```json
+   {
+     "command": "terminal",
+     "type": "input",
+     "sessionId": "对应会话ID",
+     "data": "终端输入内容",
+     "requestId": "请求ID"
+   }
+   ```
+
+3. **调整大小**:
+   ```json
+   {
+     "command": "terminal",
+     "type": "resize",
+     "sessionId": "对应会话ID",
+     "data": {
+       "cols": 80,
+       "rows": 24
+     },
+     "requestId": "请求ID"
+   }
+   ```
+
+4. **关闭会话**:
+   ```json
+   {
+     "command": "terminal",
+     "type": "close",
+     "sessionId": "对应会话ID",
+     "requestId": "请求ID"
+   }
+   ```
+
+### 响应格式
+
+```json
+{
+  "success": true,
+  "requestId": "对应请求ID",
+  "sessionId": "对应会话ID",
+  "type": "操作类型", // created, output, closed, error
+  "data": "输出内容", // 当type为output时
+  "message": "消息说明" // 可选
+}
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 安装依赖
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+```bash
+# 安装依赖
+pnpm install
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# 启动开发服务器
+pnpm dev
+```
 
-## Learn More
+## 终端组件依赖
 
-To learn more about Next.js, take a look at the following resources:
+终端功能需要以下依赖:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+pnpm add xterm@5.3.0
+pnpm add xterm-addon-fit@0.8.0
+pnpm add xterm-addon-web-links@0.9.0
+pnpm add xterm-addon-search@0.13.0
+```

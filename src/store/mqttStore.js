@@ -3,6 +3,7 @@ import {create} from 'zustand';
 import mqtt from 'mqtt';
 import {v4 as uuidv4} from 'uuid';
 import useAgentStore from './agentStore';
+import toast from 'react-hot-toast';
 
 // MQTT 主题
 const TOPICS = {
@@ -62,6 +63,7 @@ const useMqttStore = create((set, get) => {
     const pendingCommands = new Map();
     const agentState = {};
     const terminalSessions = {};
+    const terminalCallbacks = new Map(); // 存储终端会话回调函数
     let cleanupInterval = null;
 
     // 存储已删除的代理UUID，防止重新自动注册
@@ -402,6 +404,34 @@ const useMqttStore = create((set, get) => {
                             }
                         });
                     }
+                    
+                    // 处理终端相关消息
+                    if (payload.sessionId && (payload.type === 'output' || payload.type === 'created' || 
+                        payload.type === 'closed' || payload.type === 'error')) {
+                        const sessionId = payload.sessionId;
+                        const callback = terminalCallbacks.get(sessionId);
+                        
+                        if (callback) {
+                            try {
+                                // 调用会话的回调函数
+                                callback(payload);
+                                
+                                // 如果是会话关闭消息，清除回调
+                                if (payload.type === 'closed') {
+                                    console.log(`终端会话 ${sessionId} 已关闭，清除回调`);
+                                    terminalCallbacks.delete(sessionId);
+                                    
+                                    // 清除会话状态
+                                    if (terminalSessions[sessionId]) {
+                                        delete terminalSessions[sessionId];
+                                        set(state => ({ terminalSessions: {...terminalSessions} }));
+                                    }
+                                }
+                            } catch (error) {
+                                console.error(`终端会话 ${sessionId} 回调处理器执行失败:`, error);
+                            }
+                        }
+                    }
 
                     // 处理挂起的命令响应
                     const requestId = payload.requestId;
@@ -493,8 +523,7 @@ const useMqttStore = create((set, get) => {
         subscribeToResponses: (agentUuid, callback) => {
             if (!agentUuid || !callback) {
                 console.warn('订阅缺少代理UUID或回调函数');
-                return () => {
-                };
+                return () => {};
             }
 
             console.log(`正在订阅代理 ${agentUuid} 的响应`);
@@ -638,6 +667,7 @@ const useMqttStore = create((set, get) => {
                 connectingPromise = null;
             }
         },
+        
         // 重连方法
         reconnect,
 
@@ -676,9 +706,7 @@ const useMqttStore = create((set, get) => {
             });
         },
 
-        // 更新 sendCommand 方法确保正确处理 execute 命令
-// 更新sendCommand方法 - 移除不必要的timestamp参数
-
+        // 更新sendCommand方法 - 移除不必要的timestamp参数
         sendCommand: async (uuid, commandType, params = {}) => {
             // 检查MQTT连接
             if (!mqttClient || !mqttClient.connected) {
@@ -781,11 +809,81 @@ const useMqttStore = create((set, get) => {
                 );
             });
         },
+        
         // Nginx相关命令 - 简化版，统一使用基础命令
         reloadNginx: (uuid) => get().sendCommand(uuid, 'reload'),
         restartNginx: (uuid) => get().sendCommand(uuid, 'restart'),
         stopNginx: (uuid) => get().sendCommand(uuid, 'stop'),
-        startNginx: (uuid) => get().sendCommand(uuid, 'start')
+        startNginx: (uuid) => get().sendCommand(uuid, 'start'),
+        
+        // 终端相关操作
+        createTerminalSession: (agentUuid, sessionId) => {
+            return get().sendCommand(agentUuid, 'terminal', {
+                type: 'create',
+                sessionId
+            });
+        },
+        
+        sendTerminalInput: (agentUuid, sessionId, data) => {
+            return get().sendCommand(agentUuid, 'terminal', {
+                type: 'input',
+                sessionId,
+                data
+            });
+        },
+        
+        resizeTerminal: (agentUuid, sessionId, cols, rows) => {
+            return get().sendCommand(agentUuid, 'terminal', {
+                type: 'resize',
+                sessionId,
+                data: { cols, rows }
+            });
+        },
+        
+        closeTerminalSession: (agentUuid, sessionId) => {
+            return get().sendCommand(agentUuid, 'terminal', {
+                type: 'close',
+                sessionId
+            });
+        },
+        
+        // 设置终端回调
+        setTerminalCallback: (sessionId, callback) => {
+            if (!sessionId) return;
+            
+            console.log(`设置终端会话 ${sessionId} 的回调函数`);
+            terminalCallbacks.set(sessionId, callback);
+            
+            // 更新会话状态
+            if (!terminalSessions[sessionId]) {
+                terminalSessions[sessionId] = {
+                    id: sessionId,
+                    createdAt: new Date(),
+                    active: true
+                };
+                set(state => ({ terminalSessions: {...terminalSessions} }));
+            }
+            
+            return () => {
+                console.log(`清除终端会话 ${sessionId} 的回调函数`);
+                terminalCallbacks.delete(sessionId);
+            };
+        },
+        
+        // 清除终端回调
+        clearTerminalCallback: (sessionId) => {
+            if (!sessionId) return;
+            
+            console.log(`清除终端会话 ${sessionId} 的回调函数`);
+            terminalCallbacks.delete(sessionId);
+            
+            // 不要立即清除会话状态，等待关闭消息或者超时清理
+        },
+        
+        // 获取终端会话列表
+        getTerminalSessions: () => {
+            return {...terminalSessions};
+        }
     };
 });
 
