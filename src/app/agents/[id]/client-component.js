@@ -67,13 +67,19 @@ export default function AgentDetail({agent: initialAgent}) {
 
     // 监听MQTT实时状态更新
     useEffect(() => {
-        if (!agent?.uuid || !mqttConnected) return;
+        if (!agent?.uuid) return;
 
-        console.log('设置对代理的MQTT订阅:', agent.uuid);
+        console.log('设置对代理的MQTT状态监听:', agent.uuid, '当前MQTT状态:', mqttConnected ? '已连接' : '未连接');
 
         // 创建处理函数 - 处理代理状态更新
         const handleAgentUpdate = (topic, message) => {
             console.log('收到代理消息更新:', topic);
+
+            if (!mqttConnected) {
+                console.log('收到消息但MQTT显示为未连接，更新标记');
+                // 强制更新MQTT状态
+                useMqttStore.getState().connect().catch(console.error);
+            }
 
             // 获取最新的代理状态
             const mqttAgentData = getAgentState(agent.uuid);
@@ -92,8 +98,33 @@ export default function AgentDetail({agent: initialAgent}) {
             }
         };
 
-        // 订阅该代理的消息
-        const unsubscribe = subscribeToResponses(agent.uuid, handleAgentUpdate);
+        let unsubscribe = () => {};
+        
+        // 如果MQTT已连接，直接订阅
+        if (mqttConnected) {
+            unsubscribe = subscribeToResponses(agent.uuid, handleAgentUpdate);
+            
+            // 立即检查当前状态
+            const currentState = getAgentState(agent.uuid);
+            if (currentState) {
+                // 更新代理状态
+                setAgent(prev => ({
+                    ...prev,
+                    online: currentState.online,
+                    lastHeartbeat: currentState.lastHeartbeat || prev.lastHeartbeat,
+                    _fromMqtt: true
+                }));
+            }
+        } else {
+            // 如果MQTT未连接，尝试连接
+            console.log('尝试连接MQTT...');
+            useMqttStore.getState().connect()
+                .then(() => {
+                    console.log('MQTT连接成功，开始订阅代理状态');
+                    unsubscribe = subscribeToResponses(agent.uuid, handleAgentUpdate);
+                })
+                .catch(err => console.error('MQTT连接失败:', err));
+        }
 
         // 组件卸载时取消订阅
         return () => {
@@ -569,7 +600,7 @@ export default function AgentDetail({agent: initialAgent}) {
 
                                 <div>
                                     <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">MQTT连接状态</h3>
-                                    <p className="text-sm font-medium flex items-center dark:text-white mt-1">
+                                    <p className="text-sm font-medium flex items-center dark:text-white mt-1" id="mqtt-status-indicator">
                 <span
                     className={`inline-block w-2 h-2 rounded-full mr-2 ${mqttConnected ? 'bg-green-500' : 'bg-gray-400'}`}></span>
                                         {mqttConnected ? '已连接' : '未连接 (使用HTTP API)'}

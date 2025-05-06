@@ -7,7 +7,7 @@ export default function CommandExecutor({agentUuid, isActive = false}) {
     if (!isActive) return null;
 
     return (
-        <div className="bg-[#1e1e1e] rounded-lg shadow dark:bg-gray-800 h-[500px] overflow-hidden p-2 terminal-container">
+        <div className="bg-[#1e1e1e] rounded-lg shadow dark:bg-gray-800 h-[500px] overflow-hidden p-2 terminal-container" id="terminal-container">
             <MqttTerminal agentUuid={agentUuid} isActive={isActive} />
         </div>
     );

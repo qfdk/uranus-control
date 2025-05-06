@@ -61,6 +61,24 @@ export default function MqttStatus() {
         }
     }, [isMqttEnabled, isToggling]);
 
+    // 监听MQTT连接状态变化
+    useEffect(() => {
+        console.log('MqttStatus组件: MQTT连接状态变化:', connected ? '已连接' : '未连接');
+        // 如果连接断开，但本地显示已启用，可能需要触发重连
+        if (!connected && localMqttEnabled && !isReconnecting && isClient) {
+            console.log('MQTT连接状态不一致，可能需要重连');
+            // 尝试自动重连
+            if (reconnectTimerRef.current) {
+                clearTimeout(reconnectTimerRef.current);
+            }
+            
+            reconnectTimerRef.current = setTimeout(() => {
+                console.log('自动尝试重连MQTT...');
+                handleReconnect();
+            }, 3000); // 3秒后自动尝试重连
+        }
+    }, [connected, localMqttEnabled, isReconnecting, isClient]);
+
     // 点击外部区域关闭菜单
     useEffect(() => {
         function handleClickOutside(event) {
@@ -120,7 +138,32 @@ export default function MqttStatus() {
         try {
             // 调用重连
             await reconnect();
-            lastActionRef.current = `连接成功 (#${attemptNumber}, ${new Date().toLocaleTimeString()})`;
+            
+            // 等待短暂停，确保状态更新
+            setTimeout(() => {
+                // 检查连接状态
+                const currentConnected = useMqttStore.getState().connected;
+                
+                if (currentConnected) {
+                    lastActionRef.current = `连接成功 (#${attemptNumber}, ${new Date().toLocaleTimeString()})`;
+                    console.log('MQTT重连成功，当前状态:', currentConnected ? '已连接' : '未连接');
+                } else {
+                    lastActionRef.current = `连接失败 (#${attemptNumber}, ${new Date().toLocaleTimeString()})`;
+                    console.log('MQTT重连失败，当前状态仍然是:', currentConnected ? '已连接' : '未连接');
+                    
+                    // 如果连接失败，设置自动重试
+                    if (reconnectTimerRef.current) {
+                        clearTimeout(reconnectTimerRef.current);
+                    }
+                    
+                    reconnectTimerRef.current = setTimeout(() => {
+                        if (localMqttEnabled && !currentConnected) {
+                            console.log('触发自动重连...');
+                            handleReconnect();
+                        }
+                    }, 10000); // 10秒后自动重试
+                }
+            }, 1000); // 等待1秒确保状态更新
         } catch (error) {
             console.error('MQTT重连失败:', error);
             lastActionRef.current = `连接失败: ${error.message} (#${attemptNumber}, ${new Date().toLocaleTimeString()})`;

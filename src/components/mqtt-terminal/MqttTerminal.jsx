@@ -11,6 +11,7 @@ import {AlertCircle, Maximize2, Minimize2, XCircle} from 'lucide-react';
 import 'xterm/css/xterm.css';
 import './terminal.css';
 import toast from 'react-hot-toast';
+import { safelyFit, createSafeResizeObserver } from './terminal-fix';
 
 const MqttTerminal = ({agentUuid, isActive = true}) => {
     // 全屏状态
@@ -53,106 +54,102 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
         if (isActive && terminalRef.current && !terminalInstanceRef.current) {
             console.log('初始化xterm终端');
 
-            // 创建终端实例
-            terminal = new Terminal({
-                cursorBlink: true,
-                cursorStyle: 'bar',
-                fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-                fontSize: 14,
-                lineHeight: 1.5,
-                letterSpacing: 0.5,
-                convertEol: true,
-                scrollback: 5000, // 增加滚动历史
-                padding: 0, // 移除内边距，确保终端内容填满容器
-                theme: {
-                    background: '#1e1e1e',
-                    foreground: '#f0f0f0',
-                    cursor: '#f0f0f0',
-                    selection: 'rgba(255, 255, 255, 0.3)',
-                    black: '#000000',
-                    red: '#cd3131',
-                    green: '#0dbc79',
-                    yellow: '#e5e510',
-                    blue: '#2472c8',
-                    magenta: '#bc3fbc',
-                    cyan: '#11a8cd',
-                    white: '#e5e5e5',
-                    brightBlack: '#666666',
-                    brightRed: '#f14c4c',
-                    brightGreen: '#23d18b',
-                    brightYellow: '#f5f543',
-                    brightBlue: '#3b8eea',
-                    brightMagenta: '#d670d6',
-                    brightCyan: '#29b8db',
-                    brightWhite: '#ffffff'
-                }
-            });
-
-            // 创建插件
-            fitAddon = new FitAddon();
-            searchAddon = new SearchAddon();
-            webLinksAddon = new WebLinksAddon();
-
-            // 加载插件
-            terminal.loadAddon(fitAddon);
-            terminal.loadAddon(searchAddon);
-            terminal.loadAddon(webLinksAddon);
-
-            // 打开终端
-            terminal.open(terminalRef.current);
             try {
-                fitAddon.fit();
-            } catch (e) {
-                console.error('初始调整终端大小失败:', e);
-            }
+                // 创建终端实例
+                terminal = new Terminal({
+                    cursorBlink: true,
+                    cursorStyle: 'bar',
+                    fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+                    fontSize: 14,
+                    lineHeight: 1.5,
+                    letterSpacing: 0.5,
+                    convertEol: true,
+                    scrollback: 5000,
+                    padding: 0,
+                    theme: {
+                        background: '#1e1e1e',
+                        foreground: '#f0f0f0',
+                        cursor: '#f0f0f0',
+                        selection: 'rgba(255, 255, 255, 0.3)',
+                        black: '#000000',
+                        red: '#cd3131',
+                        green: '#0dbc79',
+                        yellow: '#e5e510',
+                        blue: '#2472c8',
+                        magenta: '#bc3fbc',
+                        cyan: '#11a8cd',
+                        white: '#e5e5e5',
+                        brightBlack: '#666666',
+                        brightRed: '#f14c4c',
+                        brightGreen: '#23d18b',
+                        brightYellow: '#f5f543',
+                        brightBlue: '#3b8eea',
+                        brightMagenta: '#d670d6',
+                        brightCyan: '#29b8db',
+                        brightWhite: '#ffffff'
+                    }
+                });
 
-            // 存储引用
-            terminalInstanceRef.current = terminal;
-            fitAddonRef.current = fitAddon;
-            searchAddonRef.current = searchAddon;
+                // 创建插件
+                fitAddon = new FitAddon();
+                searchAddon = new SearchAddon();
+                webLinksAddon = new WebLinksAddon();
 
-            // 设置初始化完成标志
-            setIsReady(true);
+                // 加载插件
+                terminal.loadAddon(fitAddon);
+                terminal.loadAddon(searchAddon);
+                terminal.loadAddon(webLinksAddon);
 
-            // 创建调整大小的观察器
-            const resizeObserver = new ResizeObserver(debounce(() => {
-                if (fitAddonRef.current && !resizing) {
-                    try {
-                        setResizing(true);
-                        fitAddonRef.current.fit();
+                // 直接打开终端，不调用fit
+                terminal.open(terminalRef.current);
+                
+                // 存储引用
+                terminalInstanceRef.current = terminal;
+                fitAddonRef.current = fitAddon;
+                searchAddonRef.current = searchAddon;
 
-                        // 如果已连接，发送调整大小命令
-                        if (sessionId && mqttConnected) {
+                // 设置初始化完成标志
+                setIsReady(true);
+                
+                // 使用安全的调整大小方法
+                setTimeout(() => {
+                    safelyFit(fitAddon, terminalRef.current);
+                }, 100);
+
+                // 创建安全的大小调整观察器
+                const resizeObserver = createSafeResizeObserver(fitAddon, terminalRef.current, () => {
+                    if (sessionId && mqttConnected && terminalInstanceRef.current) {
+                        try {
                             const {cols, rows} = terminalInstanceRef.current;
                             sendResizeCommand(cols, rows);
+                        } catch (error) {
+                            console.log('调整大小失败，忽略错误:', error.message);
                         }
-
-                        setResizing(false);
-                    } catch (error) {
-                        console.error('调整终端大小失败:', error);
-                        setResizing(false);
                     }
-                }
-            }, 200));
+                });
+                
+                // 设置引用
+                resizeObserverRef.current = resizeObserver;
 
-            resizeObserver.observe(terminalRef.current);
-            resizeObserverRef.current = resizeObserver;
+                // 设置终端数据处理事件
+                terminal.onData(() => {
+                    // 显示输入状态指示器
+                    setIsTyping(true);
 
-            // 设置终端数据处理事件
-            terminal.onData(() => {
-                // 显示输入状态指示器
-                setIsTyping(true);
+                    // 清除之前的超时
+                    if (typingTimeoutRef.current) {
+                        clearTimeout(typingTimeoutRef.current);
+                    }
 
-                // 清除之前的超时
-                if (typingTimeoutRef.current) {
-                    clearTimeout(typingTimeoutRef.current);
-                }
-
-                // 设置新的超时，500ms 后隐藏输入状态
-                typingTimeoutRef.current = setTimeout(() => {
-                    setIsTyping(false);
-                }, 500);
-            });
+                    // 设置新的超时，500ms 后隐藏输入状态
+                    typingTimeoutRef.current = setTimeout(() => {
+                        setIsTyping(false);
+                    }, 500);
+                });
+            } catch (error) {
+                console.error('xterm初始化失败:', error);
+                setError('xterm初始化失败: ' + error.message);
+            }
         }
 
         // 卸载时清理
@@ -353,7 +350,13 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
 
     // 发送调整大小命令
     const sendResizeCommand = (cols, rows) => {
-        if (!sessionId || !mqttConnected || !agentUuid) return;
+        if (!sessionId || !mqttConnected || !agentUuid || !cols || !rows) return;
+
+        // 确保尺寸值合理
+        if (cols <= 0 || rows <= 0 || isNaN(cols) || isNaN(rows)) {
+            console.warn(`无效的终端尺寸值: ${cols}x${rows}`);
+            return;
+        }
 
         console.log(`调整终端大小: ${cols}x${rows}`);
 
@@ -444,22 +447,22 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
             console.error('设置全屏模式样式失败:', e);
         }
 
-        // 在状态改变后调整终端大小
+        // 在状态改变后安全地调整终端大小
         setTimeout(() => {
             if (fitAddonRef.current) {
-                try {
-                    fitAddonRef.current.fit();
-
-                    // 发送调整大小命令
-                    if (sessionId && mqttConnected && terminalInstanceRef.current) {
+                safelyFit(fitAddonRef.current, terminalRef.current);
+                
+                // 发送调整大小命令
+                if (sessionId && mqttConnected && terminalInstanceRef.current) {
+                    try {
                         const {cols, rows} = terminalInstanceRef.current;
                         sendResizeCommand(cols, rows);
+                    } catch (error) {
+                        console.log('全屏切换时调整大小失败:', error.message);
                     }
-                } catch (error) {
-                    console.error('调整终端大小失败:', error);
                 }
             }
-        }, 100);
+        }, 300); // 增加延迟确保样式变化完成
     };
 
     // 只有在组件激活时渲染

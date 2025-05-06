@@ -131,6 +131,16 @@ const useMqttStore = create((set, get) => {
             client.subscribe(TOPICS.STATUS, {qos: 0});
             console.log('已订阅全局主题: 心跳和状态');
 
+            // 立即通知agentStore MQTT已连接
+            try {
+                const agentStoreInstance = useAgentStore.getState();
+                if (agentStoreInstance && typeof agentStoreInstance.setMqttConnected === 'function') {
+                    agentStoreInstance.setMqttConnected(true);
+                }
+            } catch (error) {
+                console.error('通知agentStore MQTT连接状态失败:', error);
+            }
+
             // 恢复已保存的代理订阅
             agentSubscriptions.forEach((handlers, agentUuid) => {
                 if (handlers.size > 0) {
@@ -166,7 +176,7 @@ const useMqttStore = create((set, get) => {
 
         client.on('error', (err) => {
             console.error('MQTT连接错误:', err);
-            set({error: err.message});
+            set({error: err.message, connected: false});
 
             // 更新重连计数
             reconnectCount++;
@@ -189,32 +199,38 @@ const useMqttStore = create((set, get) => {
 
         client.on('offline', () => {
             console.log('MQTT客户端离线');
-            set({connected: false});
+            set({connected: false, error: 'MQTT连接断开'});
 
-            // 通知agentStore MQTT离线
-            try {
-                const agentStoreInstance = useAgentStore.getState();
-                if (agentStoreInstance && typeof agentStoreInstance.setMqttConnected === 'function') {
-                    agentStoreInstance.setMqttConnected(false);
+            // 强制通知agentStore MQTT离线
+            setTimeout(() => {
+                try {
+                    const agentStoreInstance = useAgentStore.getState();
+                    if (agentStoreInstance && typeof agentStoreInstance.setMqttConnected === 'function') {
+                        console.log('通知agentStore: MQTT连接断开(离线事件)');
+                        agentStoreInstance.setMqttConnected(false);
+                    }
+                } catch (error) {
+                    console.error('通知agentStore MQTT连接状态失败:', error);
                 }
-            } catch (error) {
-                console.error('通知agentStore MQTT连接状态失败:', error);
-            }
+            }, 0);
         });
 
         client.on('close', () => {
             console.log('MQTT连接关闭');
-            set({connected: false});
+            set({connected: false, error: 'MQTT连接关闭'});
 
-            // 通知agentStore MQTT连接关闭
-            try {
-                const agentStoreInstance = useAgentStore.getState();
-                if (agentStoreInstance && typeof agentStoreInstance.setMqttConnected === 'function') {
-                    agentStoreInstance.setMqttConnected(false);
+            // 强制通知agentStore MQTT连接关闭
+            setTimeout(() => {
+                try {
+                    const agentStoreInstance = useAgentStore.getState();
+                    if (agentStoreInstance && typeof agentStoreInstance.setMqttConnected === 'function') {
+                        console.log('通知agentStore: MQTT连接关闭(关闭事件)');
+                        agentStoreInstance.setMqttConnected(false);
+                    }
+                } catch (error) {
+                    console.error('通知agentStore MQTT连接状态失败:', error);
                 }
-            } catch (error) {
-                console.error('通知agentStore MQTT连接状态失败:', error);
-            }
+            }, 0);
         });
 
         client.on('reconnect', () => {
@@ -587,6 +603,18 @@ const useMqttStore = create((set, get) => {
             // 如果已连接，直接返回
             if (get().connected && mqttClient && mqttClient.connected) {
                 console.log('MQTT已连接，不需要重新连接');
+                
+                // 确保透传状态到agentStore
+                try {
+                    const agentStoreInstance = useAgentStore.getState();
+                    if (agentStoreInstance && typeof agentStoreInstance.setMqttConnected === 'function') {
+                        console.log('在connect方法中确认状态同步到agentStore');
+                        agentStoreInstance.setMqttConnected(true);
+                    }
+                } catch (error) {
+                    console.error('通知agentStore MQTT连接状态失败:', error);
+                }
+                
                 return true;
             }
 
