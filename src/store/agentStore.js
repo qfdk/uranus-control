@@ -1,6 +1,6 @@
 // src/store/agentStore.js
 import {create} from 'zustand';
-import {combineAgentData} from '@/lib/agent-utils';
+import {combineAgentData, combineSingleAgent} from '@/lib/agent-utils';
 import useMqttStore from './mqttStore';
 
 // 创建agent全局状态管理
@@ -295,7 +295,26 @@ const useAgentStore = create((set, get) => ({
             }
 
             const data = await response.json();
-            return {success: true, agent: data};
+            
+            // 更新本地状态中对应的代理数据
+            set(state => {
+                // 查找代理在数组中的索引
+                const agentIndex = state.agents.findIndex(a => a._id === agentId);
+                
+                if (agentIndex !== -1) {
+                    // 更新已存在的代理
+                    const updatedAgents = [...state.agents];
+                    updatedAgents[agentIndex] = data;
+                    return { agents: updatedAgents };
+                }
+                
+                // 如果找不到，追加到数组
+                return { agents: [...state.agents, data] };
+            });
+            
+            // 返回合并后的数据，而不仅仅是HTTP数据
+            const combinedAgent = get().getCombinedAgent(agentId);
+            return {success: true, agent: combinedAgent || data};
         } catch (error) {
             console.error('获取代理数据失败:', error);
             return {success: false, error};
@@ -336,6 +355,15 @@ const useAgentStore = create((set, get) => ({
     getAgentById: (agentId) => {
         const {agents} = get();
         return agents.find(agent => agent._id === agentId);
+    },
+    
+    // 获取单个代理的合并数据 (HTTP + MQTT)
+    getCombinedAgent: (agentId) => {
+        const {agents, mqttAgentState, mqttConnected} = get();
+        const httpAgent = agents.find(agent => agent._id === agentId);
+        if (!httpAgent) return null;
+        
+        return combineSingleAgent(httpAgent, mqttAgentState, mqttConnected);
     },
 
     // 重置加载状态（用于初始化以及测试）

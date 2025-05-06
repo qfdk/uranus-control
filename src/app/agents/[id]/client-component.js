@@ -30,7 +30,12 @@ import toast from 'react-hot-toast';
 export default function AgentDetail({agent: initialAgent}) {
     const router = useRouter();
     const {connected: mqttConnected, subscribeToResponses, getAgentState} = useMqttStore();
-    const {deleteAgent, upgradeAgent} = useAgentStore();
+    
+    // 分别订阅各个状态，避免无限循环
+    const deleteAgent = useAgentStore(state => state.deleteAgent);
+    const upgradeAgent = useAgentStore(state => state.upgradeAgent);
+    const getCombinedAgent = useAgentStore(state => state.getCombinedAgent);
+    const mqttAgentState = useAgentStore(state => state.mqttAgentState);
 
     const [renderKey, setRenderKey] = useState(0);
     const [isDeleting, setIsDeleting] = useState(false);
@@ -42,6 +47,9 @@ export default function AgentDetail({agent: initialAgent}) {
     });
     const [agent, setAgent] = useState(initialAgent);
     const statusTimeoutRef = useRef(null);
+    
+    // 存储当前代理的UUID，用于mqttAgentState监听
+    const agentUuidRef = useRef(initialAgent?.uuid);
 
     // 使用自定义Hook处理客户端挂载
     const isMounted = useClientMount();
@@ -67,7 +75,7 @@ export default function AgentDetail({agent: initialAgent}) {
 
     // 监听MQTT实时状态更新
     useEffect(() => {
-        if (!agent?.uuid) return;
+        if (!agent?._id || !agent?.uuid) return;
 
         console.log('设置对代理的MQTT状态监听:', agent.uuid, '当前MQTT状态:', mqttConnected ? '已连接' : '未连接');
 
@@ -81,20 +89,11 @@ export default function AgentDetail({agent: initialAgent}) {
                 useMqttStore.getState().connect().catch(console.error);
             }
 
-            // 获取最新的代理状态
-            const mqttAgentData = getAgentState(agent.uuid);
-            if (mqttAgentData) {
-                setAgent(prev => ({
-                    ...prev,
-                    online: mqttAgentData.online,
-                    lastHeartbeat: mqttAgentData.lastHeartbeat || prev.lastHeartbeat,
-                    buildVersion: mqttAgentData.buildVersion || prev.buildVersion,
-                    buildTime: mqttAgentData.buildTime || prev.buildTime,
-                    commitId: mqttAgentData.commitId || prev.commitId,
-                    os: mqttAgentData.os || prev.os,
-                    memory: mqttAgentData.memory || prev.memory,
-                    _fromMqtt: true
-                }));
+            // 使用getCombinedAgent获取合并后的数据
+            const combinedAgent = getCombinedAgent(agent._id);
+            if (combinedAgent) {
+                console.log('使用合并后的代理数据更新状态');
+                setAgent(combinedAgent);
             }
         };
 
@@ -104,16 +103,11 @@ export default function AgentDetail({agent: initialAgent}) {
         if (mqttConnected) {
             unsubscribe = subscribeToResponses(agent.uuid, handleAgentUpdate);
             
-            // 立即检查当前状态
-            const currentState = getAgentState(agent.uuid);
-            if (currentState) {
-                // 更新代理状态
-                setAgent(prev => ({
-                    ...prev,
-                    online: currentState.online,
-                    lastHeartbeat: currentState.lastHeartbeat || prev.lastHeartbeat,
-                    _fromMqtt: true
-                }));
+            // 立即使用getCombinedAgent获取最新状态
+            const combinedAgent = getCombinedAgent(agent._id);
+            if (combinedAgent) {
+                console.log('MQTT已连接，立即更新为合并数据');
+                setAgent(combinedAgent);
             }
         } else {
             // 如果MQTT未连接，尝试连接
@@ -122,6 +116,13 @@ export default function AgentDetail({agent: initialAgent}) {
                 .then(() => {
                     console.log('MQTT连接成功，开始订阅代理状态');
                     unsubscribe = subscribeToResponses(agent.uuid, handleAgentUpdate);
+                    
+                    // 连接成功后立即更新状态
+                    const combinedAgent = getCombinedAgent(agent._id);
+                    if (combinedAgent) {
+                        console.log('MQTT连接后更新为合并数据');
+                        setAgent(combinedAgent);
+                    }
                 })
                 .catch(err => console.error('MQTT连接失败:', err));
         }
@@ -131,7 +132,7 @@ export default function AgentDetail({agent: initialAgent}) {
             console.log('取消代理MQTT订阅:', agent.uuid);
             unsubscribe();
         };
-    }, [agent?.uuid, mqttConnected, subscribeToResponses, getAgentState]);
+    }, [agent?._id, agent?.uuid, mqttConnected, subscribeToResponses, getCombinedAgent]);
 
     // 自动清除状态消息
     useEffect(() => {
@@ -141,6 +142,66 @@ export default function AgentDetail({agent: initialAgent}) {
             }
         };
     }, []);
+    
+    // 添加周期性刷新机制，确保即使没有MQTT消息也能更新状态
+    useEffect(() => {
+        if (!agent?._id || !isMounted) return;
+        
+        // 首次加载时，立即使用getCombinedAgent获取最新状态
+        const currentAgent = getCombinedAgent(agent._id);
+        if (currentAgent) {
+            setAgent(currentAgent);
+        }
+        
+        // 每5秒刷新一次代理状态，确保始终显示最新状态
+        const refreshInterval = setInterval(() => {
+            try {
+                // 从store中直接获取最新的合并状态
+                const newAgent = getCombinedAgent(agent._id);
+                if (newAgent) {
+                    // 检查在线状态是否变化
+                    const statusChanged = newAgent.online !== agent.online;
+                    
+                    // 更新代理状态
+                    setAgent(newAgent);
+                    
+                    // 如果状态发生变化，记录日志
+                    if (statusChanged) {
+                        console.log(`定时刷新: 代理状态已更新: ${newAgent.online ? '在线' : '离线'}`);
+                    }
+                }
+            } catch (error) {
+                console.error('周期性刷新代理状态失败:', error);
+            }
+        }, 3000); // 3秒刷新一次，增加频率确保快速响应
+        
+        return () => {
+            clearInterval(refreshInterval);
+        };
+    }, [agent?._id, agent?.online, getCombinedAgent, isMounted]);
+    
+    // 监听mqttAgentState变化，确保立即更新代理状态
+    useEffect(() => {
+        if (!agent?._id || !agent?.uuid || !isMounted) return;
+        
+        // 更新ref值，保存当前agent的UUID
+        agentUuidRef.current = agent.uuid;
+        
+        // 检查MQTT状态中是否有当前代理的数据
+        const mqttData = mqttAgentState?.[agent.uuid];
+        if (!mqttData) return;
+        
+        // 检查在线状态是否变化
+        if (mqttData.online !== agent.online) {
+            console.log(`MQTT状态变化检测到: ${agent.uuid} 现在 ${mqttData.online ? '在线' : '离线'}`);
+            
+            // 使用getCombinedAgent获取完整的合并状态
+            const currentAgent = getCombinedAgent(agent._id);
+            if (currentAgent) {
+                setAgent(currentAgent);
+            }
+        }
+    }, [agent?._id, agent?.uuid, agent?.online, mqttAgentState, getCombinedAgent, isMounted]);
 
     // 刷新代理数据
     const refreshAgentData = useCallback(async () => {
@@ -149,27 +210,31 @@ export default function AgentDetail({agent: initialAgent}) {
         console.log(`正在刷新代理数据: ${agent._id}`);
 
         try {
+            // 使用API获取最新数据
             const refreshResponse = await fetch(`/api/agents/${agent._id}`);
 
             if (!refreshResponse.ok) {
                 throw new Error(`获取代理数据失败: HTTP ${refreshResponse.status}`);
             }
 
-            const updatedAgent = await refreshResponse.json();
-            console.log('获取到更新的代理数据:', updatedAgent);
-
-            // 更新代理数据，保留MQTT标记
-            setAgent(prev => ({
-                ...updatedAgent,
-                _fromMqtt: prev?._fromMqtt || false
-            }));
-
-            return updatedAgent;
+            // 获取HTTP数据后，使用getCombinedAgent获取合并数据
+            await refreshResponse.json(); // 只是为了更新store中的数据，结果不保存
+            
+            // 获取合并后的最新数据
+            const combinedAgent = getCombinedAgent(agent._id);
+            if (combinedAgent) {
+                console.log('获取到合并后的代理数据');
+                setAgent(combinedAgent);
+                return combinedAgent;
+            } else {
+                console.log('无法获取合并数据，使用HTTP数据');
+                return null;
+            }
         } catch (error) {
             console.error('刷新代理状态失败:', error);
             throw error;
         }
-    }, [agent?._id]);
+    }, [agent?._id, getCombinedAgent]);
 
     // 处理删除代理
     const handleDeleteAgent = async () => {
@@ -596,15 +661,6 @@ export default function AgentDetail({agent: initialAgent}) {
                                 <div>
                                     <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">版本</h3>
                                     <p className="text-sm font-medium dark:text-white mt-1">{agent.buildVersion || '未知'}</p>
-                                </div>
-
-                                <div>
-                                    <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">MQTT连接状态</h3>
-                                    <p className="text-sm font-medium flex items-center dark:text-white mt-1" id="mqtt-status-indicator">
-                <span
-                    className={`inline-block w-2 h-2 rounded-full mr-2 ${mqttConnected ? 'bg-green-500' : 'bg-gray-400'}`}></span>
-                                        {mqttConnected ? '已连接' : '未连接 (使用HTTP API)'}
-                                    </p>
                                 </div>
                             </div>
                         </div>

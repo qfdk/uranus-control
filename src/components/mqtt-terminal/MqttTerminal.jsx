@@ -7,7 +7,7 @@ import {WebLinksAddon} from 'xterm-addon-web-links';
 import {SearchAddon} from 'xterm-addon-search';
 import {v4 as uuidv4} from 'uuid';
 import useMqttStore from '@/store/mqttStore';
-import {AlertCircle, Maximize2, Minimize2, XCircle} from 'lucide-react';
+import {AlertCircle, Maximize2, Minimize2, Eraser} from 'lucide-react';
 import 'xterm/css/xterm.css';
 import './terminal.css';
 import toast from 'react-hot-toast';
@@ -489,8 +489,31 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
                 className={`flex-1 ${error ? 'pt-10' : ''} relative`}
                 style={{width: '100%', height: '100%', overflow: 'hidden', backgroundColor: '#1e1e1e', borderRadius: '0.375rem'}}
             >
-                {/* 控制按钮组 */}
+                {/* 控制按钮组和状态指示器合并在一行 */}
                 <div className="terminal-controls">
+                    {/* 状态指示器 - 放在左侧 */}
+                    {sessionId && (
+                        <div className="terminal-status">
+                            <div
+                                className={`status-indicator ${isTyping ? 'typing' : (mqttConnected ? 'connected' : 'disconnected')}`}></div>
+                            <span>{isTyping ? '输入中...' : (mqttConnected ? '已连接' : '已断开')}</span>
+                        </div>
+                    )}
+                    
+                    {/* 清空终端按钮 */}
+                    <button
+                        onClick={() => {
+                            // 仅清空终端，不发送关闭命令
+                            if (terminalInstanceRef.current) {
+                                terminalInstanceRef.current.clear();
+                            }
+                        }}
+                        className="text-gray-400 hover:text-white bg-gray-700 hover:bg-gray-600 rounded-full p-1"
+                        title="清空终端"
+                    >
+                        <Eraser className="w-5 h-5"/>
+                    </button>
+
                     {/* 全屏按钮 */}
                     <button
                         onClick={toggleFullscreen}
@@ -499,31 +522,7 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
                     >
                         {isFullscreen ? <Minimize2 className="w-5 h-5"/> : <Maximize2 className="w-5 h-5"/>}
                     </button>
-
-                {/* 关闭按钮 */}
-                    <button
-                        onClick={() => {
-                            // 仅清空终端，不发送关闭命令
-                            if (terminalInstanceRef.current) {
-                                terminalInstanceRef.current.clear();
-                                terminalInstanceRef.current.writeln('\x1b[33m终端已清空\x1b[0m');
-                            }
-                        }}
-                        className="text-gray-400 hover:text-white bg-gray-700 hover:bg-gray-600 rounded-full p-1"
-                        title="清空终端"
-                    >
-                        <XCircle className="w-5 h-5"/>
-                    </button>
                 </div>
-
-                {/* 状态指示器 */}
-                {sessionId && (
-                    <div className="terminal-status">
-                        <div
-                            className={`status-indicator ${isTyping ? 'typing' : (mqttConnected ? 'connected' : 'disconnected')}`}></div>
-                        <span>{isTyping ? '输入中...' : (mqttConnected ? '已连接' : '已断开')}</span>
-                    </div>
-                )}
             </div>
         </div>
     );

@@ -72,13 +72,26 @@ export function AuthProvider({ children }) {
     }, [user, pathname, loading, router, isClient]);
 
     // 登录函数
-    const login = (userData) => {
+    const login = (userData, callback) => {
         localStorage.setItem('isAuthenticated', 'true');
         localStorage.setItem('user', JSON.stringify(userData));
-        setUser(userData);
-
+        
         // 添加cookies支持，配合中间件使用
         document.cookie = `isAuthenticated=true; path=/; max-age=${60*60*24*7}`; // 7天有效期
+        
+        // 设置用户状态并在完成后执行回调
+        setUser(userData);
+        
+        // 添加短暂延迟确保状态和cookie设置完成
+        setTimeout(() => {
+            // 如果提供了回调函数则执行
+            if (typeof callback === 'function') {
+                callback();
+            } else {
+                // 默认跳转到首页
+                router.push('/');
+            }
+        }, 300);
     };
 
     // 登出函数

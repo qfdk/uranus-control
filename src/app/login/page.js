@@ -1,11 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Lock, User } from 'lucide-react';
 import { useAuth } from '@/app/contexts/AuthContext';
+import dynamic from 'next/dynamic';
 
-export default function LoginPage() {
+// 纯客户端登录页面组件
+function LoginPageComponent() {
     const router = useRouter();
     const { login } = useAuth();
     const [isLoading, setIsLoading] = useState(false);
@@ -17,10 +19,7 @@ export default function LoginPage() {
         remember: false
     });
 
-    // 使用 useEffect 来处理客户端逻辑，但不会影响初始渲染
-    useEffect(() => {
-        // 客户端逻辑可以放在这里
-    }, []);
+    // 客户端处理逻辑
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -50,9 +49,10 @@ export default function LoginPage() {
             }
         
             if (data.success) {
-                // 使用AuthContext提供的login函数
+                // 只使用AuthContext的login函数
                 login(data.user);
-                // 登录成功后重定向到首页
+                
+                // 使用NextJS路由导航
                 router.push('/');
             } else {
                 throw new Error(data.message || '未知错误');
@@ -164,3 +164,6 @@ export default function LoginPage() {
         </div>
     );
 }
+
+// 使用动态导入避免SSR
+export default dynamic(() => Promise.resolve(LoginPageComponent), { ssr: false });

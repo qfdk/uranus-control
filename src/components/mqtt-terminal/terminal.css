@@ -72,10 +72,14 @@
   right: 8px;
   top: 8px;
   display: flex;
-  gap: 4px;
+  align-items: center;
+  gap: 8px;
   z-index: 50; /* 确保在xterm内容之上 */
-  opacity: 0.7;
+  opacity: 0.8;
   transition: opacity 0.2s ease;
+  background-color: rgba(20, 20, 20, 0.7);
+  padding: 4px 8px;
+  border-radius: 12px;
 }
 
 .terminal-controls:hover {
@@ -83,7 +87,7 @@
 }
 
 .terminal-controls button {
-  background-color: rgba(40, 40, 40, 0.8);
+  background-color: rgba(40, 40, 40, 0.7);
   color: #f0f0f0;
   border: none;
   border-radius: 50%;
@@ -101,22 +105,15 @@
   transform: scale(1.05);
 }
 
-/* 状态指示器 */
+/* 状态指示器 - 集成在控制栏中 */
 .terminal-status {
-  position: absolute;
-  right: 8px;
-  top: 44px; /* 置于控制按钮下方 */
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 8px;
-  background-color: rgba(20, 20, 20, 0.6);
-  border-radius: 12px;
   font-size: 12px;
   color: #ccc;
-  z-index: 50; /* 与控制按钮保持一致 */
+  margin-left: 4px;
   transition: opacity 0.2s ease;
-  opacity: 0.7;
 }
 
 .terminal-status:hover {

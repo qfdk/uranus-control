@@ -98,3 +98,57 @@ export function combineAgentData(httpAgents, mqttAgentState, mqttConnected) {
         return (a.hostname || '').localeCompare(b.hostname || '');
     });
 }
+
+/**
+ * 合并单个代理的HTTP数据与MQTT实时数据
+ * @param {Object} httpAgent - 从MongoDB获取的单个代理数据
+ * @param {Object} mqttAgentState - MQTT代理状态数据（所有代理）
+ * @param {boolean} mqttConnected - MQTT连接状态
+ * @returns {Object} 合并后的代理数据
+ */
+export function combineSingleAgent(httpAgent, mqttAgentState, mqttConnected) {
+    // 如果没有代理数据或UUID，直接返回原始数据
+    if (!httpAgent || !httpAgent.uuid) {
+        return httpAgent;
+    }
+
+    // 克隆代理数据
+    const resultAgent = { ...httpAgent };
+
+    // 只有当MQTT已连接并且存在代理MQTT状态时才进行合并
+    if (mqttConnected && mqttAgentState && mqttAgentState[httpAgent.uuid]) {
+        const mqttData = mqttAgentState[httpAgent.uuid];
+
+        // 明确设置在线状态，优先使用MQTT状态
+        resultAgent.online = mqttData.online !== undefined ? mqttData.online : resultAgent.online;
+
+        // 最后心跳时间，优先使用最新的
+        if (mqttData.lastHeartbeat) {
+            const mqttDate = new Date(mqttData.lastHeartbeat);
+            const agentDate = resultAgent.lastHeartbeat ? new Date(resultAgent.lastHeartbeat) : null;
+
+            if (!agentDate || mqttDate > agentDate) {
+                resultAgent.lastHeartbeat = mqttData.lastHeartbeat;
+            }
+        }
+
+        // 其他字段的更新策略
+        resultAgent.ip = resultAgent.ip || mqttData.ip;
+        resultAgent.hostname = resultAgent.hostname || mqttData.hostname;
+        resultAgent.buildVersion = resultAgent.buildVersion || mqttData.buildVersion;
+        resultAgent.buildTime = resultAgent.buildTime || mqttData.buildTime;
+        resultAgent.commitId = resultAgent.commitId || mqttData.commitId;
+        resultAgent.os = resultAgent.os || mqttData.os;
+        resultAgent.memory = resultAgent.memory || mqttData.memory;
+        resultAgent._fromMqtt = true;
+
+        // 复制MQTT代理的注册状态
+        if (mqttData._registering) {
+            resultAgent._registering = true;
+        }
+    } else {
+        resultAgent._fromMqtt = false;
+    }
+
+    return resultAgent;
+}

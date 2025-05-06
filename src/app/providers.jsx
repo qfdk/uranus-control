@@ -7,7 +7,12 @@ import { LoadingProvider } from './contexts/LoadingContext';
 import LoadingOverlay from '@/components/ui/LoadingOverlay';
 import useAgentStore from '@/store/agentStore';
 import useMqttStore from '@/store/mqttStore';
-import { Toaster } from 'react-hot-toast';
+import dynamic from 'next/dynamic';
+
+// 使用动态导入来避免Toaster的SSR水合问题
+const Toaster = dynamic(() => import('react-hot-toast').then(mod => mod.Toaster), {
+  ssr: false,
+});
 
 export function AppProviders({ children }) {
     const pathname = usePathname();

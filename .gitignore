@@ -346,3 +346,7 @@ dist
 
 
 # End of https://www.toptal.com/developers/gitignore/api/nextjs,macos,jetbrains+all,node,webstorm+all
+
+**/CLAUDE.local.md
+
+**/.claude/settings.local.json
