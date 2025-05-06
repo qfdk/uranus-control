@@ -167,12 +167,8 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
                 resizeObserverRef.current.disconnect();
             }
 
-            // 关闭会话
-            if (sessionId && mqttConnected) {
-                closeTerminalSession();
-            }
-
-            // 清理终端实例
+            // 不再发送关闭会话命令，防止后端关闭
+            // 直接清理终端实例
             if (terminalInstanceRef.current) {
                 try {
                     terminalInstanceRef.current.dispose();
@@ -383,10 +379,8 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
 
     // 重新连接
     const reconnect = async () => {
-        if (sessionId) {
-            await closeTerminalSession();
-        }
-
+        // 不再发送关闭会话命令，防止后端关闭
+        
         // 清空终端
         if (terminalInstanceRef.current) {
             terminalInstanceRef.current.clear();
