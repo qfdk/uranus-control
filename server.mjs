@@ -17,7 +17,7 @@ const handle = app.getRequestHandler();
 
 // MQTT配置
 const MQTT_BROKER = process.env.MQTT_BROKER || 'wss://mqtt.qfdk.me/mqtt';
-const CLIENT_ID = `uranus-control-server-${Date.now()}`;
+const CLIENT_ID = `uranus-web-server`;
 const MQTT_OPTIONS = {
     clientId: CLIENT_ID,
     clean: true,
@@ -99,14 +99,14 @@ async function startServer() {
                             }
                         }
                     }
-                } 
+                }
                 // 处理状态消息（包括遗嘱消息）
                 else if (topic === TOPICS.STATUS) {
                     // 检查payload是否包含代理uuid和状态信息
                     if (payload.uuid && payload.status === 'offline') {
                         const uuid = payload.uuid;
                         console.log(`收到代理离线状态消息: ${uuid}`);
-                        
+
                         try {
                             // 立即更新数据库中代理的在线状态
                             const result = await Agent.findOneAndUpdate(
@@ -117,7 +117,7 @@ async function startServer() {
                                 },
                                 {new: true}
                             );
-                            
+
                             if (result) {
                                 console.log(`代理 ${uuid} 已标记为离线（通过遗嘱消息）`);
                             } else {
