@@ -39,8 +39,12 @@ export default function AgentsClientPage() {
         setMqttConnected
     } = useAgentStore();
 
-    // MQTT状态 - 直接从Store获取connect方法
-    const {connected: mqttConnected, connect: connectMqtt} = useMqttStore();
+    // MQTT状态 - 获取连接状态和代理状态
+    const {
+        connected: mqttConnected, 
+        connect: connectMqtt,
+        mqttAgentState
+    } = useMqttStore();
 
     // 使用自定义Hook处理客户端挂载
     const isMounted = useClientMount();
@@ -173,25 +177,64 @@ export default function AgentsClientPage() {
         }
     }, [mqttConnected, isMounted, initializeMqtt]);
 
-    // 获取合并后的代理数据（HTTP+MQTT）
-    const combinedAgents = getCombinedAgents();
-
-    // 过滤代理
-    const filteredAgents = combinedAgents.filter(agent => {
-        // 状态过滤
-        if (statusFilter === 'online' && !agent.online) return false;
-        if (statusFilter === 'offline' && agent.online) return false;
-
-        // 搜索过滤
-        if (searchTerm) {
-            const search = searchTerm.toLowerCase();
-            return (agent.hostname && agent.hostname.toLowerCase().includes(search)) ||
-                (agent.ip && agent.ip.toLowerCase().includes(search)) ||
-                (agent.uuid && agent.uuid.toLowerCase().includes(search));
-        }
-
-        return true;
-    });
+    // 使用useState存储处理后的代理数据，避免每次渲染重新计算
+    const [processedAgents, setProcessedAgents] = useState([]);
+    
+    // 使用useEffect来处理代理数据的更新，添加防抖效果
+    useEffect(() => {
+        // 获取合并后的代理数据
+        const combinedAgents = getCombinedAgents();
+        
+        // 调试日志 - 在生产环境中可以移除
+        console.log('代理更新:', {
+            mqttConnected,
+            mqttAgentsCount: Object.keys(mqttAgentState || {}).length,
+            httpAgentsCount: agents.length,
+            combinedAgentsCount: combinedAgents.length
+        });
+        
+        // 过滤代理
+        const filtered = combinedAgents.filter(agent => {
+            // 状态过滤
+            if (statusFilter === 'online' && !agent.online) return false;
+            if (statusFilter === 'offline' && agent.online) return false;
+            
+            // 搜索过滤
+            if (searchTerm) {
+                const search = searchTerm.toLowerCase();
+                return (agent.hostname && agent.hostname.toLowerCase().includes(search)) ||
+                    (agent.ip && agent.ip.toLowerCase().includes(search)) ||
+                    (agent.uuid && agent.uuid.toLowerCase().includes(search));
+            }
+            
+            return true;
+        });
+        
+        // 排序代理
+        // 首先按在线状态排序，然后按主机名排序
+        const sortedAgents = [...filtered].sort((a, b) => {
+            // 先按在线状态排序 - 在线的排在前面
+            if (a.online !== b.online) {
+                return a.online ? -1 : 1;
+            }
+            
+            // 然后按主机名排序
+            if (a.hostname && b.hostname) {
+                return a.hostname.localeCompare(b.hostname);
+            }
+            return 0;
+        });
+        
+        // 使用延迟设置过滤后的代理数据，减少频繁更新导致的闪烁
+        const timeoutId = setTimeout(() => {
+            setProcessedAgents(sortedAgents);
+        }, 100); // 100ms延迟，减少闪烁
+        
+        return () => clearTimeout(timeoutId);
+    }, [getCombinedAgents, statusFilter, searchTerm, agents, mqttAgentState, mqttConnected]);
+    
+    // 使用处理后的代理数据
+    const filteredAgents = processedAgents;
 
     // 处理代理删除
     const handleDeleteAgent = async (agentId) => {
@@ -257,7 +300,8 @@ export default function AgentsClientPage() {
             // 仅当明确是新代理时才刷新列表
             if (isNew) {
                 // 检查是否已在当前列表中
-                const isInCurrentList = combinedAgents.some(a => a.uuid === uuid);
+                const currentAgents = getCombinedAgents();
+                const isInCurrentList = currentAgents.some(a => a.uuid === uuid);
 
                 if (!isInCurrentList) {
                     console.log('新代理不在当前列表中，刷新列表');
@@ -275,7 +319,7 @@ export default function AgentsClientPage() {
         return () => {
             window.removeEventListener('mqtt-agent-registered', handleAgentRegistered);
         };
-    }, [fetchAgents, combinedAgents]);
+    }, [fetchAgents, getCombinedAgents]);
 
     // 处理搜索和状态过滤
     const handleSearchChange = (e) => {
@@ -291,9 +335,11 @@ export default function AgentsClientPage() {
         return null;
     }
 
-    // 计算统计信息
-    const totalAgents = combinedAgents.length;
-    const onlineAgents = combinedAgents.filter(agent => agent.online).length;
+    // 计算统计信息 - 确保每次渲染都获取最新数据
+    // 这里需要获取所有代理，而不是过滤后的代理
+    const allAgents = getCombinedAgents(); 
+    const totalAgents = allAgents.length;
+    const onlineAgents = allAgents.filter(agent => agent.online).length;
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -474,13 +520,43 @@ export default function AgentsClientPage() {
 
             {/* 代理列表 */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-                <div className="overflow-x-auto">
+                {/* 加载状态覆盖层 - 放在表格外部 */}
+                {isLoading && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-800/80 z-10">
+                        <div className="flex flex-col items-center p-4 rounded-lg">
+                            <svg className="animate-spin h-8 w-8 text-blue-500 dark:text-blue-400 mb-2" xmlns="http://www.w3.org/2000/svg"
+                                fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                    strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor"
+                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <p className="text-gray-500 dark:text-gray-400">加载代理数据中...</p>
+                        </div>
+                    </div>
+                )}
+                
+                <div className="overflow-x-auto relative">
                     <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                         <thead className="bg-gray-50 dark:bg-gray-700">
                         <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">名称</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                名称
+                                <span className="ml-1 text-blue-500 dark:text-blue-400">
+                                    <svg className="inline-block w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                </span>
+                            </th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">IP地址</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">状态</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                状态
+                                <span className="ml-1 text-blue-500 dark:text-blue-400">
+                                    <svg className="inline-block w-3 h-3 transform rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                </span>
+                            </th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">版本</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Hash</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">最后心跳</th>
@@ -488,143 +564,144 @@ export default function AgentsClientPage() {
                         </tr>
                         </thead>
                         <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                        {/* 加载状态 */}
-                        {isLoading && <TableSpinner message="加载代理数据中..."/>}
-
-                        {/* 代理数据 - 仅在不加载且数据存在时显示 */}
-                        {!isLoading && filteredAgents.length > 0 && filteredAgents.map(agent => (
-                            <tr key={agent._id || agent.uuid}
-                                className={`hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${agent._mqttOnly ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                                    {agent.hostname || '未命名代理'}
-                                    {agent._mqttOnly && agent._registering && (
-                                        <span
-                                            className="ml-2 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
-                                            同步中...
-                                        </span>
-                                    )}
-                                    {agent._mqttOnly && !agent._registering && !agent._id && (
-                                        <span
-                                            className="ml-2 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
-                                            新发现
-                                        </span>
+                        {/* 无数据状态 - 在表格内部显示 */}
+                        {filteredAgents.length === 0 && !isLoading ? (
+                            <tr>
+                                <td colSpan="7" className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                                    {agents.length === 0 ? (
+                                        <div className="flex flex-col items-center">
+                                            <p className="mb-2">暂无代理数据</p>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                                                代理将在上线时自动注册
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col items-center">
+                                            <p className="mb-2">未找到符合条件的代理</p>
+                                            <Button
+                                                variant="secondary"
+                                                size="sm"
+                                                onClick={() => {
+                                                    setSearchTerm('');
+                                                    setStatusFilter('all');
+                                                }}
+                                            >
+                                                清除筛选条件
+                                            </Button>
+                                        </div>
                                     )}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{agent.ip}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                    <span
-                                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                            agent.online
-                                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                                                : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                                        }`}>
-                                      {agent.online ? '在线' : '离线'}
-                                        {/* Show real-time indicator if from MQTT */}
-                                        {agent._fromMqtt && (
-                                            <span className="ml-1 opacity-75">(实时)</span>
+                            </tr>
+                        ) : (
+                            /* 代理数据 - 正常显示 */
+                            filteredAgents.map(agent => (
+                                <tr key={agent._id || agent.uuid}
+                                    className={`hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-300 ${
+                                        agent._mqttOnly ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                                    }`}>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                                        {agent.hostname || '未命名代理'}
+                                        {agent._mqttOnly && agent._registering && (
+                                            <span
+                                                className="ml-2 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
+                                                同步中...
+                                            </span>
                                         )}
-                                    </span>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                    {agent.buildVersion || '未知'}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                    {agent.commitId ? agent.commitId.substring(0, 8) : '未知'}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                    {agent.lastHeartbeat
-                                        ? formatDistanceToNow(new Date(agent.lastHeartbeat), {addSuffix: true})
-                                        : '未知'}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                                    <div className="flex justify-end space-x-4">
-                                        {agent._id ? (
-                                            // 对于已注册的代理，显示详情和删除按钮
-                                            <>
-                                                <NavLink
-                                                    href={`/agents/${agent._id}`}
-                                                    className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 inline-flex items-center"
-                                                >
-                                                    <Eye className="w-4 h-4 mr-2"/>
-                                                    详情
-                                                </NavLink>
-                                                <button
-                                                    onClick={() => handleDeleteAgent(agent._id)}
-                                                    disabled={deleteLoading === agent._id}
-                                                    className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 inline-flex items-center"
-                                                >
-                                                    {deleteLoading === agent._id ? (
+                                        {agent._mqttOnly && !agent._registering && !agent._id && (
+                                            <span
+                                                className="ml-2 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
+                                                新发现
+                                            </span>
+                                        )}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{agent.ip}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                        <span
+                                            className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full transition-colors duration-300 ${
+                                                agent.online
+                                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                                                    : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                                            }`}>
+                                          {agent.online ? '在线' : '离线'}
+                                            {/* Show real-time indicator if from MQTT */}
+                                            {agent._fromMqtt && (
+                                                <span className="ml-1 opacity-75">(实时)</span>
+                                            )}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                        {agent.buildVersion || '未知'}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                        {agent.commitId ? agent.commitId.substring(0, 8) : '未知'}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                        {agent.lastHeartbeat
+                                            ? formatDistanceToNow(new Date(agent.lastHeartbeat), {addSuffix: true})
+                                            : '未知'}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                                        <div className="flex justify-end space-x-4">
+                                            {agent._id ? (
+                                                // 对于已注册的代理，显示详情和删除按钮
+                                                <>
+                                                    <NavLink
+                                                        href={`/agents/${agent._id}`}
+                                                        className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 inline-flex items-center"
+                                                    >
+                                                        <Eye className="w-4 h-4 mr-2"/>
+                                                        详情
+                                                    </NavLink>
+                                                    <button
+                                                        onClick={() => handleDeleteAgent(agent._id)}
+                                                        disabled={deleteLoading === agent._id}
+                                                        className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 inline-flex items-center"
+                                                    >
+                                                        {deleteLoading === agent._id ? (
+                                                            <>
+                                                                <svg
+                                                                    className="animate-spin h-4 w-4 mr-2 text-red-600 dark:text-red-400"
+                                                                    xmlns="http://www.w3.org/2000/svg" fill="none"
+                                                                    viewBox="0 0 24 24">
+                                                                    <circle className="opacity-25" cx="12" cy="12" r="10"
+                                                                            stroke="currentColor" strokeWidth="4"></circle>
+                                                                    <path className="opacity-75" fill="currentColor"
+                                                                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                                </svg>
+                                                                删除中...
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Trash2 className="w-4 h-4 mr-2"/>
+                                                                删除
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                </>
+                                            ) : (
+                                                // 对于正在注册中或新发现的代理
+                                                <span className="text-gray-500 dark:text-gray-400 inline-flex items-center">
+                                                    {agent._registering ? (
                                                         <>
-                                                            <svg
-                                                                className="animate-spin h-4 w-4 mr-2 text-red-600 dark:text-red-400"
-                                                                xmlns="http://www.w3.org/2000/svg" fill="none"
-                                                                viewBox="0 0 24 24">
-                                                                <circle className="opacity-25" cx="12" cy="12" r="10"
-                                                                        stroke="currentColor" strokeWidth="4"></circle>
-                                                                <path className="opacity-75" fill="currentColor"
-                                                                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                                            </svg>
-                                                            删除中...
+                                                            <RefreshCw className="w-4 h-4 mr-2 animate-spin"/>
+                                                            同步中...
                                                         </>
                                                     ) : (
                                                         <>
-                                                            <Trash2 className="w-4 h-4 mr-2"/>
-                                                            删除
+                                                            <RefreshCw className="w-4 h-4 mr-2"/>
+                                                            自动注册中...
                                                         </>
                                                     )}
-                                                </button>
-                                            </>
-                                        ) : (
-                                            // 对于正在注册中或新发现的代理
-                                            <span className="text-gray-500 dark:text-gray-400 inline-flex items-center">
-                                                {agent._registering ? (
-                                                    <>
-                                                        <RefreshCw className="w-4 h-4 mr-2 animate-spin"/>
-                                                        同步中...
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <RefreshCw className="w-4 h-4 mr-2"/>
-                                                        自动注册中...
-                                                    </>
-                                                )}
-                                            </span>
-                                        )}
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
                         </tbody>
                     </table>
                 </div>
-
-                {/* 无数据状态 */}
-                {!isLoading && filteredAgents.length === 0 && (
-                    <div className="p-6 text-center text-gray-500 dark:text-gray-400">
-                        {agents.length === 0 ? (
-                            <div className="flex flex-col items-center">
-                                <p className="mb-2">暂无代理数据</p>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">
-                                    代理将在上线时自动注册
-                                </p>
-                            </div>
-                        ) : (
-                            <div className="flex flex-col items-center">
-                                <p className="mb-2">未找到符合条件的代理</p>
-                                <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    onClick={() => {
-                                        setSearchTerm('');
-                                        setStatusFilter('all');
-                                    }}
-                                >
-                                    清除筛选条件
-                                </Button>
-                            </div>
-                        )}
-                    </div>
-                )}
             </div>
 
         </div>
