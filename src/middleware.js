@@ -9,6 +9,9 @@ export function middleware(request) {
     // 定义公开路径（不需要登录即可访问）
     const publicPaths = ['/login', '/api/auth/login'];
     
+    // 允许POST请求的特殊路径（用于代理自动注册）
+    const allowPostPaths = ['/api/agents'];
+    
     // 定义API路径，这些路径应当返回JSON响应而不是重定向
     const apiPaths = ['/api/auth', '/api/agents'];
 
@@ -30,8 +33,13 @@ export function middleware(request) {
         return NextResponse.redirect(new URL('/', request.url));
     }
 
-    // 如果不是公开路径且未登录
-    if (!isPublicPath && !isAuthenticated) {
+    // 检查是否为特殊POST请求路径（如代理自动注册）
+    const isAllowedPostPath = allowPostPaths.some(
+        (postPath) => path === postPath || path.startsWith(`${postPath}/`)
+    ) && request.method === 'POST';
+    
+    // 如果不是公开路径且未登录，且不是特殊POST请求
+    if (!isPublicPath && !isAuthenticated && !isAllowedPostPath) {
         // 如果是API请求，返回401错误而不是重定向
         if (isApiPath) {
             return NextResponse.json(
