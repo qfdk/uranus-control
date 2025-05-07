@@ -14,16 +14,6 @@ const TOPICS = {
 
 // 获取MQTT配置
 const getMqttConfig = () => {
-    if (typeof window === 'undefined') {
-        return {
-            MQTT_BROKER: 'wss://mqtt.qfdk.me/mqtt',
-            CLIENT_PREFIX: 'uranus-frontend',
-            RECONNECT_PERIOD: 3000,
-            CONNECT_TIMEOUT: 30000,
-            KEEPALIVE: 30
-        };
-    }
-
     // 尝试从localStorage获取配置
     try {
         const savedConfig = localStorage.getItem('mqttSettings');
@@ -31,7 +21,7 @@ const getMqttConfig = () => {
             const config = JSON.parse(savedConfig);
             return {
                 MQTT_BROKER: config.url || 'wss://mqtt.qfdk.me/mqtt',
-                CLIENT_PREFIX: config.clientPrefix || 'uranus-frontend',
+                CLIENT_PREFIX: config.clientPrefix || 'uranus-web',
                 RECONNECT_PERIOD: config.reconnectPeriod || 3000,
                 CONNECT_TIMEOUT: config.connectTimeout || 30000,
                 KEEPALIVE: config.keepalive || 30
@@ -44,7 +34,7 @@ const getMqttConfig = () => {
     // 默认配置
     return {
         MQTT_BROKER: 'wss://mqtt.qfdk.me/mqtt',
-        CLIENT_PREFIX: 'uranus-frontend',
+        CLIENT_PREFIX: 'uranus-web',
         RECONNECT_PERIOD: 3000,
         CONNECT_TIMEOUT: 30000,
         KEEPALIVE: 30
@@ -88,7 +78,11 @@ const useMqttStore = create((set, get) => {
 
         // 生成唯一客户端ID (仅首次)
         if (!clientId) {
-            clientId = `${config.CLIENT_PREFIX}-${uuidv4()}-${Date.now()}`;
+            // 生成唯一的随机ID
+            const randomId = uuidv4();
+            
+            // 使用uranus-web前缀和随机ID
+            clientId = `${config.CLIENT_PREFIX}-${randomId}`;
             console.log(`生成MQTT客户端ID: ${clientId}`);
         }
 
