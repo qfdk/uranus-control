@@ -331,7 +331,7 @@ export default function AgentsClientPage() {
                 {/* 代理节点卡片 - 优化样式 */}
                 <div
                     className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
-                    <div className="flex items-stretch p-3">
+                    <div className="flex items-center p-3 min-h-[6rem]">
                         <div className="flex items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/40 p-3 mr-4 w-16 h-16">
                             <Server className="w-8 h-8 text-blue-500 dark:text-blue-400"/>
                         </div>
@@ -355,7 +355,7 @@ export default function AgentsClientPage() {
                 {/* 系统信息卡片 - 优化样式 */}
                 <div
                     className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm">
-                    <div className="flex items-stretch p-3">
+                    <div className="flex items-center p-3 min-h-[6rem]">
                         <div className="flex items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/40 p-3 mr-4 w-16 h-16">
                             <Cpu className="w-8 h-8 text-indigo-500 dark:text-indigo-400"/>
                         </div>
@@ -382,7 +382,7 @@ export default function AgentsClientPage() {
                 {/* 快速操作卡片 - 优化样式 */}
                 <div
                     className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm">
-                    <div className="flex items-stretch p-3">
+                    <div className="flex items-center p-3 min-h-[6rem]">
                         <div className="flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800 p-3 mr-4 w-16 h-16">
                             <Settings className="w-8 h-8 text-gray-500 dark:text-gray-400"/>
                         </div>
