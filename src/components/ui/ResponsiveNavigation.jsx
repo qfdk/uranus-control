@@ -75,8 +75,7 @@ export default function ResponsiveNavigation() {
 
     // 导航项目
     const navItems = [
-        { href: '/', label: '仪表盘', icon: <LayoutDashboard className="h-5 w-5" /> },
-        { href: '/agents', label: '代理管理', icon: <Globe className="h-5 w-5" /> },
+        { href: '/agents', label: '控制台', icon: <LayoutDashboard className="h-5 w-5" /> },
         { href: '/settings', label: '设置', icon: <Settings className="h-5 w-5" /> }
     ];
 

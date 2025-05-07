@@ -1,13 +1,7 @@
 // src/app/page.js
-import AppShell from './AppShell';
-import DashboardClientPage from './client-page';
-
+import { redirect } from 'next/navigation';
 
 export default async function DashboardPage() {
-
-    return (
-        <AppShell>
-            <DashboardClientPage/>
-        </AppShell>
-    );
+    // Redirect to the agents page
+    redirect('/agents');
 }

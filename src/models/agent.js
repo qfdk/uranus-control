@@ -17,11 +17,7 @@ const AgentSchema = new mongoose.Schema({
     token: String,
 
     online: {type: Boolean, default: false},
-    lastHeartbeat: {type: Date, default: Date.now},
-    stats: {
-        websites: {type: Number, default: 0},
-        certificates: {type: Number, default: 0}
-    }
+    lastHeartbeat: {type: Date, default: Date.now}
 }, {timestamps: true});
 
 export default mongoose.models.Agent || mongoose.model('Agent', AgentSchema);

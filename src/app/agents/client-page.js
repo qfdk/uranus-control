@@ -1,9 +1,9 @@
 // src/app/agents/client-page.js
 'use client';
 
-import {useEffect, useState, useCallback, useRef} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import {formatDistanceToNow} from 'date-fns';
-import {Eye, RefreshCw, Trash2} from 'lucide-react';
+import {Eye, RefreshCw, Server, Trash2} from 'lucide-react';
 import Button from '@/components/ui/Button';
 import NavLink from '@/components/ui/NavLink';
 import {usePathname} from 'next/navigation';
@@ -17,6 +17,13 @@ export default function AgentsClientPage() {
     const [statusFilter, setStatusFilter] = useState('all');
     const [deleteLoading, setDeleteLoading] = useState(null);
     const [refreshLoading, setRefreshLoading] = useState(false);
+    const [upgradeStatus, setUpgradeStatus] = useState({
+        isUpgrading: false,
+        success: 0,
+        failed: 0,
+        total: 0,
+        message: ''
+    });
     const pathname = usePathname();
     const mqttInitializedRef = useRef(false);
 
@@ -26,6 +33,7 @@ export default function AgentsClientPage() {
         isLoading,
         fetchAgents,
         deleteAgent,
+        upgradeAgent,
         getCombinedAgents,
         initialLoaded,
         setMqttConnected
@@ -36,6 +44,86 @@ export default function AgentsClientPage() {
 
     // 使用自定义Hook处理客户端挂载
     const isMounted = useClientMount();
+
+    // 更新所有代理的处理函数
+    const handleUpgradeAllAgents = useCallback(async () => {
+        // 获取实时组合数据
+        const combinedAgentsData = getCombinedAgents();
+        // 只选择在线的代理进行升级
+        const onlineAgentsToUpgrade = combinedAgentsData.filter(agent => agent.online && agent._id);
+
+        if (onlineAgentsToUpgrade.length === 0) {
+            setUpgradeStatus({
+                isUpgrading: false,
+                success: 0,
+                failed: 0,
+                total: 0,
+                message: '没有在线代理可以升级'
+            });
+            alert('没有在线代理可以升级');
+            return;
+        }
+
+        if (!confirm(`确定要升级所有${onlineAgentsToUpgrade.length}个在线代理吗？这可能会导致服务临时中断。`)) {
+            return;
+        }
+
+        setUpgradeStatus({
+            isUpgrading: true,
+            success: 0,
+            failed: 0,
+            total: onlineAgentsToUpgrade.length,
+            message: `正在升级${onlineAgentsToUpgrade.length}个代理...`
+        });
+
+        let successCount = 0;
+        let failedCount = 0;
+
+        // 逐个升级代理
+        for (const agent of onlineAgentsToUpgrade) {
+            try {
+                const result = await upgradeAgent(agent._id);
+                if (result.success) {
+                    successCount++;
+                } else {
+                    failedCount++;
+                }
+
+                // 更新状态
+                setUpgradeStatus({
+                    isUpgrading: true,
+                    success: successCount,
+                    failed: failedCount,
+                    total: onlineAgentsToUpgrade.length,
+                    message: `正在升级: ${successCount + failedCount}/${onlineAgentsToUpgrade.length}`
+                });
+            } catch (error) {
+                console.error(`升级代理 ${agent.hostname || agent.uuid} 失败:`, error);
+                failedCount++;
+
+                // 更新状态
+                setUpgradeStatus({
+                    isUpgrading: true,
+                    success: successCount,
+                    failed: failedCount,
+                    total: onlineAgentsToUpgrade.length,
+                    message: `正在升级: ${successCount + failedCount}/${onlineAgentsToUpgrade.length}`
+                });
+            }
+        }
+
+        // 所有代理升级完成，刷新数据
+        await fetchAgents(true);
+
+        // 设置最终状态
+        setUpgradeStatus({
+            isUpgrading: false,
+            success: successCount,
+            failed: failedCount,
+            total: onlineAgentsToUpgrade.length,
+            message: `升级完成: ${successCount}成功, ${failedCount}失败`
+        });
+    }, [upgradeAgent, fetchAgents, getCombinedAgents]);
 
     // 强制初始化MQTT连接
     const initializeMqtt = useCallback(async () => {
@@ -203,39 +291,149 @@ export default function AgentsClientPage() {
         return null;
     }
 
+    // 计算统计信息
+    const totalAgents = combinedAgents.length;
+    const onlineAgents = combinedAgents.filter(agent => agent.online).length;
+
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-            <header className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <h1 className="text-2xl font-bold text-gray-800 dark:text-white">
-                    代理管理
-                    {mqttConnected && (
-                        <span className="ml-2 text-xs text-blue-500 dark:text-blue-400">(MQTT实时)</span>
-                    )}
-                    {!mqttConnected && (
-                        <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">(HTTP模式)</span>
-                    )}
-                </h1>
-                <div className="flex space-x-2">
-                    {!mqttConnected && (
-                        <Button
-                            variant="primary"
-                            size="sm"
-                            onClick={initializeMqtt}
-                        >
-                            连接MQTT
-                        </Button>
-                    )}
-                    <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={handleRefreshAgents}
-                        disabled={refreshLoading || isLoading}
-                    >
-                        <RefreshCw className={`w-4 h-4 mr-1 ${(refreshLoading || isLoading) ? 'animate-spin' : ''}`}/>
-                        {(refreshLoading || isLoading) ? '刷新中...' : '刷新列表'}
-                    </Button>
+            <div className="flex justify-between items-center mb-6">
+                <h1 className="text-2xl font-bold text-gray-800 dark:text-white">控制台仪表盘</h1>
+            </div>
+
+            {/* 升级状态提示 */}
+            {upgradeStatus.message && (
+                <div className={`mb-4 p-3 rounded-md text-sm flex items-center ${
+                    upgradeStatus.isUpgrading
+                        ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 text-blue-700 dark:text-blue-300'
+                        : (upgradeStatus.failed > 0
+                            ? 'bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-100 dark:border-yellow-800 text-yellow-700 dark:text-yellow-300'
+                            : 'bg-green-50 dark:bg-green-900/30 border border-green-100 dark:border-green-800 text-green-700 dark:text-green-300')
+                }`}>
+                    {upgradeStatus.isUpgrading ? (
+                        <RefreshCw className="w-4 h-4 mr-2 animate-spin"/>
+                    ) : (upgradeStatus.failed > 0 ? (
+                        <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                    ) : (
+                        <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/>
+                        </svg>
+                    ))}
+                    <span>{upgradeStatus.message}</span>
                 </div>
-            </header>
+            )}
+
+            {/* 状态卡片、系统信息和快速操作放在同一行 */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                {/* 代理节点卡片 - 优化样式 */}
+                <div
+                    className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
+                    <div className="flex items-center p-3">
+                        <div className="rounded-full bg-blue-100 dark:bg-blue-900/40 p-2 mr-3">
+                            <Server className="w-5 h-5 text-blue-500 dark:text-blue-400"/>
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium text-blue-600 dark:text-blue-400">代理节点</p>
+                            <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">{onlineAgents}/{totalAgents}</p>
+                        </div>
+                        <div className="ml-auto">
+                            <div
+                                className="text-sm px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300">
+                                {mqttConnected ? 'MQTT实时' : 'HTTP模式'}
+                            </div>
+                        </div>
+                    </div>
+                    <div className="px-3 pb-3 pt-1">
+                        <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full">
+                            <div className="h-2 bg-gradient-to-r from-blue-400 to-blue-500 dark:from-blue-500 dark:to-blue-600 rounded-full transition-all duration-500 ease-in-out"
+                                style={{width: `${(onlineAgents / Math.max(totalAgents, 1)) * 100}%`}}></div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* 系统信息卡片 - 优化样式 */}
+                <div
+                    className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm">
+                    <div className="flex items-center p-3">
+                        <div className="rounded-full bg-indigo-100 dark:bg-indigo-900/40 p-2 mr-3">
+                            <svg className="w-5 h-5 text-indigo-500 dark:text-indigo-400" fill="none"
+                                 viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                      d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                            </svg>
+                        </div>
+                        <div className="flex-1">
+                            <p className="text-sm font-medium text-indigo-600 dark:text-indigo-400">系统信息</p>
+                            <div className="flex justify-between items-center mt-1">
+                                <span className="text-sm text-gray-600 dark:text-gray-400">控制台版本:</span>
+                                <span className="text-sm font-medium text-gray-900 dark:text-gray-200">v1.0.0</span>
+                            </div>
+                            <div className="flex justify-between items-center mt-1">
+                                <span className="text-sm text-gray-600 dark:text-gray-400">MQTT状态:</span>
+                                <span className={`text-sm font-medium rounded-full px-2 py-0.5 ${
+                                    mqttConnected
+                                        ? 'bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-300'
+                                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+                                }`}>
+                                    {mqttConnected ? '已连接' : '未连接'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* 快速操作卡片 - 优化样式 */}
+                <div
+                    className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm">
+                    <div className="flex items-center p-3">
+                        <div className="rounded-full bg-gray-100 dark:bg-gray-800 p-2 mr-3">
+                            <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24"
+                                 stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            </svg>
+                        </div>
+                        <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1.5">快速操作</p>
+                            <div className="flex space-x-2">
+                                <button
+                                    onClick={handleUpgradeAllAgents}
+                                    disabled={upgradeStatus.isUpgrading || onlineAgents === 0}
+                                    className={`flex-1 text-sm px-3 py-2 rounded ${
+                                        upgradeStatus.isUpgrading || onlineAgents === 0
+                                            ? 'bg-blue-400 dark:bg-blue-500 cursor-not-allowed opacity-70 text-white'
+                                            : 'bg-blue-500 dark:bg-blue-600 hover:bg-blue-600 dark:hover:bg-blue-700 text-white'
+                                    } transition-colors flex items-center justify-center`}
+                                >
+                                    {upgradeStatus.isUpgrading && (
+                                        <RefreshCw className="w-4 h-4 mr-1.5 animate-spin"/>
+                                    )}
+                                    {upgradeStatus.isUpgrading ? `升级中` : '更新代理'}
+                                </button>
+                                <button
+                                    onClick={handleRefreshAgents}
+                                    disabled={refreshLoading || isLoading}
+                                    className={`flex-1 text-sm px-3 py-2 rounded ${
+                                        refreshLoading || isLoading
+                                            ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed opacity-70 text-white'
+                                            : 'bg-gray-500 dark:bg-gray-700 hover:bg-gray-600 dark:hover:bg-gray-600 text-white'
+                                    } transition-colors flex items-center justify-center`}
+                                >
+                                    {refreshLoading && (
+                                        <RefreshCw className="w-4 h-4 mr-1.5 animate-spin"/>
+                                    )}
+                                    {refreshLoading ? '刷新中' : '刷新数据'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             {/* 搜索和过滤 */}
             <div className="mb-6 bg-white dark:bg-gray-800 p-5 rounded-lg shadow-sm">
@@ -440,6 +638,7 @@ export default function AgentsClientPage() {
                     </div>
                 )}
             </div>
+
         </div>
     );
 }
