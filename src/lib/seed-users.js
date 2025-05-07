@@ -15,7 +15,7 @@ export async function seedDefaultUsers() {
 
         // 如果已经有用户，则跳过
         if (userCount > 0) {
-            return;s
+            return;
         }
 
         // 创建默认管理员用户

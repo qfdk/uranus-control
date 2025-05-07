@@ -7,8 +7,8 @@ export function middleware(request) {
     const path = request.nextUrl.pathname;
 
     // 定义公开路径（不需要登录即可访问）
-    const publicPaths = ['/login', '/api/auth/login', '/api/agents'];
-
+    const publicPaths = ['/login', '/api/auth/login'];
+    
     // 定义API路径，这些路径应当返回JSON响应而不是重定向
     const apiPaths = ['/api/auth', '/api/agents'];
 
