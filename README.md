@@ -68,16 +68,6 @@
    }
    ```
 
-4. **关闭会话**:
-   ```json
-   {
-     "command": "terminal",
-     "type": "close",
-     "sessionId": "对应会话ID",
-     "requestId": "请求ID"
-   }
-   ```
-
 ### 响应格式
 
 ```json
@@ -85,7 +75,7 @@
   "success": true,
   "requestId": "对应请求ID",
   "sessionId": "对应会话ID",
-  "type": "操作类型", // created, output, closed, error
+  "type": "操作类型", // created, output, error
   "data": "输出内容", // 当type为output时
   "message": "消息说明" // 可选
 }
@@ -99,15 +89,4 @@ pnpm install
 
 # 启动开发服务器
 pnpm dev
-```
-
-## 终端组件依赖
-
-终端功能需要以下依赖:
-
-```bash
-pnpm add xterm@5.3.0
-pnpm add xterm-addon-fit@0.8.0
-pnpm add xterm-addon-web-links@0.9.0
-pnpm add xterm-addon-search@0.13.0
 ```

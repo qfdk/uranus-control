@@ -99,6 +99,34 @@ async function startServer() {
                             }
                         }
                     }
+                } 
+                // 处理状态消息（包括遗嘱消息）
+                else if (topic === TOPICS.STATUS) {
+                    // 检查payload是否包含代理uuid和状态信息
+                    if (payload.uuid && payload.status === 'offline') {
+                        const uuid = payload.uuid;
+                        console.log(`收到代理离线状态消息: ${uuid}`);
+                        
+                        try {
+                            // 立即更新数据库中代理的在线状态
+                            const result = await Agent.findOneAndUpdate(
+                                {uuid},
+                                {
+                                    online: false,
+                                    lastHeartbeat: new Date() // 记录最后状态更新时间
+                                },
+                                {new: true}
+                            );
+                            
+                            if (result) {
+                                console.log(`代理 ${uuid} 已标记为离线（通过遗嘱消息）`);
+                            } else {
+                                console.log(`未找到要更新状态的代理: ${uuid}`);
+                            }
+                        } catch (dbError) {
+                            console.error(`更新代理 ${uuid} 离线状态时出错:`, dbError);
+                        }
+                    }
                 }
             } catch (error) {
                 console.error('处理MQTT消息时出错:', error);
