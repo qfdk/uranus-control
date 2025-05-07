@@ -331,25 +331,23 @@ export default function AgentsClientPage() {
                 {/* 代理节点卡片 - 优化样式 */}
                 <div
                     className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
-                    <div className="flex items-center p-3">
-                        <div className="rounded-full bg-blue-100 dark:bg-blue-900/40 p-2 mr-3">
-                            <Server className="w-5 h-5 text-blue-500 dark:text-blue-400"/>
+                    <div className="flex items-stretch p-3">
+                        <div className="flex items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/40 p-3 mr-4">
+                            <Server className="w-8 h-8 text-blue-500 dark:text-blue-400"/>
                         </div>
-                        <div>
-                            <p className="text-sm font-medium text-blue-600 dark:text-blue-400">代理节点</p>
-                            <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">{onlineAgents}/{totalAgents}</p>
-                        </div>
-                        <div className="ml-auto">
-                            <div
-                                className="text-sm px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300">
-                                {mqttConnected ? 'MQTT实时' : 'HTTP模式'}
+                        <div className="flex flex-col justify-center flex-1">
+                            <div className="flex items-center justify-between mb-1">
+                                <p className="text-sm font-medium text-blue-600 dark:text-blue-400">代理节点</p>
+                                <div
+                                    className="text-sm px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300">
+                                    {mqttConnected ? 'MQTT实时' : 'HTTP模式'}
+                                </div>
                             </div>
-                        </div>
-                    </div>
-                    <div className="px-3 pb-3 pt-1">
-                        <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full">
-                            <div className="h-2 bg-gradient-to-r from-blue-400 to-blue-500 dark:from-blue-500 dark:to-blue-600 rounded-full transition-all duration-500 ease-in-out"
-                                style={{width: `${(onlineAgents / Math.max(totalAgents, 1)) * 100}%`}}></div>
+                            <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">{onlineAgents}/{totalAgents}</p>
+                            <div className="mt-2 w-full bg-gray-100 dark:bg-gray-800 rounded-full">
+                                <div className="h-2 bg-gradient-to-r from-blue-400 to-blue-500 dark:from-blue-500 dark:to-blue-600 rounded-full transition-all duration-500 ease-in-out"
+                                    style={{width: `${(onlineAgents / Math.max(totalAgents, 1)) * 100}%`}}></div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -357,16 +355,16 @@ export default function AgentsClientPage() {
                 {/* 系统信息卡片 - 优化样式 */}
                 <div
                     className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm">
-                    <div className="flex items-center p-3">
-                        <div className="rounded-full bg-indigo-100 dark:bg-indigo-900/40 p-2 mr-3">
-                            <svg className="w-5 h-5 text-indigo-500 dark:text-indigo-400" fill="none"
+                    <div className="flex items-stretch p-3">
+                        <div className="flex items-center justify-center rounded-lg bg-indigo-100 dark:bg-indigo-900/40 p-3 mr-4">
+                            <svg className="w-8 h-8 text-indigo-500 dark:text-indigo-400" fill="none"
                                  viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                                       d="M13 10V3L4 14h7v7l9-11h-7z"/>
                             </svg>
                         </div>
-                        <div className="flex-1">
-                            <p className="text-sm font-medium text-indigo-600 dark:text-indigo-400">系统信息</p>
+                        <div className="flex flex-col justify-center flex-1">
+                            <p className="text-sm font-medium text-indigo-600 dark:text-indigo-400 mb-2">系统信息</p>
                             <div className="flex justify-between items-center mt-1">
                                 <span className="text-sm text-gray-600 dark:text-gray-400">控制台版本:</span>
                                 <span className="text-sm font-medium text-gray-900 dark:text-gray-200">v1.0.0</span>
@@ -388,9 +386,9 @@ export default function AgentsClientPage() {
                 {/* 快速操作卡片 - 优化样式 */}
                 <div
                     className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm">
-                    <div className="flex items-center p-3">
-                        <div className="rounded-full bg-gray-100 dark:bg-gray-800 p-2 mr-3">
-                            <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24"
+                    <div className="flex items-stretch p-3">
+                        <div className="flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800 p-3 mr-4">
+                            <svg className="w-8 h-8 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24"
                                  stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                                       d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
@@ -398,8 +396,8 @@ export default function AgentsClientPage() {
                                       d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                             </svg>
                         </div>
-                        <div className="flex-1">
-                            <p className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1.5">快速操作</p>
+                        <div className="flex flex-col justify-center flex-1">
+                            <p className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-2">快速操作</p>
                             <div className="flex space-x-2">
                                 <button
                                     onClick={handleUpgradeAllAgents}
