@@ -482,38 +482,51 @@ export default function AgentDetail({agent: initialAgent}) {
                 </Link>
             </div>
 
-            <header className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-800 dark:text-white">{agent.hostname || agent.uuid}</h1>
-                    <p className="text-gray-500 dark:text-gray-400">UUID: {agent.uuid}</p>
-                    <div className="mt-1">
-                        <span className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${
-                            agent.online ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                        }`}>
-                            <span
-                                className={`inline-block w-2 h-2 rounded-full mr-1 ${agent.online ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                            {agent.online ? '在线' : '离线'}
-                            {agent._fromMqtt && <span className="ml-1">(MQTT实时)</span>}
-                        </span>
+            <header className="mb-6 px-4 py-5 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div className="flex-1 min-w-0">  {/* min-w-0 allows truncate to work properly */}
+                        <h1 className="text-2xl font-bold text-gray-800 dark:text-white truncate">
+                            {agent.hostname || agent.uuid}
+                        </h1>
+                        
+                        <div className="mt-2 flex flex-wrap items-center gap-3">
+                            {/* Status Badge */}
+                            <span className={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-full ${
+                                agent.online ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                            }`}>
+                                <span className={`inline-block w-2 h-2 rounded-full mr-1.5 ${agent.online ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                                {agent.online ? '在线' : '离线'}
+                                {agent._fromMqtt && <span className="ml-1">(MQTT实时)</span>}
+                            </span>
+                            
+                            {/* UUID Badge */}
+                            <span className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                                <span className="font-normal mr-1">UUID:</span>
+                                <span className="font-medium">{agent.uuid}</span>
+                            </span>
+                        </div>
                     </div>
-                </div>
-                <div className="flex gap-2">
-                    <Button
-                        variant="primary"
-                        onClick={handleUpgradeAgent}
-                        disabled={isUpgrading || !agent.online}
-                    >
-                        <Upload className={`w-4 h-4 mr-1 ${isUpgrading ? 'animate-spin' : ''}`}/>
-                        {isUpgrading ? '升级中...' : '升级代理'}
-                    </Button>
-                    <Button
-                        variant="danger"
-                        onClick={handleDeleteAgent}
-                        disabled={isDeleting}
-                    >
-                        <XCircle className={`w-4 h-4 mr-1 ${isDeleting ? 'animate-spin' : ''}`}/>
-                        {isDeleting ? '删除中...' : '删除代理'}
-                    </Button>
+                    
+                    <div className="flex gap-2 self-end sm:self-auto">
+                        <Button
+                            variant="primary"
+                            onClick={handleUpgradeAgent}
+                            disabled={isUpgrading || !agent.online}
+                            className="shadow-sm"
+                        >
+                            <Upload className={`w-4 h-4 mr-1.5 ${isUpgrading ? 'animate-spin' : ''}`}/>
+                            {isUpgrading ? '升级中...' : '升级代理'}
+                        </Button>
+                        <Button
+                            variant="danger"
+                            onClick={handleDeleteAgent}
+                            disabled={isDeleting}
+                            className="shadow-sm"
+                        >
+                            <XCircle className={`w-4 h-4 mr-1.5 ${isDeleting ? 'animate-spin' : ''}`}/>
+                            {isDeleting ? '删除中...' : '删除代理'}
+                        </Button>
+                    </div>
                 </div>
             </header>
 
@@ -579,14 +592,16 @@ export default function AgentDetail({agent: initialAgent}) {
                     <div className="bg-white rounded-lg shadow dark:bg-gray-800 overflow-hidden">
                         <div className="p-5 border-b border-gray-200 dark:border-gray-700">
                             <h2 className="text-lg font-medium text-gray-800 dark:text-white mb-4">基本状态</h2>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div className="flex items-center">
-                                    <div className="p-2 rounded-md bg-blue-50 dark:bg-blue-900/30 mr-3">
+                            
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {/* 最后心跳卡片 */}
+                                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 flex items-center">
+                                    <div className="p-2 rounded-full bg-blue-100 dark:bg-blue-800/60 mr-3 flex-shrink-0">
                                         <Clock className="w-5 h-5 text-blue-500 dark:text-blue-400"/>
                                     </div>
-                                    <div>
+                                    <div className="overflow-hidden">
                                         <p className="text-xs font-medium text-gray-500 dark:text-gray-400">最后心跳</p>
-                                        <p className="text-sm font-medium dark:text-white">
+                                        <p className="text-sm font-medium dark:text-white truncate">
                                             {agent.lastHeartbeat
                                                 ? formatDistanceToNow(new Date(agent.lastHeartbeat), {addSuffix: true})
                                                 : '未知'}
@@ -594,23 +609,29 @@ export default function AgentDetail({agent: initialAgent}) {
                                     </div>
                                 </div>
 
-                                <div className="flex items-center">
-                                    <div className="p-2 rounded-md bg-green-50 dark:bg-green-900/30 mr-3">
+                                {/* 操作系统卡片 */}
+                                <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 flex items-center">
+                                    <div className="p-2 rounded-full bg-green-100 dark:bg-green-800/60 mr-3 flex-shrink-0">
                                         <Cpu className="w-5 h-5 text-green-500 dark:text-green-400"/>
                                     </div>
-                                    <div>
+                                    <div className="overflow-hidden">
                                         <p className="text-xs font-medium text-gray-500 dark:text-gray-400">操作系统</p>
-                                        <p className="text-sm font-medium dark:text-white">{agent.os || '未知'}</p>
+                                        <p className="text-sm font-medium dark:text-white truncate" title={agent.os || '未知'}>
+                                            {agent.os || '未知'}
+                                        </p>
                                     </div>
                                 </div>
 
-                                <div className="flex items-center">
-                                    <div className="p-2 rounded-md bg-purple-50 dark:bg-purple-900/30 mr-3">
+                                {/* 内存卡片 */}
+                                <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4 flex items-center">
+                                    <div className="p-2 rounded-full bg-purple-100 dark:bg-purple-800/60 mr-3 flex-shrink-0">
                                         <HardDrive className="w-5 h-5 text-purple-500 dark:text-purple-400"/>
                                     </div>
-                                    <div>
+                                    <div className="overflow-hidden">
                                         <p className="text-xs font-medium text-gray-500 dark:text-gray-400">内存</p>
-                                        <p className="text-sm font-medium dark:text-white">{agent.memory || '未知'}</p>
+                                        <p className="text-sm font-medium dark:text-white truncate" title={agent.memory || '未知'}>
+                                            {agent.memory || '未知'}
+                                        </p>
                                     </div>
                                 </div>
                             </div>
@@ -619,48 +640,109 @@ export default function AgentDetail({agent: initialAgent}) {
                         {/* 详细信息 */}
                         <div className="p-5">
                             <h2 className="text-lg font-medium text-gray-800 dark:text-white mb-4">详细信息</h2>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                    <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">IP地址</h3>
-                                    <p className="text-sm font-medium dark:text-white mt-1">{agent.ip || '未知'}</p>
+                            
+                            {/* 主要详细信息卡片风格 */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                                {/* IP 地址卡片 */}
+                                <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 flex flex-col">
+                                    <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">IP地址</h3>
+                                    <div className="flex items-center">
+                                        <p className="text-sm font-medium dark:text-white truncate flex-grow" title={agent.ip || '未知'}>
+                                            {agent.ip || '未知'}
+                                        </p>
+                                        {agent.ip && (
+                                            <button 
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(agent.ip);
+                                                    toast.success('IP地址已复制到剪贴板');
+                                                }}
+                                                className="ml-2 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-md"
+                                                title="复制IP地址"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                </svg>
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
-                                {/* URL字段 */}
-                                <div>
-                                    <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">管理页面</h3>
-                                    <p className="text-sm font-medium dark:text-white mt-1">
+                                
+                                {/* URL 卡片 */}
+                                <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 flex flex-col">
+                                    <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">管理页面</h3>
+                                    <div className="text-sm font-medium dark:text-white">
                                         {agent.url ? (
                                             <a
                                                 href={agent.url}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 flex items-center"
+                                                className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 flex items-center truncate"
+                                                title={agent.url}
                                             >
-                                                <span>{agent.url}</span>
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1"
+                                                <span className="truncate">{agent.url}</span>
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1 flex-shrink-0"
                                                      fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                                                           d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
                                                 </svg>
                                             </a>
                                         ) : '未设置'}
+                                    </div>
+                                </div>
+                                
+                                {/* 版本卡片 */}
+                                <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 flex flex-col">
+                                    <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">版本</h3>
+                                    <p className="text-sm font-medium dark:text-white truncate" title={agent.buildVersion || '未知'}>
+                                        {agent.buildVersion || '未知'}
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            {/* 次要详细信息 */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {/* 构建时间 */}
+                                <div className="border-l-2 border-blue-500 dark:border-blue-600 pl-3 py-1">
+                                    <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400">构建时间</h3>
+                                    <p className="text-sm font-medium dark:text-white mt-1 truncate" title={agent.buildTime || '未知'}>
+                                        {agent.buildTime || '未知'}
                                     </p>
                                 </div>
 
-                                <div>
-                                    <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">构建时间</h3>
-                                    <p className="text-sm font-medium dark:text-white mt-1">{agent.buildTime || '未知'}</p>
+                                {/* Hash */}
+                                <div className="border-l-2 border-purple-500 dark:border-purple-600 pl-3 py-1">
+                                    <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400">Commit Hash</h3>
+                                    <div className="flex items-center mt-1">
+                                        <p className="text-sm font-medium dark:text-white flex-grow">
+                                            {agent.commitId ? (
+                                                <span title={agent.commitId}>
+                                                    {agent.commitId.substring(0, 8)}
+                                                </span>
+                                            ) : '未知'}
+                                        </p>
+                                        {agent.commitId && (
+                                            <button 
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(agent.commitId);
+                                                    toast.success('Commit Hash已复制到剪贴板');
+                                                }}
+                                                className="ml-2 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500 rounded-md"
+                                                title="复制完整Hash值"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                </svg>
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
-
-                                <div>
-                                    <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Hash</h3>
-                                    <p className="text-sm font-medium dark:text-white mt-1">
-                                        {agent.commitId ? agent.commitId.substring(0, 8) : '未知'}
+                                
+                                {/* 其他标识符 */}
+                                <div className="border-l-2 border-green-500 dark:border-green-600 pl-3 py-1">
+                                    <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400">标识符</h3>
+                                    <p className="text-sm font-medium dark:text-white mt-1 truncate" title={agent._id || '未知'}>
+                                        {agent._id || '未知'}
                                     </p>
-                                </div>
-
-                                <div>
-                                    <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">版本</h3>
-                                    <p className="text-sm font-medium dark:text-white mt-1">{agent.buildVersion || '未知'}</p>
                                 </div>
                             </div>
                         </div>
