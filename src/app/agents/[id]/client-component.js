@@ -2,7 +2,7 @@
 
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {formatDistanceToNow} from 'date-fns';
-import {zh} from 'date-fns/locale';
+import zhCN from 'date-fns/locale/zh-CN';
 import Link from 'next/link';
 import {
     ArrowLeft,
@@ -604,7 +604,7 @@ export default function AgentDetail({agent: initialAgent}) {
                                         <p className="text-xs font-medium text-gray-500 dark:text-gray-400">最后心跳</p>
                                         <p className="text-sm font-medium dark:text-white truncate">
                                             {agent.lastHeartbeat
-                                                ? formatDistanceToNow(new Date(agent.lastHeartbeat), {addSuffix: true, locale: zh})
+                                                ? formatDistanceToNow(new Date(agent.lastHeartbeat), {addSuffix: true, locale: zhCN})
                                                 : '未知'}
                                         </p>
                                     </div>
