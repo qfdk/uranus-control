@@ -3,6 +3,7 @@
 
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {formatDistanceToNow} from 'date-fns';
+import {zh} from 'date-fns/locale';
 import {Cpu, Eye, RefreshCw, Server, Settings, Trash2} from 'lucide-react';
 import Button from '@/components/ui/Button';
 import NavLink from '@/components/ui/NavLink';
@@ -637,7 +638,7 @@ export default function AgentsClientPage() {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                         {agent.lastHeartbeat
-                                            ? formatDistanceToNow(new Date(agent.lastHeartbeat), {addSuffix: true})
+                                            ? formatDistanceToNow(new Date(agent.lastHeartbeat), {addSuffix: true, locale: zh})
                                             : '未知'}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
