@@ -85,6 +85,11 @@ export function AuthProvider({ children }) {
         if (user && publicRoutes.includes(pathname)) {
             router.push('/');
         }
+
+        // 处理 isAuthenticated 为 true 但 user 为 null 的情况
+        if (localStorage.getItem('isAuthenticated') === 'true' && !user) {
+            logout();
+        }
     }, [user, pathname, loading, router, isClient]);
 
     // 检查会话是否过期
