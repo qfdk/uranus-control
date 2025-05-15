@@ -1,4 +1,3 @@
-// src/middleware.js
 import {NextResponse} from 'next/server';
 
 /**
@@ -36,6 +35,7 @@ export function middleware(request) {
     const path = request.nextUrl.pathname;
     const method = request.method;
     const isAuthenticated = request.cookies.get('isAuthenticated')?.value === 'true';
+    const sessionExpiration = request.cookies.get('sessionExpiration')?.value;
     
     // 路径类型检查
     const isApiPath = matchesPath(path, ROUTE_CONFIG.apiPaths);
@@ -49,7 +49,19 @@ export function middleware(request) {
         return NextResponse.redirect(new URL('/', request.url));
     }
     
-    // 2. 未登录用户访问受保护路径 => 认证失败处理
+    // 2. 检查会话是否过期
+    if (isAuthenticated && sessionExpiration) {
+        const expirationTime = new Date(sessionExpiration);
+        if (expirationTime <= new Date()) {
+            // 会话已过期，清除认证状态
+            const response = NextResponse.redirect(new URL('/login', request.url));
+            response.cookies.set('isAuthenticated', '', {maxAge: 0});
+            response.cookies.set('sessionExpiration', '', {maxAge: 0});
+            return response;
+        }
+    }
+    
+    // 3. 未登录用户访问受保护路径 => 认证失败处理
     const requiresAuth = !isPublicPath && !isAuthenticated && !isAllowedPostPath;
     
     if (requiresAuth) {
@@ -67,7 +79,7 @@ export function middleware(request) {
         return NextResponse.redirect(loginUrl);
     }
     
-    // 3. 默认：继续处理请求
+    // 4. 默认：继续处理请求
     return NextResponse.next();
 }
 
