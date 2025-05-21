@@ -28,7 +28,7 @@ const getMqttConfig = () => {
             };
         }
     } catch (error) {
-        console.error('读取MQTT配置失败:', error);
+        // Silent error handling
     }
 
     // 默认配置

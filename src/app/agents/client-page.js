@@ -103,8 +103,7 @@ export default function AgentsClientPage() {
                     message: `正在升级: ${successCount + failedCount}/${onlineAgentsToUpgrade.length}`
                 });
             } catch (error) {
-                console.error(`升级代理 ${agent.hostname || agent.uuid} 失败:`, error);
-                failedCount++;
+                    failedCount++;
 
                 // 更新状态
                 setUpgradeStatus({
@@ -133,15 +132,12 @@ export default function AgentsClientPage() {
     // 强制初始化MQTT连接
     const initializeMqtt = useCallback(async () => {
         if (!mqttInitializedRef.current && isMounted) {
-            console.log('代理页面：手动初始化MQTT连接');
             mqttInitializedRef.current = true;
 
             try {
                 await connectMqtt();
-                console.log('MQTT连接成功');
                 setMqttConnected(true);
             } catch (error) {
-                console.error('MQTT连接失败:', error);
                 setMqttConnected(false);
             }
         }
@@ -152,10 +148,7 @@ export default function AgentsClientPage() {
         if (isMounted && pathname === '/agents') {
             // 只在首次加载或者没有缓存数据时执行API请求
             if (!initialLoaded || agents.length === 0) {
-                console.log('代理页面：首次加载数据');
                 fetchAgents();
-            } else {
-                console.log('代理页面：使用缓存数据');
             }
 
             // 强制初始化MQTT
@@ -170,10 +163,7 @@ export default function AgentsClientPage() {
 
     // 监听MQTT连接状态变化
     useEffect(() => {
-        if (mqttConnected) {
-            console.log('MQTT已连接，使用实时数据更新');
-        } else if (isMounted && !mqttInitializedRef.current) {
-            console.log('MQTT未连接，尝试连接');
+        if (!mqttConnected && isMounted && !mqttInitializedRef.current) {
             initializeMqtt();
         }
     }, [mqttConnected, isMounted, initializeMqtt]);
@@ -186,13 +176,6 @@ export default function AgentsClientPage() {
         // 获取合并后的代理数据
         const combinedAgents = getCombinedAgents();
         
-        // 调试日志 - 在生产环境中可以移除
-        console.log('代理更新:', {
-            mqttConnected,
-            mqttAgentsCount: Object.keys(mqttAgentState || {}).length,
-            httpAgentsCount: agents.length,
-            combinedAgentsCount: combinedAgents.length
-        });
         
         // 过滤代理
         const filtered = combinedAgents.filter(agent => {
@@ -260,7 +243,6 @@ export default function AgentsClientPage() {
                 return result;
             }
         } catch (err) {
-            console.error('删除操作出错:', err);
             setDeleteLoading(null);
             return {success: false, error: err};
         }
@@ -271,14 +253,12 @@ export default function AgentsClientPage() {
         try {
             setRefreshLoading(true);
             await fetchAgents(true);  // 传入true表示强制刷新
-            console.log('代理列表已强制刷新');
 
             // 尝试确保MQTT连接
             if (!mqttConnected) {
                 initializeMqtt();
             }
         } catch (error) {
-            console.error('刷新代理数据失败:', error);
         } finally {
             setTimeout(() => {
                 setRefreshLoading(false);
@@ -296,7 +276,6 @@ export default function AgentsClientPage() {
 
             if (!uuid || !agent) return;
 
-            console.log('检测到代理注册事件，UUID:', uuid, '是否新代理:', isNew);
 
             // 仅当明确是新代理时才刷新列表
             if (isNew) {
@@ -305,10 +284,8 @@ export default function AgentsClientPage() {
                 const isInCurrentList = currentAgents.some(a => a.uuid === uuid);
 
                 if (!isInCurrentList) {
-                    console.log('新代理不在当前列表中，刷新列表');
                     fetchAgents(true);
                 } else {
-                    console.log('代理已在列表中，无需刷新');
                 }
             }
         };

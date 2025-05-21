@@ -71,7 +71,6 @@ export default function MqttStatus() {
             }
             
             reconnectTimerRef.current = setTimeout(() => {
-                console.log('自动尝试重连MQTT...');
                 handleReconnect();
             }, 3000); // 3秒后自动尝试重连
         }
@@ -144,10 +143,8 @@ export default function MqttStatus() {
                 
                 if (currentConnected) {
                     lastActionRef.current = `连接成功 (#${attemptNumber}, ${new Date().toLocaleTimeString()})`;
-                    console.log('MQTT重连成功，当前状态:', currentConnected ? '已连接' : '未连接');
                 } else {
                     lastActionRef.current = `连接失败 (#${attemptNumber}, ${new Date().toLocaleTimeString()})`;
-                    console.log('MQTT重连失败，当前状态仍然是:', currentConnected ? '已连接' : '未连接');
                     
                     // 如果连接失败，设置自动重试
                     if (reconnectTimerRef.current) {
@@ -156,7 +153,6 @@ export default function MqttStatus() {
                     
                     reconnectTimerRef.current = setTimeout(() => {
                         if (localMqttEnabled && !currentConnected) {
-                            console.log('触发自动重连...');
                             handleReconnect();
                         }
                     }, 10000); // 10秒后自动重试
@@ -173,7 +169,6 @@ export default function MqttStatus() {
             
             reconnectTimerRef.current = setTimeout(() => {
                 if (localMqttEnabled && !connected) {
-                    console.log('触发自动重连...');
                     handleReconnect();
                 }
             }, 10000); // 10秒后自动重试

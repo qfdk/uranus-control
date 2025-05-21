@@ -7,10 +7,6 @@ export default function LoadingOverlay() {
     const {isLoading} = useLoading();
     const [visible, setVisible] = useState(false);
 
-    // 追踪加载状态变化
-    useEffect(() => {
-        console.log('LoadingOverlay: 加载状态变为', isLoading);
-    }, [isLoading]);
 
     // 使用延迟显示和淡出效果，避免闪烁
     useEffect(() => {
@@ -20,11 +16,9 @@ export default function LoadingOverlay() {
         if (isLoading) {
             // 立即显示加载状态，无延迟
             setVisible(true);
-            console.log('LoadingOverlay: 显示加载overlay');
         } else {
             // 延迟隐藏，使过渡效果更平滑
             hideTimer = setTimeout(() => {
-                console.log('LoadingOverlay: 隐藏加载overlay');
                 setVisible(false);
             }, 300);
         }

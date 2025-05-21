@@ -145,7 +145,6 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
                     }, 500);
                 });
             } catch (error) {
-                console.error('xterm初始化失败:', error);
                 setError('xterm初始化失败: ' + error.message);
             }
         }
@@ -157,7 +156,6 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
                 try {
                     document.documentElement.style.overflow = prevOverflowStyleRef.current || '';
                 } catch (e) {
-                    console.error('恢复页面滚动状态失败:', e);
                 }
             }
 
@@ -171,7 +169,6 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
                     terminalInstanceRef.current.dispose();
                     terminalInstanceRef.current = null;
                 } catch (e) {
-                    console.error('清理终端实例失败:', e);
                 }
             }
 
@@ -225,7 +222,6 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
                 throw new Error(result?.message || '连接失败');
             }
         } catch (error) {
-            console.error('初始化终端连接失败:', error);
             setError(error.message || '连接失败');
             toast.error(`连接失败: ${error.message || '未知错误'}`);
 
@@ -367,7 +363,6 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
 
         // 确保尺寸值合理
         if (cols <= 0 || rows <= 0 || isNaN(cols) || isNaN(rows)) {
-            console.warn(`无效的终端尺寸值: ${cols}x${rows}`);
             return;
         }
 
@@ -429,7 +424,6 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
 
         const terminalContainer = terminalRef.current?.closest('.terminal-container');
         if(!terminalContainer) {
-            console.error('找不到终端容器');
             return;
         }
 
@@ -451,7 +445,6 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
                 document.body.classList.remove('terminal-fullscreen-mode');
             }
         } catch (e) {
-            console.error('设置全屏模式样式失败:', e);
         }
 
         // 在状态改变后安全地调整终端大小

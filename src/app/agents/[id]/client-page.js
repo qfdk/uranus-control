@@ -16,7 +16,6 @@ export default function AgentDetailWrapper({ agent }) {
         // 重要：确保在组件完全挂载后延迟一段时间再停止加载状态
         // 这能确保用户能看到加载状态，提升感知性能
         const timer = setTimeout(() => {
-            console.log('AgentDetailWrapper: 组件挂载完成，停止加载');
             stopLoading();
         }, 500); // 增加延迟时间，确保加载状态可见
 
