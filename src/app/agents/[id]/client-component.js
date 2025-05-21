@@ -1,6 +1,6 @@
 'use client';
 
-import React, {useCallback, useEffect, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState, useMemo} from 'react';
 import {formatDistanceToNow} from 'date-fns';
 import zhCN from 'date-fns/locale/zh-CN';
 import Link from 'next/link';
@@ -79,7 +79,7 @@ export default function AgentDetail({agent: initialAgent}) {
         if (!agent?._id || !agent?.uuid) return;
 
         // 创建处理函数 - 处理代理状态更新
-        const handleAgentUpdate = (topic, message) => {
+        const handleAgentUpdate = useCallback((topic, message) => {
             // 检查MQTT连接状态
             if (!mqttConnected) {
                 // 强制更新MQTT状态
@@ -89,22 +89,29 @@ export default function AgentDetail({agent: initialAgent}) {
             // 使用getCombinedAgent获取合并后的数据
             const combinedAgent = getCombinedAgent(agent._id);
             if (combinedAgent) {
-                setAgent(combinedAgent);
+                // 只在实际有变化时更新，避免循环渲染
+                if (JSON.stringify(combinedAgent) !== JSON.stringify(agent)) {
+                    setAgent(combinedAgent);
+                }
             }
-        };
+        }, [agent, mqttConnected, agent._id]);
 
         let unsubscribe = () => {};
         
-        // 如果MQTT已连接，直接订阅
-        if (mqttConnected) {
-            unsubscribe = subscribeToResponses(agent.uuid, handleAgentUpdate);
-            
-            // 立即使用getCombinedAgent获取最新状态
+        // 防止频繁重新订阅的引用
+        const subscriptionRef = useRef(null);
+
+        // 如果MQTT已连接，直接订阅（避免重复订阅）
+        if (mqttConnected && !subscriptionRef.current) {
+            subscriptionRef.current = subscribeToResponses(agent.uuid, handleAgentUpdate);
+            unsubscribe = subscriptionRef.current;
+
+            // 立即使用getCombinedAgent获取最新状态（仅当有实际变化时）
             const combinedAgent = getCombinedAgent(agent._id);
-            if (combinedAgent) {
+            if (combinedAgent && JSON.stringify(combinedAgent) !== JSON.stringify(agent)) {
                 setAgent(combinedAgent);
             }
-        } else {
+        } else if (!mqttConnected) {
             // 如果MQTT未连接，尝试连接
             useMqttStore.getState().connect()
                 .then(() => {
