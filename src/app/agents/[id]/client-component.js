@@ -546,7 +546,7 @@ export default function AgentDetail({agent: initialAgent}) {
                             ? 'border-blue-500 text-blue-600 dark:text-blue-400 dark:border-blue-400'
                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
                     }`}
-                    disabled={!agent.online || !mqttConnected}
+                    disabled={(!agent.online && !(agent.lastHeartbeat && new Date() - new Date(agent.lastHeartbeat) < 30000)) || !mqttConnected}
                 >
                     <Server className="w-4 h-4 mr-2"/>
                     Nginx控制
@@ -563,7 +563,7 @@ export default function AgentDetail({agent: initialAgent}) {
                             ? 'border-blue-500 text-blue-600 dark:text-blue-400 dark:border-blue-400'
                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
                     }`}
-                    disabled={!agent.online}
+                    disabled={!agent.online && !(agent.lastHeartbeat && new Date() - new Date(agent.lastHeartbeat) < 30000)}
                 >
                     <TerminalSquare className="w-4 h-4 mr-2"/>
                     终端
@@ -750,7 +750,7 @@ export default function AgentDetail({agent: initialAgent}) {
                     />
 
                     {/* Nginx控制面板 */}
-                    {agent.online && mqttConnected ? (
+                    {(agent.online || (agent.lastHeartbeat && new Date() - new Date(agent.lastHeartbeat) < 30000)) && mqttConnected ? (
                         <div className="bg-white rounded-lg shadow dark:bg-gray-800">
                             <div className="p-5">
                                 <div className="flex items-center mb-6">
@@ -870,7 +870,7 @@ export default function AgentDetail({agent: initialAgent}) {
 
             {activeTab === 'terminal' && (
                 <div>
-                    {agent.online ? (
+                    {agent.online || (agent.lastHeartbeat && new Date() - new Date(agent.lastHeartbeat) < 30000) ? (
                         <CommandExecutor agentUuid={agent.uuid} isActive={activeTab === 'terminal'}/>
                     ) : (
                         <div className="bg-white rounded-lg shadow dark:bg-gray-800 p-5 text-center">
