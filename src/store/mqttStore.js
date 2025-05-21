@@ -105,16 +105,10 @@ const useMqttStore = create((set, get) => {
             }
         };
 
-        console.log('正在连接MQTT:', config.MQTT_BROKER, mqttOptions);
-
         // 创建MQTT客户端
         const client = mqtt.connect(config.MQTT_BROKER, mqttOptions);
 
-        // 添加连接日志
-        console.log('MQTT客户端已创建，等待连接事件...');
-
         client.on('connect', () => {
-            console.log('MQTT连接成功');
             reconnectCount = 0; // 重置重连计数
             isConnecting = false;
             set({connected: true, error: null});
@@ -122,7 +116,6 @@ const useMqttStore = create((set, get) => {
             // 只订阅全局主题
             client.subscribe(TOPICS.HEARTBEAT, {qos: 0});
             client.subscribe(TOPICS.STATUS, {qos: 0});
-            console.log('已订阅全局主题: 心跳和状态');
 
             // 立即通知agentStore MQTT已连接
             try {
@@ -138,7 +131,6 @@ const useMqttStore = create((set, get) => {
             agentSubscriptions.forEach((handlers, agentUuid) => {
                 if (handlers.size > 0) {
                     const responseTopic = `${TOPICS.RESPONSE}${agentUuid}`;
-                    console.log(`恢复代理订阅: ${responseTopic}`);
                     client.subscribe(responseTopic, {qos: 0});
                 }
             });
@@ -148,13 +140,9 @@ const useMqttStore = create((set, get) => {
             Object.entries(sessions).forEach(([sessionId, session]) => {
                 if (session && session.agentUuid) {
                     const agentResponseTopic = `${TOPICS.RESPONSE}${session.agentUuid}`;
-                    console.log(`为会话 ${sessionId} 订阅代理响应主题: ${agentResponseTopic}`);
                     client.subscribe(agentResponseTopic, {qos: 0});
                 }
             });
-
-            // 添加连接建立消息
-            console.log('MQTT连接和订阅完成');
 
             // 通知agentStore MQTT已连接
             try {
@@ -399,7 +387,6 @@ const useMqttStore = create((set, get) => {
                 } else if (topic.startsWith(TOPICS.RESPONSE)) {
                     // 提取代理UUID
                     const agentUuid = topic.substring(TOPICS.RESPONSE.length);
-                    console.log(`收到代理 ${agentUuid} 的响应`);
 
                     // 获取该代理的所有订阅处理器
                     const handlers = agentSubscriptions.get(agentUuid);
@@ -802,7 +789,6 @@ const useMqttStore = create((set, get) => {
 
                 // 发布命令消息
                 const commandTopic = `${TOPICS.COMMAND}${uuid}`;
-                console.log(`发送命令到 ${commandTopic}:`, commandMessage);
 
                 // 确保序列化成功
                 let messageText;
