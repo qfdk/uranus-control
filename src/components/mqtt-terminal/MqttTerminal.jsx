@@ -276,7 +276,7 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
 
             // 检查是否是重复消息
             if (processedMessagesRef.current.has(messageId)) {
-                console.log('忽略重复消息:', messageId);
+                // 静默忽略重复消息
                 return;
             }
 

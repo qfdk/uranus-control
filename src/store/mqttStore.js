@@ -490,9 +490,7 @@ const useMqttStore = create((set, get) => {
                 }
             });
 
-            if (expiredCount > 0) {
-                console.log(`已清理 ${expiredCount} 个超时命令`);
-            }
+            // 静默处理清理，不再输出日志
         }, 30000); // 每30秒检查一次
 
         return client;
@@ -789,7 +787,7 @@ const useMqttStore = create((set, get) => {
 
                 // 设置超时为30秒，较长的超时以避免快速多次输入时出现错误
                 const timeoutId = setTimeout(() => {
-                    console.log(`命令请求超时: ${requestId}`);
+                    // 静默处理超时，只清理资源
                     pendingCommands.delete(requestId);
                     reject(new Error('命令请求超时'));
                 }, 30000);
