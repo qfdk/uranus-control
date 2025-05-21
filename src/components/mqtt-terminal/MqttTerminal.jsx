@@ -39,9 +39,6 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
     // 终端状态
     const [isTyping, setIsTyping] = useState(false);
     const typingTimeoutRef = useRef(null);
-    // 防抖相关
-    const debounceTimeoutRef = useRef(null);
-    const lastSendTimeRef = useRef(0);
 
     // MQTT连接状态
     const {connected: mqttConnected, connect} = useMqttStore();
@@ -337,7 +334,7 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
         };
 
         // 使用防抖函数
-        const debouncedSend = createDebouncedFunction(sendInput, 5);
+        const debouncedSend = debounce(sendInput, 5);
 
         // 监听终端输入
         terminalInstanceRef.current.onData(data => {
@@ -349,7 +346,7 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
             // 使用防抖函数发送输入数据到MQTT
             debouncedSend(data);
         });
-    }, [mqttConnected, agentUuid, createDebouncedFunction]);
+    }, [mqttConnected, agentUuid]);
 
     // 发送调整大小命令
     const sendResizeCommand = useCallback((cols, rows) => {
@@ -387,29 +384,16 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
         initializeConnection();
     }, [initializeConnection]);
 
-    // 创建防抖函数
-    const createDebouncedFunction = useCallback((cb, delay) => {
-        return (...args) => {
-            if (debounceTimeoutRef.current) {
-                clearTimeout(debounceTimeoutRef.current);
-            }
-
-            const now = Date.now();
-            const elapsed = now - lastSendTimeRef.current;
-
-            // 如果距上次发送时间太短，使用防抖
-            if (elapsed < 50) {
-                debounceTimeoutRef.current = setTimeout(() => {
-                    lastSendTimeRef.current = Date.now();
-                    cb(...args);
-                }, delay);
-            } else {
-                // 否则立即执行
-                lastSendTimeRef.current = now;
-                cb(...args);
-            }
+    // 创建简单防抖函数
+    function debounce(func, wait) {
+        let timeout;
+        return function(...args) {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => {
+                func.apply(this, args);
+            }, wait);
         };
-    }, []);
+    }
 
     // 发送Ctrl+C（SIGINT）
     const sendCtrlC = useCallback(() => {
@@ -513,14 +497,9 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
                         </div>
                     )}
                     
-                    {/* Ctrl+C 按钮 - 添加节流控制 */}
+                    {/* Ctrl+C 按钮 */}
                     <button
-                        onClick={useCallback(() => {
-                            const now = Date.now();
-                            if (now - lastSendTimeRef.current < 300) return;
-                            lastSendTimeRef.current = now;
-                            sendCtrlC();
-                        }, [sendCtrlC, lastSendTimeRef])}
+                        onClick={sendCtrlC}
                         className="text-gray-400 hover:text-white bg-gray-700 hover:bg-gray-600 rounded-full p-1"
                         title="发送 Ctrl+C (SIGINT)"
                     >
