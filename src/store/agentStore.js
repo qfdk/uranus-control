@@ -17,7 +17,7 @@ const useAgentStore = create((set, get) => ({
 
     // 设置MQTT状态
     setMqttConnected: (connected) => {
-        console.log(`更新MQTT连接状态: ${connected}`);
+        // 只有状态变化时才更新，避免重复设置
         set((state) => {
             if (state.mqttConnected !== connected) {
                 return {mqttConnected: connected};
@@ -33,7 +33,6 @@ const useAgentStore = create((set, get) => ({
                 if (mqttStore) {
                     const mqttAgentState = mqttStore.getAgentState();
                     if (mqttAgentState && Object.keys(mqttAgentState).length > 0) {
-                        console.log('同步MQTT代理状态到agentStore');
                         set({mqttAgentState: {...mqttAgentState}});
                     }
                 }

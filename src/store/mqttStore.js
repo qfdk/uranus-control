@@ -581,13 +581,10 @@ const useMqttStore = create((set, get) => {
         connect: async () => {
             // 如果已连接，直接返回
             if (get().connected && mqttClient && mqttClient.connected) {
-                console.log('MQTT已连接，不需要重新连接');
-
                 // 确保透传状态到agentStore
                 try {
                     const agentStoreInstance = useAgentStore.getState();
                     if (agentStoreInstance && typeof agentStoreInstance.setMqttConnected === 'function') {
-                        console.log('在connect方法中确认状态同步到agentStore');
                         agentStoreInstance.setMqttConnected(true);
                     }
                 } catch (error) {
