@@ -787,12 +787,12 @@ const useMqttStore = create((set, get) => {
                     };
                 }
 
-                // 设置超时
+                // 设置超时为30秒，较长的超时以避免快速多次输入时出现错误
                 const timeoutId = setTimeout(() => {
                     console.log(`命令请求超时: ${requestId}`);
                     pendingCommands.delete(requestId);
                     reject(new Error('命令请求超时'));
-                }, 10000); // 10秒超时
+                }, 30000);
 
                 // 保存待处理命令
                 pendingCommands.set(requestId, {

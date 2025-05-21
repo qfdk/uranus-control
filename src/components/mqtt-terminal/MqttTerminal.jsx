@@ -1,6 +1,6 @@
 'use client';
 
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useEffect, useRef, useState, useCallback} from 'react';
 import {Terminal} from 'xterm';
 import {FitAddon} from 'xterm-addon-fit';
 import {WebLinksAddon} from 'xterm-addon-web-links';
@@ -39,6 +39,9 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
     // 终端状态
     const [isTyping, setIsTyping] = useState(false);
     const typingTimeoutRef = useRef(null);
+    // 防抖相关
+    const debounceTimeoutRef = useRef(null);
+    const lastSendTimeRef = useRef(0);
 
     // MQTT连接状态
     const {connected: mqttConnected, connect} = useMqttStore();
@@ -52,7 +55,6 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
 
         // 只在组件激活时初始化终端
         if (isActive && terminalRef.current && !terminalInstanceRef.current) {
-            console.log('初始化xterm终端');
 
             try {
                 // 创建终端实例
@@ -123,7 +125,6 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
                             const {cols, rows} = terminalInstanceRef.current;
                             sendResizeCommand(cols, rows);
                         } catch (error) {
-                            console.log('调整大小失败，忽略错误:', error.message);
                         }
                     }
                 });
@@ -167,8 +168,7 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
                 resizeObserverRef.current.disconnect();
             }
 
-            // 不再发送关闭会话命令，防止后端关闭
-            // 直接清理终端实例
+            // 清理终端实例
             if (terminalInstanceRef.current) {
                 try {
                     terminalInstanceRef.current.dispose();
@@ -181,7 +181,7 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
             // 清理处理过的消息集合
             processedMessagesRef.current.clear();
         };
-    }, [isActive]);
+    }, [isActive, isFullscreen]);
 
     // 初始化MQTT连接
     useEffect(() => {
@@ -189,10 +189,10 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
         if (isActive && isReady && agentUuid && !isConnecting && !sessionId) {
             initializeConnection();
         }
-    }, [isActive, isReady, agentUuid, mqttConnected]);
+    }, [isActive, isReady, agentUuid, mqttConnected, isConnecting, sessionId, initializeConnection]);
 
     // 检查输出是否包含命令提示符
-    const containsPrompt = (text) => {
+    const containsPrompt = useCallback((text) => {
         // 检测常见的命令提示符模式
         const promptPatterns = [
             /\$\s*$/,                // $
@@ -205,7 +205,7 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
         ];
 
         return promptPatterns.some(pattern => pattern.test(text));
-    };
+    }, []);
 
     // 处理MQTT终端消息
     useEffect(() => {
@@ -271,7 +271,7 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
     }, [sessionId, firstCommand]);
 
     // 初始化连接
-    const initializeConnection = async () => {
+    const initializeConnection = useCallback(async () => {
         if (isConnecting || !agentUuid) return;
 
         setIsConnecting(true);
@@ -318,11 +318,26 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
         } finally {
             setIsConnecting(false);
         }
-    };
+    }, [agentUuid, mqttConnected, connect]);
 
     // 设置终端输入处理
-    const setupTerminalInput = (termSessionId) => {
+    const setupTerminalInput = useCallback((termSessionId) => {
         if (!terminalInstanceRef.current || !termSessionId) return;
+
+        // 创建发送函数
+        const sendInput = (input) => {
+            if (mqttConnected) {
+                useMqttStore.getState().sendTerminalInput(agentUuid, termSessionId, input)
+                    .catch(error => {
+                        if (!error.message.includes('会话ID已存在')) {
+                            console.error('发送终端输入失败:', error);
+                        }
+                    });
+            }
+        };
+
+        // 使用防抖函数
+        const debouncedSend = createDebouncedFunction(sendInput, 5);
 
         // 监听终端输入
         terminalInstanceRef.current.onData(data => {
@@ -331,21 +346,13 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
                 setFirstCommand(false);
             }
 
-            // 发送输入数据到MQTT
-            if (mqttConnected) {
-                useMqttStore.getState().sendTerminalInput(agentUuid, termSessionId, data)
-                    .catch(error => {
-                        // 忽略会话ID已存在的错误，因为可能是重复发送
-                        if (!error.message.includes('会话ID已存在')) {
-                            console.error('发送终端输入失败:', error);
-                        }
-                    });
-            }
+            // 使用防抖函数发送输入数据到MQTT
+            debouncedSend(data);
         });
-    };
+    }, [mqttConnected, agentUuid, createDebouncedFunction]);
 
     // 发送调整大小命令
-    const sendResizeCommand = (cols, rows) => {
+    const sendResizeCommand = useCallback((cols, rows) => {
         if (!sessionId || !mqttConnected || !agentUuid || !cols || !rows) return;
 
         // 确保尺寸值合理
@@ -354,33 +361,17 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
             return;
         }
 
-        console.log(`调整终端大小: ${cols}x${rows}`);
-
         useMqttStore.getState().resizeTerminal(agentUuid, sessionId, cols, rows)
             .catch(error => {
-                // 忽略会话ID已存在的错误，因为可能是重复发送
                 if (!error.message.includes('会话ID已存在')) {
                     console.error('发送调整大小命令失败:', error);
                 }
             });
-    };
+    }, [sessionId, mqttConnected, agentUuid]);
 
-    // 关闭终端会话
-    const closeTerminalSession = async () => {
-        if (!sessionId || !mqttConnected || !agentUuid) return;
-
-        try {
-            await useMqttStore.getState().closeTerminalSession(agentUuid, sessionId);
-            console.log('终端会话已关闭:', sessionId);
-        } catch (error) {
-            console.error('关闭终端会话失败:', error);
-        }
-    };
 
     // 重新连接
-    const reconnect = async () => {
-        // 不再发送关闭会话命令，防止后端关闭
-        
+    const reconnect = useCallback(async () => {
         // 清空终端
         if (terminalInstanceRef.current) {
             terminalInstanceRef.current.clear();
@@ -394,35 +385,46 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
 
         setError(null);
         initializeConnection();
-    };
+    }, [initializeConnection]);
 
-    // 防抖函数
-    function debounce(func, wait) {
-        let timeout;
-        return function executedFunction(...args) {
-            const later = () => {
-                clearTimeout(timeout);
-                func(...args);
-            };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
+    // 创建防抖函数
+    const createDebouncedFunction = useCallback((cb, delay) => {
+        return (...args) => {
+            if (debounceTimeoutRef.current) {
+                clearTimeout(debounceTimeoutRef.current);
+            }
+
+            const now = Date.now();
+            const elapsed = now - lastSendTimeRef.current;
+
+            // 如果距上次发送时间太短，使用防抖
+            if (elapsed < 50) {
+                debounceTimeoutRef.current = setTimeout(() => {
+                    lastSendTimeRef.current = Date.now();
+                    cb(...args);
+                }, delay);
+            } else {
+                // 否则立即执行
+                lastSendTimeRef.current = now;
+                cb(...args);
+            }
         };
-    }
+    }, []);
 
     // 发送Ctrl+C（SIGINT）
-    const sendCtrlC = () => {
+    const sendCtrlC = useCallback(() => {
         if (!sessionId || !mqttConnected || !agentUuid) return;
 
         // 发送Ctrl+C字符（ASCII 3）
         useMqttStore.getState().sendTerminalInput(agentUuid, sessionId, '\x03')
             .catch(error => {
+                // 只记录错误，不向用户展示错误提示
                 console.error('发送Ctrl+C失败:', error);
-                toast.error(`发送Ctrl+C失败: ${error.message || '未知错误'}`);
             });
-    };
+    }, [sessionId, mqttConnected, agentUuid]);
 
     // 切换全屏模式
-    const toggleFullscreen = () => {
+    const toggleFullscreen = useCallback(() => {
         const newFullscreenState = !isFullscreen;
         setIsFullscreen(newFullscreenState);
 
@@ -457,19 +459,18 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
         setTimeout(() => {
             if (fitAddonRef.current) {
                 safelyFit(fitAddonRef.current, terminalRef.current);
-                
+
                 // 发送调整大小命令
                 if (sessionId && mqttConnected && terminalInstanceRef.current) {
                     try {
                         const {cols, rows} = terminalInstanceRef.current;
                         sendResizeCommand(cols, rows);
                     } catch (error) {
-                        console.log('全屏切换时调整大小失败:', error.message);
                     }
                 }
             }
-        }, 300); // 增加延迟确保样式变化完成
-    };
+        }, 300);
+    }, [isFullscreen, sessionId, mqttConnected]);
 
     // 只有在组件激活时渲染
     if (!isActive) return null;
@@ -512,9 +513,14 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
                         </div>
                     )}
                     
-                    {/* Ctrl+C 按钮 */}
+                    {/* Ctrl+C 按钮 - 添加节流控制 */}
                     <button
-                        onClick={sendCtrlC}
+                        onClick={useCallback(() => {
+                            const now = Date.now();
+                            if (now - lastSendTimeRef.current < 300) return;
+                            lastSendTimeRef.current = now;
+                            sendCtrlC();
+                        }, [sendCtrlC, lastSendTimeRef])}
                         className="text-gray-400 hover:text-white bg-gray-700 hover:bg-gray-600 rounded-full p-1"
                         title="发送 Ctrl+C (SIGINT)"
                     >
@@ -523,12 +529,11 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
 
                     {/* 清空终端按钮 */}
                     <button
-                        onClick={() => {
-                            // 仅清空终端，不发送关闭命令
+                        onClick={useCallback(() => {
                             if (terminalInstanceRef.current) {
                                 terminalInstanceRef.current.clear();
                             }
-                        }}
+                        }, [terminalInstanceRef])}
                         className="text-gray-400 hover:text-white bg-gray-700 hover:bg-gray-600 rounded-full p-1"
                         title="清空终端"
                     >
