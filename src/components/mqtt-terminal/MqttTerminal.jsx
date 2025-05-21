@@ -335,10 +335,8 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
         const sendInput = (input) => {
             if (mqttConnected) {
                 useMqttStore.getState().sendTerminalInput(agentUuid, termSessionId, input)
-                    .catch(error => {
-                        if (!error.message.includes('会话ID已存在')) {
-                            console.error('发送终端输入失败:', error);
-                        }
+                    .catch(() => {
+                        // 忽略所有错误，提高用户体验
                     });
             }
         };
@@ -374,10 +372,8 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
         }
 
         useMqttStore.getState().resizeTerminal(agentUuid, sessionId, cols, rows)
-            .catch(error => {
-                if (!error.message.includes('会话ID已存在')) {
-                    console.error('发送调整大小命令失败:', error);
-                }
+            .catch(() => {
+                // 忽略调整大小错误
             });
     }, [sessionId, mqttConnected, agentUuid]);
 
@@ -421,9 +417,8 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
 
         // 发送Ctrl+C字符（ASCII 3）
         useMqttStore.getState().sendTerminalInput(agentUuid, sessionId, '\x03')
-            .catch(error => {
-                // 只记录错误，不向用户展示错误提示
-                console.error('发送Ctrl+C失败:', error);
+            .catch(() => {
+                // 完全忽略错误，不显示任何提示
             });
     }, [sessionId, mqttConnected, agentUuid]);
 
