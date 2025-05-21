@@ -180,6 +180,65 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
         };
     }, [isActive, isFullscreen]);
 
+    // 前向声明函数
+    const sendTerminalDataRef = useRef();
+    const resizeTerminalRef = useRef();
+
+    // 初始化连接函数声明提前
+    const initializeConnection = useCallback(async () => {
+        if (isConnecting || !agentUuid) return;
+
+        setIsConnecting(true);
+        setError(null);
+        setFirstCommand(true);
+
+        try {
+            // 确保MQTT已连接
+            if (!mqttConnected) {
+                await connect();
+            }
+
+            // 创建唯一会话ID
+            const newSessionId = `term-${uuidv4()}`;
+            setSessionId(newSessionId);
+
+            // 发送创建会话命令
+            const result = await useMqttStore.getState().createTerminalSession(agentUuid, newSessionId);
+
+            if (result && result.success) {
+                // 使用ref方式调用函数，避免循环依赖
+                if (terminalInstanceRef.current) {
+                    // 设置终端输入处理
+                    if (typeof sendTerminalDataRef.current === 'function') {
+                        sendTerminalDataRef.current(newSessionId);
+                    }
+
+                    // 发送初始的调整大小命令
+                    const {cols, rows} = terminalInstanceRef.current;
+                    if (typeof resizeTerminalRef.current === 'function') {
+                        resizeTerminalRef.current(cols, rows);
+                    }
+                }
+
+                toast.success('连接成功');
+            } else {
+                throw new Error(result?.message || '连接失败');
+            }
+        } catch (error) {
+            console.error('初始化终端连接失败:', error);
+            setError(error.message || '连接失败');
+            toast.error(`连接失败: ${error.message || '未知错误'}`);
+
+            if (terminalInstanceRef.current) {
+                terminalInstanceRef.current.writeln(`\r\n\x1b[31m错误: ${error.message || '连接失败'}\x1b[0m`);
+            }
+
+            setSessionId(null);
+        } finally {
+            setIsConnecting(false);
+        }
+    }, [agentUuid, mqttConnected, connect]);
+
     // 初始化MQTT连接
     useEffect(() => {
         // 只有在组件激活和终端准备好的情况下才连接
@@ -267,55 +326,6 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
         };
     }, [sessionId, firstCommand]);
 
-    // 初始化连接
-    const initializeConnection = useCallback(async () => {
-        if (isConnecting || !agentUuid) return;
-
-        setIsConnecting(true);
-        setError(null);
-        setFirstCommand(true);
-
-        try {
-            // 确保MQTT已连接
-            if (!mqttConnected) {
-                await connect();
-            }
-
-            // 创建唯一会话ID
-            const newSessionId = `term-${uuidv4()}`;
-            setSessionId(newSessionId);
-
-            // 发送创建会话命令
-            const result = await useMqttStore.getState().createTerminalSession(agentUuid, newSessionId);
-
-            if (result && result.success) {
-                // 设置终端输入处理
-                setupTerminalInput(newSessionId);
-
-                // 发送初始的调整大小命令
-                if (terminalInstanceRef.current) {
-                    const {cols, rows} = terminalInstanceRef.current;
-                    sendResizeCommand(cols, rows);
-                }
-
-                toast.success('连接成功');
-            } else {
-                throw new Error(result?.message || '连接失败');
-            }
-        } catch (error) {
-            console.error('初始化终端连接失败:', error);
-            setError(error.message || '连接失败');
-            toast.error(`连接失败: ${error.message || '未知错误'}`);
-
-            if (terminalInstanceRef.current) {
-                terminalInstanceRef.current.writeln(`\r\n\x1b[31m错误: ${error.message || '连接失败'}\x1b[0m`);
-            }
-
-            setSessionId(null);
-        } finally {
-            setIsConnecting(false);
-        }
-    }, [agentUuid, mqttConnected, connect]);
 
     // 设置终端输入处理
     const setupTerminalInput = useCallback((termSessionId) => {
@@ -348,6 +358,11 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
         });
     }, [mqttConnected, agentUuid]);
 
+    // 更新ref引用
+    useEffect(() => {
+        sendTerminalDataRef.current = setupTerminalInput;
+    }, [setupTerminalInput]);
+
     // 发送调整大小命令
     const sendResizeCommand = useCallback((cols, rows) => {
         if (!sessionId || !mqttConnected || !agentUuid || !cols || !rows) return;
@@ -365,6 +380,11 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
                 }
             });
     }, [sessionId, mqttConnected, agentUuid]);
+
+    // 更新resize命令的ref引用
+    useEffect(() => {
+        resizeTerminalRef.current = sendResizeCommand;
+    }, [sendResizeCommand]);
 
 
     // 重新连接
