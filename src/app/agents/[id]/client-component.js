@@ -47,6 +47,9 @@ export default function AgentDetail({agent: initialAgent}) {
         show: false
     });
     const [agent, setAgent] = useState(initialAgent);
+
+    // 防止频繁重新订阅的引用
+    const subscriptionRef = useRef(null);
     const statusTimeoutRef = useRef(null);
     
     // 存储当前代理的UUID，用于mqttAgentState监听
@@ -99,9 +102,6 @@ export default function AgentDetail({agent: initialAgent}) {
         if (!agent?._id || !agent?.uuid) return;
 
         let unsubscribe = () => {};
-        
-        // 防止频繁重新订阅的引用
-        const subscriptionRef = useRef(null);
 
         // 如果MQTT已连接，直接订阅（避免重复订阅）
         if (mqttConnected && !subscriptionRef.current) {
@@ -130,8 +130,8 @@ export default function AgentDetail({agent: initialAgent}) {
 
         // 组件卸载时取消订阅
         return () => {
-            console.log('取消代理MQTT订阅:', agent.uuid);
             unsubscribe();
+            subscriptionRef.current = null;
         };
     }, [agent?._id, agent?.uuid, mqttConnected, subscribeToResponses, getCombinedAgent]);
 
