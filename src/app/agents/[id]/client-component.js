@@ -78,14 +78,10 @@ export default function AgentDetail({agent: initialAgent}) {
     useEffect(() => {
         if (!agent?._id || !agent?.uuid) return;
 
-        console.log('设置对代理的MQTT状态监听:', agent.uuid, '当前MQTT状态:', mqttConnected ? '已连接' : '未连接');
-
         // 创建处理函数 - 处理代理状态更新
         const handleAgentUpdate = (topic, message) => {
-            console.log('收到代理消息更新:', topic);
-
+            // 检查MQTT连接状态
             if (!mqttConnected) {
-                console.log('收到消息但MQTT显示为未连接，更新标记');
                 // 强制更新MQTT状态
                 useMqttStore.getState().connect().catch(console.error);
             }
@@ -93,7 +89,6 @@ export default function AgentDetail({agent: initialAgent}) {
             // 使用getCombinedAgent获取合并后的数据
             const combinedAgent = getCombinedAgent(agent._id);
             if (combinedAgent) {
-                console.log('使用合并后的代理数据更新状态');
                 setAgent(combinedAgent);
             }
         };
@@ -107,21 +102,17 @@ export default function AgentDetail({agent: initialAgent}) {
             // 立即使用getCombinedAgent获取最新状态
             const combinedAgent = getCombinedAgent(agent._id);
             if (combinedAgent) {
-                console.log('MQTT已连接，立即更新为合并数据');
                 setAgent(combinedAgent);
             }
         } else {
             // 如果MQTT未连接，尝试连接
-            console.log('尝试连接MQTT...');
             useMqttStore.getState().connect()
                 .then(() => {
-                    console.log('MQTT连接成功，开始订阅代理状态');
                     unsubscribe = subscribeToResponses(agent.uuid, handleAgentUpdate);
                     
                     // 连接成功后立即更新状态
                     const combinedAgent = getCombinedAgent(agent._id);
                     if (combinedAgent) {
-                        console.log('MQTT连接后更新为合并数据');
                         setAgent(combinedAgent);
                     }
                 })
