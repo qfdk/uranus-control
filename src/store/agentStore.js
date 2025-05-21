@@ -355,7 +355,37 @@ const useAgentStore = create((set, get) => ({
     resetLoadingState: () => set({
         initialLoaded: false,
         isLoading: false
-    })
+    }),
+
+    // 强制刷新单个代理数据
+    refreshAgent: async (agentId) => {
+        if (!agentId) return {success: false, error: {message: 'Invalid agent ID'}};
+
+        try {
+            // 先获取最新数据
+            const result = await get().getAgent(agentId);
+            if (!result.success) {
+                throw new Error('获取代理数据失败');
+            }
+
+            // 如果MQTT已连接，强制同步MQTT状态
+            if (useMqttStore.getState().connected) {
+                const agent = get().getAgentById(agentId);
+                if (agent?.uuid) {
+                    // 获取最新的MQTT状态
+                    const mqttAgentState = useMqttStore.getState().getAgentState();
+                    if (mqttAgentState && Object.keys(mqttAgentState).length > 0) {
+                        // 更新MQTT状态
+                        get().updateMqttAgentState({...mqttAgentState});
+                    }
+                }
+            }
+
+            return result;
+        } catch (error) {
+            return {success: false, error};
+        }
+    }
 }));
 
 export default useAgentStore;

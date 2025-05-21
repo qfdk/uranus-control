@@ -36,6 +36,7 @@ export default function AgentDetail({agent: initialAgent}) {
     const deleteAgent = useAgentStore(state => state.deleteAgent);
     const upgradeAgent = useAgentStore(state => state.upgradeAgent);
     const getCombinedAgent = useAgentStore(state => state.getCombinedAgent);
+    const refreshAgent = useAgentStore(state => state.refreshAgent);
     const mqttAgentState = useAgentStore(state => state.mqttAgentState);
 
     const [renderKey, setRenderKey] = useState(0);
@@ -203,30 +204,27 @@ export default function AgentDetail({agent: initialAgent}) {
     const refreshAgentData = useCallback(async () => {
         if (!agent?._id) return;
 
-
         try {
-            // 使用API获取最新数据
-            const refreshResponse = await fetch(`/api/agents/${agent._id}`);
+            // 使用新的refreshAgent函数强制刷新数据
+            const result = await refreshAgent(agent._id);
 
-            if (!refreshResponse.ok) {
-                throw new Error(`获取代理数据失败: HTTP ${refreshResponse.status}`);
-            }
-
-            // 获取HTTP数据后，使用getCombinedAgent获取合并数据
-            await refreshResponse.json(); // 只是为了更新store中的数据，结果不保存
-            
-            // 获取合并后的最新数据
-            const combinedAgent = getCombinedAgent(agent._id);
-            if (combinedAgent) {
-                setAgent(combinedAgent);
-                return combinedAgent;
+            if (result.success && result.agent) {
+                // 更新本地状态
+                setAgent(result.agent);
+                return result.agent;
             } else {
+                // 如果刷新失败，尝试使用现有数据
+                const combinedAgent = getCombinedAgent(agent._id);
+                if (combinedAgent) {
+                    setAgent(combinedAgent);
+                    return combinedAgent;
+                }
                 return null;
             }
         } catch (error) {
             throw error;
         }
-    }, [agent?._id, getCombinedAgent]);
+    }, [agent?._id, refreshAgent, getCombinedAgent]);
 
     // 处理删除代理
     const handleDeleteAgent = async () => {
@@ -546,7 +544,7 @@ export default function AgentDetail({agent: initialAgent}) {
                             ? 'border-blue-500 text-blue-600 dark:text-blue-400 dark:border-blue-400'
                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
                     }`}
-                    disabled={(!agent.online && !(agent.lastHeartbeat && new Date() - new Date(agent.lastHeartbeat) < 30000)) || !mqttConnected}
+                    disabled={(!agent.online && !(agent.lastHeartbeat && new Date() - new Date(agent.lastHeartbeat) < 20000)) || !mqttConnected}
                 >
                     <Server className="w-4 h-4 mr-2"/>
                     Nginx控制
@@ -563,7 +561,7 @@ export default function AgentDetail({agent: initialAgent}) {
                             ? 'border-blue-500 text-blue-600 dark:text-blue-400 dark:border-blue-400'
                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
                     }`}
-                    disabled={!agent.online && !(agent.lastHeartbeat && new Date() - new Date(agent.lastHeartbeat) < 30000)}
+                    disabled={!agent.online && !(agent.lastHeartbeat && new Date() - new Date(agent.lastHeartbeat) < 20000)}
                 >
                     <TerminalSquare className="w-4 h-4 mr-2"/>
                     终端
@@ -750,7 +748,7 @@ export default function AgentDetail({agent: initialAgent}) {
                     />
 
                     {/* Nginx控制面板 */}
-                    {(agent.online || (agent.lastHeartbeat && new Date() - new Date(agent.lastHeartbeat) < 30000)) && mqttConnected ? (
+                    {(agent.online || (agent.lastHeartbeat && new Date() - new Date(agent.lastHeartbeat) < 20000)) && mqttConnected ? (
                         <div className="bg-white rounded-lg shadow dark:bg-gray-800">
                             <div className="p-5">
                                 <div className="flex items-center mb-6">
@@ -870,7 +868,7 @@ export default function AgentDetail({agent: initialAgent}) {
 
             {activeTab === 'terminal' && (
                 <div>
-                    {agent.online || (agent.lastHeartbeat && new Date() - new Date(agent.lastHeartbeat) < 30000) ? (
+                    {agent.online || (agent.lastHeartbeat && new Date() - new Date(agent.lastHeartbeat) < 20000) ? (
                         <CommandExecutor agentUuid={agent.uuid} isActive={activeTab === 'terminal'}/>
                     ) : (
                         <div className="bg-white rounded-lg shadow dark:bg-gray-800 p-5 text-center">

@@ -34,7 +34,7 @@ const TOPICS = {
 
 // 数据库更新限流（按代理）
 const updateThrottles = new Map();
-const UPDATE_INTERVAL = 5000; // 同一代理最少5秒更新一次
+const UPDATE_INTERVAL = 2000; // 同一代理最少2秒更新一次，提高更新频率
 
 // 设置并启动服务器
 async function startServer() {
@@ -136,7 +136,7 @@ async function startServer() {
         // 定时任务：标记没有发送心跳的代理为离线
         setInterval(async () => {
             try {
-                const timeoutThreshold = new Date(Date.now() - 30000); // 30秒超时
+                const timeoutThreshold = new Date(Date.now() - 20000); // 20秒超时，减少一些超时时间
 
                 const result = await Agent.updateMany(
                     {online: true, lastHeartbeat: {$lt: timeoutThreshold}},
@@ -149,7 +149,7 @@ async function startServer() {
             } catch (error) {
                 console.error('运行心跳检查时出错:', error);
             }
-        }, 15000); // 每15秒运行一次
+        }, 5000); // 每5秒运行一次，更快地检测离线
 
         // 准备Next.js应用
         await app.prepare();
