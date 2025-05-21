@@ -595,16 +595,21 @@ export default function AgentsClientPage() {
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{agent.ip}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                                         <span
-                                            className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full transition-colors duration-300 ${
+                                            className={`px-2 inline-flex items-center text-xs leading-5 font-semibold rounded-full transition-colors duration-300 ${
                                                 agent.online
                                                     ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
                                                     : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
                                             }`}>
+                                          <span className={`inline-block w-2 h-2 rounded-full mr-1 ${
+                                              agent.online ? 'bg-green-500 animate-pulse' : 'bg-red-500'
+                                          }`}></span>
                                           {agent.online ? '在线' : '离线'}
-                                            {/* Show real-time indicator if from MQTT */}
-                                            {agent._fromMqtt && (
-                                                <span className="ml-1 opacity-75">(实时)</span>
-                                            )}
+                                          {/* Show data source indicator */}
+                                          {mqttConnected ? (
+                                              <span className="ml-1 bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 text-[10px] px-0.5 rounded">MQTT</span>
+                                          ) : (
+                                              <span className="ml-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-[10px] px-0.5 rounded">DB</span>
+                                          )}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">

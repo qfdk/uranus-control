@@ -477,11 +477,20 @@ export default function AgentDetail({agent: initialAgent}) {
                         <div className="mt-2 flex flex-wrap items-center gap-3">
                             {/* Status Badge */}
                             <span className={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-full ${
-                                agent.online ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                                agent.online
+                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                                    : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
                             }`}>
-                                <span className={`inline-block w-2 h-2 rounded-full mr-1.5 ${agent.online ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                                <span className={`inline-block w-2 h-2 rounded-full mr-1.5 ${
+                                    agent.online
+                                        ? 'bg-green-500 animate-pulse'
+                                        : 'bg-red-500'
+                                }`}></span>
                                 {agent.online ? '在线' : '离线'}
-                                {agent._fromMqtt && <span className="ml-1">(MQTT实时)</span>}
+                                {mqttConnected
+                                    ? <span className="ml-1 bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 px-1 rounded">MQTT实时</span>
+                                    : <span className="ml-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-1 rounded">数据库</span>
+                                }
                             </span>
                             
                             {/* UUID Badge */}
@@ -758,10 +767,22 @@ export default function AgentDetail({agent: initialAgent}) {
                                         <p className="text-sm font-medium text-blue-600 dark:text-blue-300 cursor-pointer"
                                            onClick={(e) => {
                                                e.stopPropagation();
+                                               // Get the current MQTT connection status
+                                               const currentMqttStatus = mqttConnected;
+                                               // Get the current MQTT agent state (if available)
+                                               const currentMqttAgentState = getAgentState(agent.uuid);
+
+                                               // Fetch the database state for comparison
                                                fetch(`/api/agents/${agent._id}/debug`)
                                                    .then(r => r.json())
                                                    .then(data => {
-                                                       alert(`DB在线: ${data.agentFromDB.online}\nMQTT在线: ${data.mqttState?.online}\nMQTT连接: ${data.mqttConnected}\n最后心跳: ${data.lastHeartbeatAge}`);
+                                                       alert(
+                                                           `数据库在线状态: ${data.agentFromDB.online}\n` +
+                                                           `MQTT在线状态: ${currentMqttAgentState?.online ?? '未知'}\n` +
+                                                           `MQTT已连接: ${currentMqttStatus ? '是' : '否'}\n` +
+                                                           `最后心跳: ${data.lastHeartbeatAge}\n` +
+                                                           `当前状态来源: ${agent._fromMqtt ? 'MQTT实时数据' : '数据库'}`
+                                                       );
                                                    });
                                            }}>
                                             查看实时状态
