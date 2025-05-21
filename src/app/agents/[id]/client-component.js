@@ -729,6 +729,45 @@ export default function AgentDetail({agent: initialAgent}) {
                                         {agent._id || '未知'}
                                     </p>
                                 </div>
+
+                                {/* Debug section - click to force online status */}
+                                <div className="border-l-2 border-orange-500 dark:border-orange-600 pl-3 py-1 cursor-pointer"
+                                     onClick={async () => {
+                                        try {
+                                            // 强制更新代理状态为在线
+                                            const response = await fetch(`/api/agents/${agent._id}/online`, {
+                                                method: 'POST',
+                                                headers: {'Content-Type': 'application/json'},
+                                                body: JSON.stringify({online: true})
+                                            });
+
+                                            if (response.ok) {
+                                                // 刷新代理数据
+                                                refreshAgentData();
+                                                toast.success('已强制更新代理为在线状态');
+                                            }
+                                        } catch (error) {
+                                            toast.error('更新状态失败');
+                                        }
+                                     }}>
+                                    <h3 className="text-xs font-medium text-orange-500 dark:text-orange-400">调试操作</h3>
+                                    <div className="flex flex-col space-y-1">
+                                        <p className="text-sm font-medium text-orange-600 dark:text-orange-300">
+                                            点击强制设置为在线
+                                        </p>
+                                        <p className="text-sm font-medium text-blue-600 dark:text-blue-300 cursor-pointer"
+                                           onClick={(e) => {
+                                               e.stopPropagation();
+                                               fetch(`/api/agents/${agent._id}/debug`)
+                                                   .then(r => r.json())
+                                                   .then(data => {
+                                                       alert(`DB在线: ${data.agentFromDB.online}\nMQTT在线: ${data.mqttState?.online}\nMQTT连接: ${data.mqttConnected}\n最后心跳: ${data.lastHeartbeatAge}`);
+                                                   });
+                                           }}>
+                                            查看实时状态
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
