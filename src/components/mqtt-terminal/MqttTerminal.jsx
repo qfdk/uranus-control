@@ -7,7 +7,7 @@ import {WebLinksAddon} from 'xterm-addon-web-links';
 import {SearchAddon} from 'xterm-addon-search';
 import {v4 as uuidv4} from 'uuid';
 import useMqttStore from '@/store/mqttStore';
-import {AlertCircle, Maximize2, Minimize2, Eraser} from 'lucide-react';
+import {AlertCircle, Maximize2, Minimize2, Eraser, Square} from 'lucide-react';
 import 'xterm/css/xterm.css';
 import './terminal.css';
 import toast from 'react-hot-toast';
@@ -409,6 +409,18 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
         };
     }
 
+    // 发送Ctrl+C（SIGINT）
+    const sendCtrlC = () => {
+        if (!sessionId || !mqttConnected || !agentUuid) return;
+
+        // 发送Ctrl+C字符（ASCII 3）
+        useMqttStore.getState().sendTerminalInput(agentUuid, sessionId, '\x03')
+            .catch(error => {
+                console.error('发送Ctrl+C失败:', error);
+                toast.error(`发送Ctrl+C失败: ${error.message || '未知错误'}`);
+            });
+    };
+
     // 切换全屏模式
     const toggleFullscreen = () => {
         const newFullscreenState = !isFullscreen;
@@ -500,6 +512,15 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
                         </div>
                     )}
                     
+                    {/* Ctrl+C 按钮 */}
+                    <button
+                        onClick={sendCtrlC}
+                        className="text-gray-400 hover:text-white bg-gray-700 hover:bg-gray-600 rounded-full p-1"
+                        title="发送 Ctrl+C (SIGINT)"
+                    >
+                        <Square className="w-5 h-5" />
+                    </button>
+
                     {/* 清空终端按钮 */}
                     <button
                         onClick={() => {
