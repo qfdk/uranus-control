@@ -9,7 +9,6 @@ export function useClientMount(delay = 300) {
     useEffect(() => {
         setIsMounted(true);
         const timer = setTimeout(() => {
-            console.log('ClientMount: 组件挂载完成，停止加载');
             stopLoading();
         }, delay);
         return () => clearTimeout(timer);

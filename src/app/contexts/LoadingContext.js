@@ -18,8 +18,6 @@ export function LoadingProvider({children}) {
     // 监听路径变化
     useEffect(() => {
         if (previousPathRef.current !== pathname) {
-            console.log(`路径变化: ${previousPathRef.current} -> ${pathname}`);
-
             // 登录页不显示加载状态
             if (pathname === '/login') {
                 setIsLoading(false);

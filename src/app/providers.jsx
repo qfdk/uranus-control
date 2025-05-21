@@ -43,23 +43,17 @@ export function AppProviders({ children }) {
 
             // 延迟初始化MQTT，确保页面渲染完成
             const timer = setTimeout(async () => {
-                console.log('初始化MQTT连接...');
                 mqttInitializedRef.current = true;
 
                 try {
                     await connectMqtt();
-                    console.log('MQTT连接成功初始化');
                 } catch (error) {
-                    console.error('MQTT初始化失败:', error);
-
                     // 如果初始连接失败，稍后再尝试一次
                     setTimeout(async () => {
-                        console.log('尝试MQTT重新连接...');
                         try {
                             await connectMqtt();
-                            console.log('MQTT重连成功');
                         } catch (retryError) {
-                            console.error('MQTT重连失败:', retryError);
+                            // Silent error handling
                         }
                     }, 5000); // 5秒后重试
                 }

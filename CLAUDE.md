@@ -40,27 +40,31 @@ Uranus Control is a Next.js frontend for the Uranus system, featuring:
    - Agent online/offline tracking
 
 2. **Authentication System**
-   - User model with secure password handling
+   - User model with secure password handling via crypto + salt
    - JWT-free authentication using cookies and localStorage
    - Login/logout flow with protected routes via middleware
+   - Session expiration handling
 
 3. **MQTT Communication**
    - Client-side MQTT connection (`mqttStore.js`)
    - Real-time agent status monitoring
    - Command execution via MQTT topics
    - Terminal session management
+   - Reconnection and error handling
 
 4. **Agent Management**
    - MongoDB persistence for agent data
    - Real-time agent data via MQTT heartbeats
    - Combined HTTP/MQTT agent data representation
    - Agent operations: register, delete, upgrade, execute commands
+   - Automatic agent registration on heartbeat detection
 
 5. **Terminal Implementation**
    - MQTT-based terminal sessions
-   - xterm.js frontend with various add-ons
+   - xterm.js frontend with various add-ons (fit, web-links, search)
    - Command routing through MQTT topics
    - Session lifecycle management
+   - Fullscreen mode and resize handling
 
 ### Data Flow
 
@@ -69,18 +73,28 @@ Uranus Control is a Next.js frontend for the Uranus system, featuring:
    - Server receives and updates MongoDB
    - Client subscribes to MQTT topics for real-time updates
    - Combined view uses both persistent and real-time data
+   - Rate-limited database updates to prevent overload
 
 2. **Terminal Sessions**
    - Client creates terminal session via MQTT
    - Input sent through MQTT topics to agents
    - Output streamed back through response topics
    - xterm.js renders the terminal interface
+   - Dynamic terminal resizing based on viewport
 
 3. **Authentication Flow**
    - Server validates credentials against MongoDB
    - Client stores authentication state in localStorage and cookies
    - Middleware and client-side protection for routes
    - Dual protection both server and client side
+   - Session expiration checks
+
+### MQTT Topics
+
+- `uranus/command/{agentUUID}`: Send commands to a specific agent
+- `uranus/response/{agentUUID}`: Receive responses from an agent
+- `uranus/heartbeat`: Receive agent heartbeats
+- `uranus/status`: Monitor agent status (including last will messages)
 
 ## Environment Configuration
 
@@ -100,3 +114,4 @@ Key environment variables:
 - **Backend**: Node.js, MongoDB/Mongoose
 - **Communication**: MQTT
 - **Terminal**: xterm.js with add-ons (fit, web-links, search)
+- **State Management**: Zustand for global state

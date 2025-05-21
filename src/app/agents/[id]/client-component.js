@@ -70,9 +70,7 @@ export default function AgentDetail({agent: initialAgent}) {
     // 初始化MQTT连接
     useEffect(() => {
         if (isMounted && !mqttConnected) {
-            console.log('代理详情页面：尝试连接MQTT');
             useMqttStore.getState().connect().catch(err => {
-                console.error('MQTT连接失败:', err);
             });
         }
     }, [isMounted, mqttConnected]);
@@ -168,11 +166,9 @@ export default function AgentDetail({agent: initialAgent}) {
                     
                     // 如果状态发生变化，记录日志
                     if (statusChanged) {
-                        console.log(`定时刷新: 代理状态已更新: ${newAgent.online ? '在线' : '离线'}`);
-                    }
+                                }
                 }
             } catch (error) {
-                console.error('周期性刷新代理状态失败:', error);
             }
         }, 3000); // 3秒刷新一次，增加频率确保快速响应
         
@@ -194,7 +190,6 @@ export default function AgentDetail({agent: initialAgent}) {
         
         // 检查在线状态是否变化
         if (mqttData.online !== agent.online) {
-            console.log(`MQTT状态变化检测到: ${agent.uuid} 现在 ${mqttData.online ? '在线' : '离线'}`);
             
             // 使用getCombinedAgent获取完整的合并状态
             const currentAgent = getCombinedAgent(agent._id);
@@ -208,7 +203,6 @@ export default function AgentDetail({agent: initialAgent}) {
     const refreshAgentData = useCallback(async () => {
         if (!agent?._id) return;
 
-        console.log(`正在刷新代理数据: ${agent._id}`);
 
         try {
             // 使用API获取最新数据
@@ -224,15 +218,12 @@ export default function AgentDetail({agent: initialAgent}) {
             // 获取合并后的最新数据
             const combinedAgent = getCombinedAgent(agent._id);
             if (combinedAgent) {
-                console.log('获取到合并后的代理数据');
                 setAgent(combinedAgent);
                 return combinedAgent;
             } else {
-                console.log('无法获取合并数据，使用HTTP数据');
                 return null;
             }
         } catch (error) {
-            console.error('刷新代理状态失败:', error);
             throw error;
         }
     }, [agent?._id, getCombinedAgent]);
@@ -265,7 +256,6 @@ export default function AgentDetail({agent: initialAgent}) {
                 toast.error(result.error?.message || '删除代理失败，请重试');
             }
         } catch (error) {
-            console.error('删除代理失败:', error);
             toast.error('删除代理失败: ' + error.message);
         }
     };
@@ -291,7 +281,6 @@ export default function AgentDetail({agent: initialAgent}) {
                 try {
                     const result = await upgradeAgent(agent._id);
 
-                    console.log('升级响应:', result);
 
                     // 检查响应是成功的
                     if (result.success || result.message) {
@@ -335,8 +324,7 @@ export default function AgentDetail({agent: initialAgent}) {
                                     setRenderKey(prev => prev + 1); // 强制重新渲染
                                 }, 5000);
                             } catch (error) {
-                                console.error('刷新代理数据失败:', error);
-                                setUpgradeStatus({
+                                            setUpgradeStatus({
                                     type: 'warning',
                                     message: '代理可能已升级，但无法获取最新状态',
                                     show: true
@@ -354,8 +342,7 @@ export default function AgentDetail({agent: initialAgent}) {
                         setIsUpgrading(false);
                     }
                 } catch (error) {
-                    console.error('升级代理失败:', error);
-                    setUpgradeStatus({
+                        setUpgradeStatus({
                         type: 'error',
                         message: error.message || '升级代理失败，请重试',
                         show: true
@@ -440,7 +427,6 @@ export default function AgentDetail({agent: initialAgent}) {
                 throw new Error('不支持的命令');
             }
         } catch (error) {
-            console.error(`${command}命令执行失败:`, error);
             setCommandMessage({
                 type: 'error',
                 content: `${commandNames[command] || command}失败: ${error.message}`,
