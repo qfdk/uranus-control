@@ -63,10 +63,8 @@ export default function MqttStatus() {
 
     // 监听MQTT连接状态变化
     useEffect(() => {
-        console.log('MqttStatus组件: MQTT连接状态变化:', connected ? '已连接' : '未连接');
         // 如果连接断开，但本地显示已启用，可能需要触发重连
         if (!connected && localMqttEnabled && !isReconnecting && isClient) {
-            console.log('MQTT连接状态不一致，可能需要重连');
             // 尝试自动重连
             if (reconnectTimerRef.current) {
                 clearTimeout(reconnectTimerRef.current);

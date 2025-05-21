@@ -26,7 +26,6 @@ export function AppProviders({ children }) {
     useEffect(() => {
         // 只在非登录页面获取数据
         if (pathname !== '/login' && !initializedRef.current) {
-            console.log('应用启动，初始化全局数据...');
             initializedRef.current = true;
 
             // 获取代理数据

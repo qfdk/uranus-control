@@ -74,27 +74,29 @@ export default function AgentDetail({agent: initialAgent}) {
         }
     }, [isMounted, mqttConnected]);
 
+    // 处理函数 - 处理代理状态更新
+    const handleAgentUpdate = useCallback((topic, message) => {
+        // 检查MQTT连接状态
+        if (!mqttConnected) {
+            // 强制更新MQTT状态
+            useMqttStore.getState().connect().catch(console.error);
+        }
+
+        // 使用getCombinedAgent获取合并后的数据
+        if (!agent?._id) return;
+
+        const combinedAgent = getCombinedAgent(agent._id);
+        if (combinedAgent) {
+            // 只在实际有变化时更新，避免循环渲染
+            if (JSON.stringify(combinedAgent) !== JSON.stringify(agent)) {
+                setAgent(combinedAgent);
+            }
+        }
+    }, [agent, mqttConnected, getCombinedAgent]);
+
     // 监听MQTT实时状态更新
     useEffect(() => {
         if (!agent?._id || !agent?.uuid) return;
-
-        // 创建处理函数 - 处理代理状态更新
-        const handleAgentUpdate = useCallback((topic, message) => {
-            // 检查MQTT连接状态
-            if (!mqttConnected) {
-                // 强制更新MQTT状态
-                useMqttStore.getState().connect().catch(console.error);
-            }
-
-            // 使用getCombinedAgent获取合并后的数据
-            const combinedAgent = getCombinedAgent(agent._id);
-            if (combinedAgent) {
-                // 只在实际有变化时更新，避免循环渲染
-                if (JSON.stringify(combinedAgent) !== JSON.stringify(agent)) {
-                    setAgent(combinedAgent);
-                }
-            }
-        }, [agent, mqttConnected, agent._id]);
 
         let unsubscribe = () => {};
         

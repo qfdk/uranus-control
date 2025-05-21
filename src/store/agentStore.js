@@ -57,14 +57,12 @@ const useAgentStore = create((set, get) => ({
 
         // 如果已经在加载且不是强制刷新，则跳过
         if (get().isLoading && !force) {
-            console.log('正在加载中，跳过请求');
             return {success: true, data: get().agents};
         }
 
         set({isLoading: true, error: null});
 
         try {
-            console.log('从API获取代理列表...');
             const response = await fetch('/api/agents');
 
             if (response.status === 401) {
@@ -76,7 +74,6 @@ const useAgentStore = create((set, get) => ({
             }
 
             const data = await response.json();
-            console.log(`获取到${data.length}个代理`);
 
             set({
                 agents: data,
