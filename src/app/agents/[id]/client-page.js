@@ -23,17 +23,9 @@ export default function AgentDetailWrapper({ agent }) {
         return () => clearTimeout(timer);
     }, [stopLoading]);
 
-    // 调试输出
-    useEffect(() => {
-        console.log('AgentDetailWrapper: 渲染中，客户端状态:', isClient);
-    }, [isClient]);
-
     if (!isClient) {
         // 不显示本地加载状态，而是依赖全局LoadingOverlay
-        console.log('AgentDetailWrapper: 客户端渲染尚未准备好');
         return null;
     }
-
-    console.log('AgentDetailWrapper: 渲染AgentDetail组件');
     return <AgentDetail agent={agent} />;
 }
