@@ -391,10 +391,10 @@ export default function AgentsClientPage() {
                             </div>
                             <div className="flex justify-between items-center mt-1">
                                 <span className="text-sm text-gray-600 dark:text-gray-400">MQTT状态:</span>
-                                <span className={`text-sm font-medium rounded-full px-2 py-0.5 ${
+                                <span className={`text-sm font-medium ${
                                     mqttConnected
-                                        ? 'bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-300'
-                                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+                                        ? 'text-green-600 dark:text-green-400'
+                                        : 'text-gray-600 dark:text-gray-400'
                                 }`}>
                                     {mqttConnected ? '已连接' : '未连接'}
                                 </span>
@@ -595,13 +595,13 @@ export default function AgentsClientPage() {
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{agent.ip}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                                         <span
-                                            className={`px-2 inline-flex items-center text-xs leading-5 font-semibold rounded-full transition-colors duration-300 ${
+                                            className={`inline-flex items-center text-sm font-medium transition-colors duration-300 ${
                                                 agent.online
-                                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                                                    : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                                                    ? 'text-green-600 dark:text-green-400'
+                                                    : 'text-gray-500 dark:text-gray-400'
                                             }`}>
-                                          <span className={`inline-block w-2 h-2 rounded-full mr-1 ${
-                                              agent.online ? 'bg-green-500 animate-pulse' : 'bg-red-500'
+                                          <span className={`inline-block w-2 h-2 rounded-full mr-1.5 ${
+                                              agent.online ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
                                           }`}></span>
                                           {agent.online ? '在线' : '离线'}
                                         </span>
