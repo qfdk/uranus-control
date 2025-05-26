@@ -487,11 +487,18 @@ export default function AgentDetail({agent: initialAgent}) {
                                         : 'bg-red-500'
                                 }`}></span>
                                 {agent.online ? '在线' : '离线'}
-                                {mqttConnected
-                                    ? <span className="ml-1 bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 px-1 rounded">MQTT实时</span>
-                                    : <span className="ml-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-1 rounded">数据库</span>
-                                }
                             </span>
+                            
+                            {/* Data Source Badge */}
+                            {mqttConnected ? (
+                                <span className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                                    MQTT实时
+                                </span>
+                            ) : (
+                                <span className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                                    数据库
+                                </span>
+                            )}
                             
                             {/* UUID Badge */}
                             <span className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
