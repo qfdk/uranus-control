@@ -23,7 +23,6 @@ export async function POST(request) {
 
     try {
         const data = await request.json();
-
         // 处理心跳更新或新代理注册
         const agent = await Agent.findOneAndUpdate(
             {uuid: data.uuid},
