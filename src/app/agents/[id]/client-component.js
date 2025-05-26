@@ -476,21 +476,25 @@ export default function AgentDetail({agent: initialAgent}) {
                         
                         <div className="mt-2 flex flex-wrap items-center gap-3">
                             {/* Status Badge */}
-                            <span className={`inline-flex items-center text-sm font-medium ${
+                            <span className={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-full ${
                                 agent.online
-                                    ? 'text-green-600 dark:text-green-400'
-                                    : 'text-gray-500 dark:text-gray-400'
+                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                                    : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
                             }`}>
                                 <span className={`inline-block w-2 h-2 rounded-full mr-1.5 ${
                                     agent.online
                                         ? 'bg-green-500 animate-pulse'
-                                        : 'bg-gray-400'
+                                        : 'bg-red-500'
                                 }`}></span>
                                 {agent.online ? '在线' : '离线'}
+                                {mqttConnected
+                                    ? <span className="ml-1 bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 px-1 rounded">MQTT实时</span>
+                                    : <span className="ml-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-1 rounded">数据库</span>
+                                }
                             </span>
                             
                             {/* UUID Badge */}
-                            <span className="inline-flex items-center text-xs text-gray-600 dark:text-gray-400">
+                            <span className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
                                 <span className="font-normal mr-1">UUID:</span>
                                 <span className="font-medium">{agent.uuid}</span>
                             </span>
@@ -554,8 +558,8 @@ export default function AgentDetail({agent: initialAgent}) {
                     <Server className="w-4 h-4 mr-2"/>
                     Nginx控制
                     {(!agent.online || !mqttConnected) && <span
-                        className="ml-2 text-xs text-gray-500 dark:text-gray-400">
-                        ({!agent.online ? '离线' : 'MQTT未连接'})
+                        className="ml-2 text-xs bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 px-1.5 py-0.5 rounded-full">
+                        {!agent.online ? '离线' : 'MQTT未连接'}
                     </span>}
                 </button>
 
@@ -571,7 +575,7 @@ export default function AgentDetail({agent: initialAgent}) {
                     <TerminalSquare className="w-4 h-4 mr-2"/>
                     终端
                     {!agent.online && <span
-                        className="ml-2 text-xs text-gray-500 dark:text-gray-400">(离线)</span>}
+                        className="ml-2 text-xs bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 px-1.5 py-0.5 rounded-full">离线</span>}
                 </button>
             </div>
 
@@ -585,9 +589,9 @@ export default function AgentDetail({agent: initialAgent}) {
                             
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {/* 最后心跳卡片 */}
-                                <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 flex items-center">
-                                    <div className="p-2 rounded-full bg-gray-100 dark:bg-gray-700 mr-3 flex-shrink-0">
-                                        <Clock className="w-5 h-5 text-gray-600 dark:text-gray-400"/>
+                                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 flex items-center">
+                                    <div className="p-2 rounded-full bg-blue-100 dark:bg-blue-800/60 mr-3 flex-shrink-0">
+                                        <Clock className="w-5 h-5 text-blue-500 dark:text-blue-400"/>
                                     </div>
                                     <div className="overflow-hidden">
                                         <p className="text-xs font-medium text-gray-500 dark:text-gray-400">最后心跳</p>
@@ -600,9 +604,9 @@ export default function AgentDetail({agent: initialAgent}) {
                                 </div>
 
                                 {/* 操作系统卡片 */}
-                                <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 flex items-center">
-                                    <div className="p-2 rounded-full bg-gray-100 dark:bg-gray-700 mr-3 flex-shrink-0">
-                                        <Cpu className="w-5 h-5 text-gray-600 dark:text-gray-400"/>
+                                <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 flex items-center">
+                                    <div className="p-2 rounded-full bg-green-100 dark:bg-green-800/60 mr-3 flex-shrink-0">
+                                        <Cpu className="w-5 h-5 text-green-500 dark:text-green-400"/>
                                     </div>
                                     <div className="overflow-hidden">
                                         <p className="text-xs font-medium text-gray-500 dark:text-gray-400">操作系统</p>
@@ -613,9 +617,9 @@ export default function AgentDetail({agent: initialAgent}) {
                                 </div>
 
                                 {/* 内存卡片 */}
-                                <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 flex items-center">
-                                    <div className="p-2 rounded-full bg-gray-100 dark:bg-gray-700 mr-3 flex-shrink-0">
-                                        <HardDrive className="w-5 h-5 text-gray-600 dark:text-gray-400"/>
+                                <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4 flex items-center">
+                                    <div className="p-2 rounded-full bg-purple-100 dark:bg-purple-800/60 mr-3 flex-shrink-0">
+                                        <HardDrive className="w-5 h-5 text-purple-500 dark:text-purple-400"/>
                                     </div>
                                     <div className="overflow-hidden">
                                         <p className="text-xs font-medium text-gray-500 dark:text-gray-400">内存</p>
@@ -634,7 +638,7 @@ export default function AgentDetail({agent: initialAgent}) {
                             {/* 主要详细信息卡片风格 */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
                                 {/* IP 地址卡片 */}
-                                <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 flex flex-col">
+                                <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 flex flex-col">
                                     <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">IP地址</h3>
                                     <div className="flex items-center">
                                         <p className="text-sm font-medium dark:text-white truncate flex-grow" title={agent.ip || '未知'}>
@@ -646,7 +650,7 @@ export default function AgentDetail({agent: initialAgent}) {
                                                     navigator.clipboard.writeText(agent.ip);
                                                     toast.success('IP地址已复制到剪贴板');
                                                 }}
-                                                className="ml-2 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 rounded-md"
+                                                className="ml-2 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-md"
                                                 title="复制IP地址"
                                             >
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -658,7 +662,7 @@ export default function AgentDetail({agent: initialAgent}) {
                                 </div>
                                 
                                 {/* URL 卡片 */}
-                                <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 flex flex-col">
+                                <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 flex flex-col">
                                     <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">管理页面</h3>
                                     <div className="text-sm font-medium dark:text-white">
                                         {agent.url ? (
@@ -681,7 +685,7 @@ export default function AgentDetail({agent: initialAgent}) {
                                 </div>
                                 
                                 {/* 版本卡片 */}
-                                <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 flex flex-col">
+                                <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 flex flex-col">
                                     <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">版本</h3>
                                     <p className="text-sm font-medium dark:text-white truncate" title={agent.buildVersion || '未知'}>
                                         {agent.buildVersion || '未知'}
@@ -692,7 +696,7 @@ export default function AgentDetail({agent: initialAgent}) {
                             {/* 次要详细信息 */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {/* 构建时间 */}
-                                <div className="border-l-2 border-gray-400 dark:border-gray-600 pl-3 py-1">
+                                <div className="border-l-2 border-blue-500 dark:border-blue-600 pl-3 py-1">
                                     <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400">构建时间</h3>
                                     <p className="text-sm font-medium dark:text-white mt-1 truncate" title={agent.buildTime || '未知'}>
                                         {agent.buildTime || '未知'}
@@ -700,7 +704,7 @@ export default function AgentDetail({agent: initialAgent}) {
                                 </div>
 
                                 {/* Hash */}
-                                <div className="border-l-2 border-gray-400 dark:border-gray-600 pl-3 py-1">
+                                <div className="border-l-2 border-purple-500 dark:border-purple-600 pl-3 py-1">
                                     <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400">Commit Hash</h3>
                                     <div className="flex items-center mt-1">
                                         <p className="text-sm font-medium dark:text-white flex-grow">
@@ -716,7 +720,7 @@ export default function AgentDetail({agent: initialAgent}) {
                                                     navigator.clipboard.writeText(agent.commitId);
                                                     toast.success('Commit Hash已复制到剪贴板');
                                                 }}
-                                                className="ml-2 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 rounded-md"
+                                                className="ml-2 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500 rounded-md"
                                                 title="复制完整Hash值"
                                             >
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -728,7 +732,7 @@ export default function AgentDetail({agent: initialAgent}) {
                                 </div>
                                 
                                 {/* 其他标识符 */}
-                                <div className="border-l-2 border-gray-400 dark:border-gray-600 pl-3 py-1">
+                                <div className="border-l-2 border-green-500 dark:border-green-600 pl-3 py-1">
                                     <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400">标识符</h3>
                                     <p className="text-sm font-medium dark:text-white mt-1 truncate" title={agent._id || '未知'}>
                                         {agent._id || '未知'}
@@ -758,15 +762,15 @@ export default function AgentDetail({agent: initialAgent}) {
                         <div className="bg-white rounded-lg shadow dark:bg-gray-800">
                             <div className="p-5">
                                 <div className="flex items-center mb-6">
-                                    <Server className="w-6 h-6 text-gray-600 dark:text-gray-400 mr-2"/>
+                                    <Server className="w-6 h-6 text-blue-500 dark:text-blue-400 mr-2"/>
                                     <h2 className="text-xl font-medium text-gray-800 dark:text-white">Nginx服务控制</h2>
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div
-                                        className="bg-gray-50 dark:bg-gray-800/50 p-5 rounded-lg border border-gray-200 dark:border-gray-700">
+                                        className="bg-blue-50 dark:bg-blue-900/20 p-5 rounded-lg border border-blue-100 dark:border-blue-800">
                                         <div className="flex items-center mb-3">
-                                            <RotateCw className="w-5 h-5 text-gray-600 dark:text-gray-400 mr-2"/>
+                                            <RotateCw className="w-5 h-5 text-blue-500 dark:text-blue-400 mr-2"/>
                                             <h3 className="text-lg font-medium text-gray-800 dark:text-white">重载配置</h3>
                                         </div>
                                         <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
@@ -784,9 +788,9 @@ export default function AgentDetail({agent: initialAgent}) {
                                     </div>
 
                                     <div
-                                        className="bg-gray-50 dark:bg-gray-800/50 p-5 rounded-lg border border-gray-200 dark:border-gray-700">
+                                        className="bg-green-50 dark:bg-green-900/20 p-5 rounded-lg border border-green-100 dark:border-green-800">
                                         <div className="flex items-center mb-3">
-                                            <RefreshCw className="w-5 h-5 text-gray-600 dark:text-gray-400 mr-2"/>
+                                            <RefreshCw className="w-5 h-5 text-green-500 dark:text-green-400 mr-2"/>
                                             <h3 className="text-lg font-medium text-gray-800 dark:text-white">重启服务</h3>
                                         </div>
                                         <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
@@ -804,9 +808,9 @@ export default function AgentDetail({agent: initialAgent}) {
                                     </div>
 
                                     <div
-                                        className="bg-gray-50 dark:bg-gray-800/50 p-5 rounded-lg border border-gray-200 dark:border-gray-700">
+                                        className="bg-red-50 dark:bg-red-900/20 p-5 rounded-lg border border-red-100 dark:border-red-800">
                                         <div className="flex items-center mb-3">
-                                            <Square className="w-5 h-5 text-gray-600 dark:text-gray-400 mr-2"/>
+                                            <Square className="w-5 h-5 text-red-500 dark:text-red-400 mr-2"/>
                                             <h3 className="text-lg font-medium text-gray-800 dark:text-white">停止服务</h3>
                                         </div>
                                         <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
@@ -824,9 +828,9 @@ export default function AgentDetail({agent: initialAgent}) {
                                     </div>
 
                                     <div
-                                        className="bg-gray-50 dark:bg-gray-800/50 p-5 rounded-lg border border-gray-200 dark:border-gray-700">
+                                        className="bg-purple-50 dark:bg-purple-900/20 p-5 rounded-lg border border-purple-100 dark:border-purple-800">
                                         <div className="flex items-center mb-3">
-                                            <Play className="w-5 h-5 text-gray-600 dark:text-gray-400 mr-2"/>
+                                            <Play className="w-5 h-5 text-purple-500 dark:text-purple-400 mr-2"/>
                                             <h3 className="text-lg font-medium text-gray-800 dark:text-white">启动服务</h3>
                                         </div>
                                         <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
