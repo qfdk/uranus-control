@@ -739,56 +739,6 @@ export default function AgentDetail({agent: initialAgent}) {
                                     </p>
                                 </div>
 
-                                {/* Debug section - click to force online status */}
-                                <div className="border-l-2 border-orange-500 dark:border-orange-600 pl-3 py-1 cursor-pointer"
-                                     onClick={async () => {
-                                        try {
-                                            // 强制更新代理状态为在线
-                                            const response = await fetch(`/api/agents/${agent._id}/online`, {
-                                                method: 'POST',
-                                                headers: {'Content-Type': 'application/json'},
-                                                body: JSON.stringify({online: true})
-                                            });
-
-                                            if (response.ok) {
-                                                // 刷新代理数据
-                                                refreshAgentData();
-                                                toast.success('已强制更新代理为在线状态');
-                                            }
-                                        } catch (error) {
-                                            toast.error('更新状态失败');
-                                        }
-                                     }}>
-                                    <h3 className="text-xs font-medium text-orange-500 dark:text-orange-400">调试操作</h3>
-                                    <div className="flex flex-col space-y-1">
-                                        <p className="text-sm font-medium text-orange-600 dark:text-orange-300">
-                                            点击强制设置为在线
-                                        </p>
-                                        <p className="text-sm font-medium text-blue-600 dark:text-blue-300 cursor-pointer"
-                                           onClick={(e) => {
-                                               e.stopPropagation();
-                                               // Get the current MQTT connection status
-                                               const currentMqttStatus = mqttConnected;
-                                               // Get the current MQTT agent state (if available)
-                                               const currentMqttAgentState = getAgentState(agent.uuid);
-
-                                               // Fetch the database state for comparison
-                                               fetch(`/api/agents/${agent._id}/debug`)
-                                                   .then(r => r.json())
-                                                   .then(data => {
-                                                       alert(
-                                                           `数据库在线状态: ${data.agentFromDB.online}\n` +
-                                                           `MQTT在线状态: ${currentMqttAgentState?.online ?? '未知'}\n` +
-                                                           `MQTT已连接: ${currentMqttStatus ? '是' : '否'}\n` +
-                                                           `最后心跳: ${data.lastHeartbeatAge}\n` +
-                                                           `当前状态来源: ${agent._fromMqtt ? 'MQTT实时数据' : '数据库'}`
-                                                       );
-                                                   });
-                                           }}>
-                                            查看实时状态
-                                        </p>
-                                    </div>
-                                </div>
                             </div>
                         </div>
                     </div>
