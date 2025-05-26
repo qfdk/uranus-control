@@ -28,7 +28,7 @@ const getMqttConfig = () => {
             };
         }
     } catch (error) {
-        console.error('读取MQTT配置失败:', error);
+        // Silent error handling
     }
 
     // 默认配置
@@ -105,16 +105,10 @@ const useMqttStore = create((set, get) => {
             }
         };
 
-        console.log('正在连接MQTT:', config.MQTT_BROKER, mqttOptions);
-
         // 创建MQTT客户端
         const client = mqtt.connect(config.MQTT_BROKER, mqttOptions);
 
-        // 添加连接日志
-        console.log('MQTT客户端已创建，等待连接事件...');
-
         client.on('connect', () => {
-            console.log('MQTT连接成功');
             reconnectCount = 0; // 重置重连计数
             isConnecting = false;
             set({connected: true, error: null});
@@ -122,7 +116,6 @@ const useMqttStore = create((set, get) => {
             // 只订阅全局主题
             client.subscribe(TOPICS.HEARTBEAT, {qos: 0});
             client.subscribe(TOPICS.STATUS, {qos: 0});
-            console.log('已订阅全局主题: 心跳和状态');
 
             // 立即通知agentStore MQTT已连接
             try {
@@ -138,7 +131,6 @@ const useMqttStore = create((set, get) => {
             agentSubscriptions.forEach((handlers, agentUuid) => {
                 if (handlers.size > 0) {
                     const responseTopic = `${TOPICS.RESPONSE}${agentUuid}`;
-                    console.log(`恢复代理订阅: ${responseTopic}`);
                     client.subscribe(responseTopic, {qos: 0});
                 }
             });
@@ -148,13 +140,9 @@ const useMqttStore = create((set, get) => {
             Object.entries(sessions).forEach(([sessionId, session]) => {
                 if (session && session.agentUuid) {
                     const agentResponseTopic = `${TOPICS.RESPONSE}${session.agentUuid}`;
-                    console.log(`为会话 ${sessionId} 订阅代理响应主题: ${agentResponseTopic}`);
                     client.subscribe(agentResponseTopic, {qos: 0});
                 }
             });
-
-            // 添加连接建立消息
-            console.log('MQTT连接和订阅完成');
 
             // 通知agentStore MQTT已连接
             try {
@@ -399,7 +387,6 @@ const useMqttStore = create((set, get) => {
                 } else if (topic.startsWith(TOPICS.RESPONSE)) {
                     // 提取代理UUID
                     const agentUuid = topic.substring(TOPICS.RESPONSE.length);
-                    console.log(`收到代理 ${agentUuid} 的响应`);
 
                     // 获取该代理的所有订阅处理器
                     const handlers = agentSubscriptions.get(agentUuid);
@@ -490,9 +477,7 @@ const useMqttStore = create((set, get) => {
                 }
             });
 
-            if (expiredCount > 0) {
-                console.log(`已清理 ${expiredCount} 个超时命令`);
-            }
+            // 静默处理清理，不再输出日志
         }, 30000); // 每30秒检查一次
 
         return client;
@@ -596,13 +581,10 @@ const useMqttStore = create((set, get) => {
         connect: async () => {
             // 如果已连接，直接返回
             if (get().connected && mqttClient && mqttClient.connected) {
-                console.log('MQTT已连接，不需要重新连接');
-
                 // 确保透传状态到agentStore
                 try {
                     const agentStoreInstance = useAgentStore.getState();
                     if (agentStoreInstance && typeof agentStoreInstance.setMqttConnected === 'function') {
-                        console.log('在connect方法中确认状态同步到agentStore');
                         agentStoreInstance.setMqttConnected(true);
                     }
                 } catch (error) {
@@ -787,12 +769,12 @@ const useMqttStore = create((set, get) => {
                     };
                 }
 
-                // 设置超时
+                // 设置超时为30秒，较长的超时以避免快速多次输入时出现错误
                 const timeoutId = setTimeout(() => {
-                    console.log(`命令请求超时: ${requestId}`);
+                    // 静默处理超时，只清理资源
                     pendingCommands.delete(requestId);
                     reject(new Error('命令请求超时'));
-                }, 10000); // 10秒超时
+                }, 30000);
 
                 // 保存待处理命令
                 pendingCommands.set(requestId, {
@@ -804,7 +786,6 @@ const useMqttStore = create((set, get) => {
 
                 // 发布命令消息
                 const commandTopic = `${TOPICS.COMMAND}${uuid}`;
-                console.log(`发送命令到 ${commandTopic}:`, commandMessage);
 
                 // 确保序列化成功
                 let messageText;

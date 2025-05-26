@@ -17,7 +17,7 @@ const useAgentStore = create((set, get) => ({
 
     // 设置MQTT状态
     setMqttConnected: (connected) => {
-        console.log(`更新MQTT连接状态: ${connected}`);
+        // 只有状态变化时才更新，避免重复设置
         set((state) => {
             if (state.mqttConnected !== connected) {
                 return {mqttConnected: connected};
@@ -33,7 +33,6 @@ const useAgentStore = create((set, get) => ({
                 if (mqttStore) {
                     const mqttAgentState = mqttStore.getAgentState();
                     if (mqttAgentState && Object.keys(mqttAgentState).length > 0) {
-                        console.log('同步MQTT代理状态到agentStore');
                         set({mqttAgentState: {...mqttAgentState}});
                     }
                 }
@@ -52,20 +51,17 @@ const useAgentStore = create((set, get) => ({
     fetchAgents: async (force = false) => {
         // 检查是否已经完成初始加载且不是强制刷新
         if (get().initialLoaded && !force) {
-            console.log('已完成初始加载，跳过请求');
             return {success: true, data: get().agents};
         }
 
         // 如果已经在加载且不是强制刷新，则跳过
         if (get().isLoading && !force) {
-            console.log('正在加载中，跳过请求');
             return {success: true, data: get().agents};
         }
 
         set({isLoading: true, error: null});
 
         try {
-            console.log('从API获取代理列表...');
             const response = await fetch('/api/agents');
 
             if (response.status === 401) {
@@ -77,7 +73,6 @@ const useAgentStore = create((set, get) => ({
             }
 
             const data = await response.json();
-            console.log(`获取到${data.length}个代理`);
 
             set({
                 agents: data,
@@ -88,7 +83,6 @@ const useAgentStore = create((set, get) => ({
 
             return {success: true, data};
         } catch (error) {
-            console.error('获取代理数据失败:', error);
             set({
                 error: error.message,
                 isLoading: false
@@ -109,20 +103,16 @@ const useAgentStore = create((set, get) => ({
             if (agentResponse.ok) {
                 const agentData = await agentResponse.json();
                 agentUuid = agentData.uuid; // 保存UUID用于后续清理
-                console.log(`准备删除代理: ${agentId}, UUID: ${agentUuid}`);
             } else {
-                console.error(`获取代理信息失败: ${agentId}`);
                 // 尝试从本地状态获取UUID
                 const state = get();
                 const agent = state.agents.find(a => a._id === agentId);
                 if (agent && agent.uuid) {
                     agentUuid = agent.uuid;
-                    console.log(`从本地状态获取代理UUID: ${agentUuid}`);
                 }
             }
 
             if (!agentUuid) {
-                console.error(`无法获取代理UUID, 仅删除数据库记录: ${agentId}`);
             }
 
             // 执行删除操作
@@ -141,32 +131,27 @@ const useAgentStore = create((set, get) => ({
 
             // 如果有UUID，同时标记为已删除，防止再次自动注册
             if (agentUuid) {
-                console.log(`标记代理为已删除: ${agentUuid}`);
                 const mqttStore = useMqttStore.getState();
 
                 // 确保MQTT Store已初始化
                 if (typeof mqttStore.markAgentDeleted === 'function') {
                     mqttStore.markAgentDeleted(agentUuid);
                 } else {
-                    console.error('MQTT Store未初始化，无法标记代理为已删除');
                 }
 
                 // 双保险：直接移除MQTT状态中的代理数据
                 try {
                     const mqttAgentState = {...mqttStore.getAgentState()};
                     if (mqttAgentState[agentUuid]) {
-                        console.log(`从MQTT状态中删除代理: ${agentUuid}`);
                         delete mqttAgentState[agentUuid];
                         get().updateMqttAgentState(mqttAgentState);
                     }
                 } catch (err) {
-                    console.error('清理MQTT状态失败:', err);
                 }
             }
 
             return {success: true};
         } catch (error) {
-            console.error('删除代理失败:', error);
             return {success: false, error};
         }
     },
@@ -370,7 +355,37 @@ const useAgentStore = create((set, get) => ({
     resetLoadingState: () => set({
         initialLoaded: false,
         isLoading: false
-    })
+    }),
+
+    // 强制刷新单个代理数据
+    refreshAgent: async (agentId) => {
+        if (!agentId) return {success: false, error: {message: 'Invalid agent ID'}};
+
+        try {
+            // 先获取最新数据
+            const result = await get().getAgent(agentId);
+            if (!result.success) {
+                throw new Error('获取代理数据失败');
+            }
+
+            // 如果MQTT已连接，强制同步MQTT状态
+            if (useMqttStore.getState().connected) {
+                const agent = get().getAgentById(agentId);
+                if (agent?.uuid) {
+                    // 获取最新的MQTT状态
+                    const mqttAgentState = useMqttStore.getState().getAgentState();
+                    if (mqttAgentState && Object.keys(mqttAgentState).length > 0) {
+                        // 更新MQTT状态
+                        get().updateMqttAgentState({...mqttAgentState});
+                    }
+                }
+            }
+
+            return result;
+        } catch (error) {
+            return {success: false, error};
+        }
+    }
 }));
 
 export default useAgentStore;

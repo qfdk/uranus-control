@@ -1,6 +1,6 @@
 'use client';
 
-import React, {useCallback, useEffect, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState, useMemo} from 'react';
 import {formatDistanceToNow} from 'date-fns';
 import zhCN from 'date-fns/locale/zh-CN';
 import Link from 'next/link';
@@ -36,6 +36,7 @@ export default function AgentDetail({agent: initialAgent}) {
     const deleteAgent = useAgentStore(state => state.deleteAgent);
     const upgradeAgent = useAgentStore(state => state.upgradeAgent);
     const getCombinedAgent = useAgentStore(state => state.getCombinedAgent);
+    const refreshAgent = useAgentStore(state => state.refreshAgent);
     const mqttAgentState = useAgentStore(state => state.mqttAgentState);
 
     const [renderKey, setRenderKey] = useState(0);
@@ -47,6 +48,9 @@ export default function AgentDetail({agent: initialAgent}) {
         show: false
     });
     const [agent, setAgent] = useState(initialAgent);
+
+    // 防止频繁重新订阅的引用
+    const subscriptionRef = useRef(null);
     const statusTimeoutRef = useRef(null);
     
     // 存储当前代理的UUID，用于mqttAgentState监听
@@ -67,61 +71,56 @@ export default function AgentDetail({agent: initialAgent}) {
     // 初始化MQTT连接
     useEffect(() => {
         if (isMounted && !mqttConnected) {
-            console.log('代理详情页面：尝试连接MQTT');
             useMqttStore.getState().connect().catch(err => {
-                console.error('MQTT连接失败:', err);
             });
         }
     }, [isMounted, mqttConnected]);
+
+    // 处理函数 - 处理代理状态更新
+    const handleAgentUpdate = useCallback((topic, message) => {
+        // 检查MQTT连接状态
+        if (!mqttConnected) {
+            // 强制更新MQTT状态
+            useMqttStore.getState().connect().catch(console.error);
+        }
+
+        // 使用getCombinedAgent获取合并后的数据
+        if (!agent?._id) return;
+
+        const combinedAgent = getCombinedAgent(agent._id);
+        if (combinedAgent) {
+            // 只在实际有变化时更新，避免循环渲染
+            if (JSON.stringify(combinedAgent) !== JSON.stringify(agent)) {
+                setAgent(combinedAgent);
+            }
+        }
+    }, [agent, mqttConnected, getCombinedAgent]);
 
     // 监听MQTT实时状态更新
     useEffect(() => {
         if (!agent?._id || !agent?.uuid) return;
 
-        console.log('设置对代理的MQTT状态监听:', agent.uuid, '当前MQTT状态:', mqttConnected ? '已连接' : '未连接');
-
-        // 创建处理函数 - 处理代理状态更新
-        const handleAgentUpdate = (topic, message) => {
-            console.log('收到代理消息更新:', topic);
-
-            if (!mqttConnected) {
-                console.log('收到消息但MQTT显示为未连接，更新标记');
-                // 强制更新MQTT状态
-                useMqttStore.getState().connect().catch(console.error);
-            }
-
-            // 使用getCombinedAgent获取合并后的数据
-            const combinedAgent = getCombinedAgent(agent._id);
-            if (combinedAgent) {
-                console.log('使用合并后的代理数据更新状态');
-                setAgent(combinedAgent);
-            }
-        };
-
         let unsubscribe = () => {};
-        
-        // 如果MQTT已连接，直接订阅
-        if (mqttConnected) {
-            unsubscribe = subscribeToResponses(agent.uuid, handleAgentUpdate);
-            
-            // 立即使用getCombinedAgent获取最新状态
+
+        // 如果MQTT已连接，直接订阅（避免重复订阅）
+        if (mqttConnected && !subscriptionRef.current) {
+            subscriptionRef.current = subscribeToResponses(agent.uuid, handleAgentUpdate);
+            unsubscribe = subscriptionRef.current;
+
+            // 立即使用getCombinedAgent获取最新状态（仅当有实际变化时）
             const combinedAgent = getCombinedAgent(agent._id);
-            if (combinedAgent) {
-                console.log('MQTT已连接，立即更新为合并数据');
+            if (combinedAgent && JSON.stringify(combinedAgent) !== JSON.stringify(agent)) {
                 setAgent(combinedAgent);
             }
-        } else {
+        } else if (!mqttConnected) {
             // 如果MQTT未连接，尝试连接
-            console.log('尝试连接MQTT...');
             useMqttStore.getState().connect()
                 .then(() => {
-                    console.log('MQTT连接成功，开始订阅代理状态');
                     unsubscribe = subscribeToResponses(agent.uuid, handleAgentUpdate);
                     
                     // 连接成功后立即更新状态
                     const combinedAgent = getCombinedAgent(agent._id);
                     if (combinedAgent) {
-                        console.log('MQTT连接后更新为合并数据');
                         setAgent(combinedAgent);
                     }
                 })
@@ -130,8 +129,8 @@ export default function AgentDetail({agent: initialAgent}) {
 
         // 组件卸载时取消订阅
         return () => {
-            console.log('取消代理MQTT订阅:', agent.uuid);
             unsubscribe();
+            subscriptionRef.current = null;
         };
     }, [agent?._id, agent?.uuid, mqttConnected, subscribeToResponses, getCombinedAgent]);
 
@@ -168,11 +167,9 @@ export default function AgentDetail({agent: initialAgent}) {
                     
                     // 如果状态发生变化，记录日志
                     if (statusChanged) {
-                        console.log(`定时刷新: 代理状态已更新: ${newAgent.online ? '在线' : '离线'}`);
-                    }
+                                }
                 }
             } catch (error) {
-                console.error('周期性刷新代理状态失败:', error);
             }
         }, 3000); // 3秒刷新一次，增加频率确保快速响应
         
@@ -194,7 +191,6 @@ export default function AgentDetail({agent: initialAgent}) {
         
         // 检查在线状态是否变化
         if (mqttData.online !== agent.online) {
-            console.log(`MQTT状态变化检测到: ${agent.uuid} 现在 ${mqttData.online ? '在线' : '离线'}`);
             
             // 使用getCombinedAgent获取完整的合并状态
             const currentAgent = getCombinedAgent(agent._id);
@@ -208,34 +204,27 @@ export default function AgentDetail({agent: initialAgent}) {
     const refreshAgentData = useCallback(async () => {
         if (!agent?._id) return;
 
-        console.log(`正在刷新代理数据: ${agent._id}`);
-
         try {
-            // 使用API获取最新数据
-            const refreshResponse = await fetch(`/api/agents/${agent._id}`);
+            // 使用新的refreshAgent函数强制刷新数据
+            const result = await refreshAgent(agent._id);
 
-            if (!refreshResponse.ok) {
-                throw new Error(`获取代理数据失败: HTTP ${refreshResponse.status}`);
-            }
-
-            // 获取HTTP数据后，使用getCombinedAgent获取合并数据
-            await refreshResponse.json(); // 只是为了更新store中的数据，结果不保存
-            
-            // 获取合并后的最新数据
-            const combinedAgent = getCombinedAgent(agent._id);
-            if (combinedAgent) {
-                console.log('获取到合并后的代理数据');
-                setAgent(combinedAgent);
-                return combinedAgent;
+            if (result.success && result.agent) {
+                // 更新本地状态
+                setAgent(result.agent);
+                return result.agent;
             } else {
-                console.log('无法获取合并数据，使用HTTP数据');
+                // 如果刷新失败，尝试使用现有数据
+                const combinedAgent = getCombinedAgent(agent._id);
+                if (combinedAgent) {
+                    setAgent(combinedAgent);
+                    return combinedAgent;
+                }
                 return null;
             }
         } catch (error) {
-            console.error('刷新代理状态失败:', error);
             throw error;
         }
-    }, [agent?._id, getCombinedAgent]);
+    }, [agent?._id, refreshAgent, getCombinedAgent]);
 
     // 处理删除代理
     const handleDeleteAgent = async () => {
@@ -265,7 +254,6 @@ export default function AgentDetail({agent: initialAgent}) {
                 toast.error(result.error?.message || '删除代理失败，请重试');
             }
         } catch (error) {
-            console.error('删除代理失败:', error);
             toast.error('删除代理失败: ' + error.message);
         }
     };
@@ -291,7 +279,6 @@ export default function AgentDetail({agent: initialAgent}) {
                 try {
                     const result = await upgradeAgent(agent._id);
 
-                    console.log('升级响应:', result);
 
                     // 检查响应是成功的
                     if (result.success || result.message) {
@@ -335,8 +322,7 @@ export default function AgentDetail({agent: initialAgent}) {
                                     setRenderKey(prev => prev + 1); // 强制重新渲染
                                 }, 5000);
                             } catch (error) {
-                                console.error('刷新代理数据失败:', error);
-                                setUpgradeStatus({
+                                            setUpgradeStatus({
                                     type: 'warning',
                                     message: '代理可能已升级，但无法获取最新状态',
                                     show: true
@@ -354,8 +340,7 @@ export default function AgentDetail({agent: initialAgent}) {
                         setIsUpgrading(false);
                     }
                 } catch (error) {
-                    console.error('升级代理失败:', error);
-                    setUpgradeStatus({
+                        setUpgradeStatus({
                         type: 'error',
                         message: error.message || '升级代理失败，请重试',
                         show: true
@@ -440,7 +425,6 @@ export default function AgentDetail({agent: initialAgent}) {
                 throw new Error('不支持的命令');
             }
         } catch (error) {
-            console.error(`${command}命令执行失败:`, error);
             setCommandMessage({
                 type: 'error',
                 content: `${commandNames[command] || command}失败: ${error.message}`,
@@ -493,11 +477,20 @@ export default function AgentDetail({agent: initialAgent}) {
                         <div className="mt-2 flex flex-wrap items-center gap-3">
                             {/* Status Badge */}
                             <span className={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-full ${
-                                agent.online ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                                agent.online
+                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                                    : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
                             }`}>
-                                <span className={`inline-block w-2 h-2 rounded-full mr-1.5 ${agent.online ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                                <span className={`inline-block w-2 h-2 rounded-full mr-1.5 ${
+                                    agent.online
+                                        ? 'bg-green-500 animate-pulse'
+                                        : 'bg-red-500'
+                                }`}></span>
                                 {agent.online ? '在线' : '离线'}
-                                {agent._fromMqtt && <span className="ml-1">(MQTT实时)</span>}
+                                {mqttConnected
+                                    ? <span className="ml-1 bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 px-1 rounded">MQTT实时</span>
+                                    : <span className="ml-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-1 rounded">数据库</span>
+                                }
                             </span>
                             
                             {/* UUID Badge */}
@@ -560,7 +553,7 @@ export default function AgentDetail({agent: initialAgent}) {
                             ? 'border-blue-500 text-blue-600 dark:text-blue-400 dark:border-blue-400'
                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
                     }`}
-                    disabled={!agent.online || !mqttConnected}
+                    disabled={(!agent.online && !(agent.lastHeartbeat && new Date() - new Date(agent.lastHeartbeat) < 20000)) || !mqttConnected}
                 >
                     <Server className="w-4 h-4 mr-2"/>
                     Nginx控制
@@ -577,7 +570,7 @@ export default function AgentDetail({agent: initialAgent}) {
                             ? 'border-blue-500 text-blue-600 dark:text-blue-400 dark:border-blue-400'
                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
                     }`}
-                    disabled={!agent.online}
+                    disabled={!agent.online && !(agent.lastHeartbeat && new Date() - new Date(agent.lastHeartbeat) < 20000)}
                 >
                     <TerminalSquare className="w-4 h-4 mr-2"/>
                     终端
@@ -745,6 +738,57 @@ export default function AgentDetail({agent: initialAgent}) {
                                         {agent._id || '未知'}
                                     </p>
                                 </div>
+
+                                {/* Debug section - click to force online status */}
+                                <div className="border-l-2 border-orange-500 dark:border-orange-600 pl-3 py-1 cursor-pointer"
+                                     onClick={async () => {
+                                        try {
+                                            // 强制更新代理状态为在线
+                                            const response = await fetch(`/api/agents/${agent._id}/online`, {
+                                                method: 'POST',
+                                                headers: {'Content-Type': 'application/json'},
+                                                body: JSON.stringify({online: true})
+                                            });
+
+                                            if (response.ok) {
+                                                // 刷新代理数据
+                                                refreshAgentData();
+                                                toast.success('已强制更新代理为在线状态');
+                                            }
+                                        } catch (error) {
+                                            toast.error('更新状态失败');
+                                        }
+                                     }}>
+                                    <h3 className="text-xs font-medium text-orange-500 dark:text-orange-400">调试操作</h3>
+                                    <div className="flex flex-col space-y-1">
+                                        <p className="text-sm font-medium text-orange-600 dark:text-orange-300">
+                                            点击强制设置为在线
+                                        </p>
+                                        <p className="text-sm font-medium text-blue-600 dark:text-blue-300 cursor-pointer"
+                                           onClick={(e) => {
+                                               e.stopPropagation();
+                                               // Get the current MQTT connection status
+                                               const currentMqttStatus = mqttConnected;
+                                               // Get the current MQTT agent state (if available)
+                                               const currentMqttAgentState = getAgentState(agent.uuid);
+
+                                               // Fetch the database state for comparison
+                                               fetch(`/api/agents/${agent._id}/debug`)
+                                                   .then(r => r.json())
+                                                   .then(data => {
+                                                       alert(
+                                                           `数据库在线状态: ${data.agentFromDB.online}\n` +
+                                                           `MQTT在线状态: ${currentMqttAgentState?.online ?? '未知'}\n` +
+                                                           `MQTT已连接: ${currentMqttStatus ? '是' : '否'}\n` +
+                                                           `最后心跳: ${data.lastHeartbeatAge}\n` +
+                                                           `当前状态来源: ${agent._fromMqtt ? 'MQTT实时数据' : '数据库'}`
+                                                       );
+                                                   });
+                                           }}>
+                                            查看实时状态
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -764,7 +808,7 @@ export default function AgentDetail({agent: initialAgent}) {
                     />
 
                     {/* Nginx控制面板 */}
-                    {agent.online && mqttConnected ? (
+                    {(agent.online || (agent.lastHeartbeat && new Date() - new Date(agent.lastHeartbeat) < 20000)) && mqttConnected ? (
                         <div className="bg-white rounded-lg shadow dark:bg-gray-800">
                             <div className="p-5">
                                 <div className="flex items-center mb-6">
@@ -884,7 +928,7 @@ export default function AgentDetail({agent: initialAgent}) {
 
             {activeTab === 'terminal' && (
                 <div>
-                    {agent.online ? (
+                    {agent.online || (agent.lastHeartbeat && new Date() - new Date(agent.lastHeartbeat) < 20000) ? (
                         <CommandExecutor agentUuid={agent.uuid} isActive={activeTab === 'terminal'}/>
                     ) : (
                         <div className="bg-white rounded-lg shadow dark:bg-gray-800 p-5 text-center">

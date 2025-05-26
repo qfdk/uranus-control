@@ -27,6 +27,7 @@ export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [isClient, setIsClient] = useState(false);
+    const [sessionExpiration, setSessionExpiration] = useState(null);
 
     // 确保只在客户端执行
     useEffect(() => {
@@ -37,17 +38,32 @@ export function AuthProvider({ children }) {
             // 从localStorage获取认证状态
             const isAuthenticated = localStorage.getItem('isAuthenticated') === 'true';
             const userData = localStorage.getItem('user');
+            const sessionExpirationTime = localStorage.getItem('sessionExpiration');
 
-            if (isAuthenticated && userData) {
-                try {
-                    setUser(JSON.parse(userData));
-                } catch (e) {
-                    // 如果解析失败，清除无效数据
+            if (isAuthenticated && userData && sessionExpirationTime) {
+                const expirationTime = new Date(sessionExpirationTime);
+                if (expirationTime > new Date()) {
+                    try {
+                        setUser(JSON.parse(userData));
+                        setSessionExpiration(expirationTime);
+                    } catch (e) {
+                        // 如果解析失败，清除无效数据
+                        localStorage.removeItem('user');
+                        localStorage.removeItem('sessionExpiration');
+                        setUser(null);
+                        setSessionExpiration(null);
+                    }
+                } else {
+                    // 会话已过期
+                    localStorage.removeItem('isAuthenticated');
                     localStorage.removeItem('user');
+                    localStorage.removeItem('sessionExpiration');
                     setUser(null);
+                    setSessionExpiration(null);
                 }
             } else {
                 setUser(null);
+                setSessionExpiration(null);
             }
 
             setLoading(false);
@@ -69,19 +85,43 @@ export function AuthProvider({ children }) {
         if (user && publicRoutes.includes(pathname)) {
             router.push('/');
         }
+
+        // 处理 isAuthenticated 为 true 但 user 为 null 的情况
+        if (localStorage.getItem('isAuthenticated') === 'true' && !user) {
+            logout();
+        }
     }, [user, pathname, loading, router, isClient]);
+
+    // 检查会话是否过期
+    useEffect(() => {
+        if (!sessionExpiration) return;
+
+        const interval = setInterval(() => {
+            if (new Date() > sessionExpiration) {
+                logout();
+            }
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [sessionExpiration]);
 
     // 登录函数
     const login = (userData, callback) => {
+        const expirationTime = new Date();
+        expirationTime.setHours(expirationTime.getHours() + 1); // 设置会话过期时间为1小时后
+
         localStorage.setItem('isAuthenticated', 'true');
         localStorage.setItem('user', JSON.stringify(userData));
-        
+        localStorage.setItem('sessionExpiration', expirationTime.toISOString());
+
         // 添加cookies支持，配合中间件使用
         document.cookie = `isAuthenticated=true; path=/; max-age=${60*60*24*7}`; // 7天有效期
-        
+        document.cookie = `sessionExpiration=${expirationTime.toISOString()}; path=/; max-age=${60*60*24*7}`; // 7天有效期
+
         // 设置用户状态并在完成后执行回调
         setUser(userData);
-        
+        setSessionExpiration(expirationTime);
+
         // 添加短暂延迟确保状态和cookie设置完成
         setTimeout(() => {
             // 如果提供了回调函数则执行
@@ -98,10 +138,13 @@ export function AuthProvider({ children }) {
     const logout = () => {
         localStorage.removeItem('isAuthenticated');
         localStorage.removeItem('user');
+        localStorage.removeItem('sessionExpiration');
         setUser(null);
+        setSessionExpiration(null);
 
         // 清除cookie
         document.cookie = 'isAuthenticated=; path=/; max-age=0';
+        document.cookie = 'sessionExpiration=; path=/; max-age=0';
 
         router.push('/login');
     };
