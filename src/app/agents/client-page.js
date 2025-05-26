@@ -604,12 +604,6 @@ export default function AgentsClientPage() {
                                               agent.online ? 'bg-green-500 animate-pulse' : 'bg-red-500'
                                           }`}></span>
                                           {agent.online ? '在线' : '离线'}
-                                          {/* Show data source indicator */}
-                                          {mqttConnected ? (
-                                              <span className="ml-1 bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 text-[10px] px-0.5 rounded">MQTT</span>
-                                          ) : (
-                                              <span className="ml-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-[10px] px-0.5 rounded">DB</span>
-                                          )}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
