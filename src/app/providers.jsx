@@ -9,6 +9,7 @@ import LoadingOverlay from '@/components/ui/LoadingOverlay';
 import useAgentStore from '@/store/agentStore';
 import useMqttStore from '@/store/mqttStore';
 import dynamic from 'next/dynamic';
+import RegisterSW from './register-sw';
 
 // 使用动态导入来避免Toaster的SSR水合问题
 const Toaster = dynamic(() => import('react-hot-toast').then(mod => mod.Toaster), {
@@ -75,6 +76,7 @@ export function AppProviders({ children }) {
                         }}
                     />
                     <LoadingOverlay />
+                    <RegisterSW />
                     {children}
                 </LoadingProvider>
             </SettingsProvider>
