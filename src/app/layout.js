@@ -1,7 +1,6 @@
 // src/app/layout.js
 import { Inter } from 'next/font/google';
 import './globals.css';
-import './pwa-viewport.css';
 import { AppProviders } from './providers';
 import { seedDefaultUsers } from '@/lib/seed-users';
 

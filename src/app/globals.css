@@ -76,7 +76,16 @@ body {
     transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* 基础样式已移至 pwa-viewport.css */
+/* iOS PWA 全屏适配 */
+html,
+body {
+    height: 100%;
+}
+
+#__next {
+    min-height: 100vh;
+    min-height: 100dvh;
+}
 
 /* 添加全局按钮和可点击元素的光标样式 */
 button,
