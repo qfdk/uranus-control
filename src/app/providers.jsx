@@ -76,7 +76,7 @@ export function AppProviders({ children }) {
                         }}
                     />
                     <LoadingOverlay />
-                    <RegisterSW />
+                    {/* <RegisterSW /> */}
                     {children}
                 </LoadingProvider>
             </SettingsProvider>

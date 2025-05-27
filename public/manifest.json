@@ -1,9 +1,9 @@
 {
-  "name": "Οὐρανός 控制台",
-  "short_name": "Οὐρανός",
-  "description": "集中式Nginx服务器管理控制台",
+  "name": "Uranus Control",
+  "short_name": "Uranus",
+  "description": "Centralized Nginx Server Management Console",
   "start_url": "/",
-  "display": "fullscreen",
+  "display": "standalone",
   "theme_color": "#3b82f6",
   "background_color": "#ffffff",
   "orientation": "portrait",
