@@ -1,10 +1,6 @@
 // Service Worker for PWA functionality
-const CACHE_NAME = 'uranus-control-v1';
+const CACHE_NAME = 'uranus-control-v2';
 const urlsToCache = [
-  '/',
-  '/login',
-  '/agents',
-  '/settings',
   '/manifest.json',
   '/icon-192x192.png',
   '/icon-512x512.png'
@@ -23,6 +19,16 @@ self.addEventListener('install', event => {
 
 // Fetch event - serve from cache when offline
 self.addEventListener('fetch', event => {
+  // Skip non-GET requests
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
+  // Skip chrome-extension and other non-http(s) URLs
+  if (!event.request.url.startsWith('http')) {
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request)
       .then(response => {
@@ -36,7 +42,17 @@ self.addEventListener('fetch', event => {
 
         return fetch(fetchRequest).then(response => {
           // Check if valid response
-          if (!response || response.status !== 200 || response.type !== 'basic') {
+          // Don't cache redirects (3xx), errors (4xx, 5xx), or opaque responses
+          if (!response || 
+              response.status !== 200 || 
+              response.type !== 'basic' ||
+              response.redirected) {
+            return response;
+          }
+
+          // Don't cache API calls
+          const url = new URL(event.request.url);
+          if (url.pathname.startsWith('/api/')) {
             return response;
           }
 
@@ -49,6 +65,10 @@ self.addEventListener('fetch', event => {
             });
 
           return response;
+        }).catch(error => {
+          // Network request failed, serve offline page if available
+          console.error('Fetch failed:', error);
+          return caches.match('/');
         });
       })
   );

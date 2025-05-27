@@ -13,10 +13,12 @@ export function LoadingProvider({children}) {
     const timeoutRef = useRef(null);
     const pathname = usePathname();
     const previousPathRef = useRef(pathname);
+    const navigationInProgressRef = useRef(false);
 
     // 强制结束所有加载状态
     const resetLoading = useCallback(() => {
         loadingCountRef.current = 0;
+        navigationInProgressRef.current = false;
         setIsLoading(false);
 
         if (timeoutRef.current) {
