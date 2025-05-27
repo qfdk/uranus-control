@@ -76,8 +76,8 @@ function LoginPageComponent() {
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex flex-col justify-center px-4 sm:px-6 lg:px-8">
             <div className="sm:mx-auto sm:w-full sm:max-w-md">
-                <div className="bg-white dark:bg-gray-800 py-8 px-6 shadow-xl rounded-2xl sm:px-10">
-                    <div className="sm:mx-auto sm:w-full sm:max-w-md mb-8">
+                <div className="bg-white dark:bg-gray-800 py-6 px-6 shadow-xl rounded-2xl sm:px-10">
+                    <div className="sm:mx-auto sm:w-full sm:max-w-md mb-6">
                         <div className="text-center">
                             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
                                 {settings?.siteName || 'Οὐρανός 控制台'}
@@ -86,7 +86,7 @@ function LoginPageComponent() {
                     </div>
 
                     {error && (
-                        <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg"
+                        <div className="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg"
                              role="alert">
                             <div className="flex items-center">
                                 <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
@@ -97,7 +97,7 @@ function LoginPageComponent() {
                         </div>
                     )}
 
-                    <form className="space-y-5" onSubmit={handleSubmit}>
+                    <form className="space-y-4" onSubmit={handleSubmit}>
                         <div>
                             <label htmlFor="username" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 用户名
@@ -153,7 +153,7 @@ function LoginPageComponent() {
                             </div>
                         </div>
 
-                        <div className="pt-2">
+                        <div className="pt-1">
                             <button
                                 type="submit"
                                 disabled={isLoading}
@@ -181,9 +181,9 @@ function LoginPageComponent() {
                             </button>
                         </div>
                         
-                        <div className="mt-6 text-center">
+                        <div className="mt-4 text-center">
                             <p className="text-xs text-gray-500 dark:text-gray-400">
-                                © 2024 {settings?.siteName || 'Οὐρανός 控制台'}. All rights reserved.
+                                © 2024 {settings?.siteName || 'Οὐρανός 控制台'}
                             </p>
                         </div>
                     </form>
