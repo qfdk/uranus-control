@@ -74,33 +74,43 @@ function LoginPageComponent() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-            <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-                <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
-                    <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex flex-col justify-center px-4 sm:px-6 lg:px-8">
+            <div className="sm:mx-auto sm:w-full sm:max-w-md">
+                <div className="bg-white dark:bg-gray-800 py-8 px-6 shadow-xl rounded-2xl sm:px-10">
+                    <div className="sm:mx-auto sm:w-full sm:max-w-md mb-8">
                         <div className="text-center">
-                            <h1 className="text-3xl font-bold text-gray-900">
+                            <div className="mx-auto w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg">
+                                <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
+                            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
                                 {settings?.siteName || 'Οὐρανός 控制台'}
                             </h1>
-                            <p className="mt-2 text-sm text-gray-600">登录继续</p>
+                            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">请登录以继续</p>
                         </div>
                     </div>
 
                     {error && (
-                        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative"
+                        <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg"
                              role="alert">
-                            <span className="block sm:inline">{error}</span>
+                            <div className="flex items-center">
+                                <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                </svg>
+                                <span>{error}</span>
+                            </div>
                         </div>
                     )}
 
-                    <form className="space-y-6" onSubmit={handleSubmit}>
+                    <form className="space-y-5" onSubmit={handleSubmit}>
                         <div>
-                            <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+                            <label htmlFor="username" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 用户名
                             </label>
-                            <div className="mt-1 relative rounded-md shadow-sm">
+                            <div className="relative">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <User className="h-5 w-5 text-gray-400"/>
+                                    <User className="h-5 w-5 text-gray-400 dark:text-gray-500"/>
                                 </div>
                                 <input
                                     id="username"
@@ -109,19 +119,19 @@ function LoginPageComponent() {
                                     required
                                     value={formData.username}
                                     onChange={handleChange}
-                                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                                     placeholder="请输入用户名"
                                 />
                             </div>
                         </div>
 
                         <div>
-                            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                            <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 密码
                             </label>
-                            <div className="mt-1 relative rounded-md shadow-sm">
+                            <div className="relative">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <Lock className="h-5 w-5 text-gray-400"/>
+                                    <Lock className="h-5 w-5 text-gray-400 dark:text-gray-500"/>
                                 </div>
                                 <input
                                     id="password"
@@ -130,14 +140,14 @@ function LoginPageComponent() {
                                     required
                                     value={formData.password}
                                     onChange={handleChange}
-                                    className="block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                    className="block w-full pl-10 pr-10 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                                     placeholder="请输入密码"
                                 />
                                 <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
                                     <button
                                         type="button"
                                         onClick={() => setShowPassword(!showPassword)}
-                                        className="text-gray-400 hover:text-gray-500 focus:outline-none"
+                                        className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 focus:outline-none transition-colors"
                                     >
                                         {showPassword ? (
                                             <EyeOff className="h-5 w-5"/>
@@ -149,11 +159,11 @@ function LoginPageComponent() {
                             </div>
                         </div>
 
-                        <div>
+                        <div className="pt-2">
                             <button
                                 type="submit"
                                 disabled={isLoading}
-                                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-md text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transform transition-all hover:scale-[1.02]"
                             >
                                 {isLoading ? (
                                     <>
@@ -166,8 +176,21 @@ function LoginPageComponent() {
                                         </svg>
                                         登录中...
                                     </>
-                                ) : '登录'}
+                                ) : (
+                                    <>
+                                        <span>登录</span>
+                                        <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                                        </svg>
+                                    </>
+                                )}
                             </button>
+                        </div>
+                        
+                        <div className="mt-6 text-center">
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                © 2024 {settings?.siteName || 'Οὐρανός 控制台'}. All rights reserved.
+                            </p>
                         </div>
                     </form>
                 </div>
