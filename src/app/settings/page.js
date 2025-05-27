@@ -13,7 +13,7 @@ import { useSettings } from '@/app/contexts/SettingsContext';
 export default function SettingsPage() {
     const [activeTab, setActiveTab] = useState('general');
     const { user: currentUser } = useAuth();
-    const { updateSettings } = useSettings();
+    const { settings: contextSettings, updateSettings } = useSettings();
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(false);
     const [showModal, setShowModal] = useState(false);
@@ -28,8 +28,8 @@ export default function SettingsPage() {
         active: true
     });
 
-    // 常规设置状态
-    const [generalSettings, setGeneralSettings] = useState({
+    // 常规设置状态 - 初始化时使用context中的设置
+    const [generalSettings, setGeneralSettings] = useState(contextSettings || {
         siteName: 'Οὐρανός 控制台',
         siteUrl: 'http://localhost:3000',
         language: 'zh-CN'
@@ -82,31 +82,11 @@ export default function SettingsPage() {
         { value: false, label: '禁用' }
     ];
 
-    // 获取常规设置
-    const fetchGeneralSettings = async () => {
-        try {
-            setLoading(true);
-
-            // 尝试从API获取设置
-            const response = await fetch('/api/settings?key=generalSettings');
-
-            if (response.ok) {
-                const data = await response.json();
-                if (data) {
-                    console.log('已加载常规设置:', data);
-                    setGeneralSettings(data);
-                }
-            } else {
-                // 如果API调用失败，尝试从localStorage获取
-                const savedSettings = localStorage.getItem('generalSettings');
-                if (savedSettings) {
-                    setGeneralSettings(JSON.parse(savedSettings));
-                }
-            }
-        } catch (error) {
-            console.error('加载常规设置失败:', error);
-        } finally {
-            setLoading(false);
+    // 获取常规设置 - 现在只从context同步
+    const fetchGeneralSettings = () => {
+        // 从context同步设置到本地state
+        if (contextSettings) {
+            setGeneralSettings(contextSettings);
         }
     };
 
@@ -181,6 +161,13 @@ export default function SettingsPage() {
             setLoading(false);
         }
     };
+
+    // 监听contextSettings变化，同步到本地state
+    useEffect(() => {
+        if (contextSettings) {
+            setGeneralSettings(contextSettings);
+        }
+    }, [contextSettings]);
 
     // 首次加载获取数据
     useEffect(() => {

@@ -56,6 +56,15 @@ export default function AppShell({ children }) {
     useEffect(() => {
         if (isMounted) {
             stopLoading();
+            
+            // 清理导航安全超时
+            if (window.navigationSafetyTimeout) {
+                clearTimeout(window.navigationSafetyTimeout);
+                window.navigationSafetyTimeout = null;
+            }
+            
+            // 重置导航状态
+            window.navigationInProgress = false;
         }
     }, [pathname, stopLoading, isMounted]);
 

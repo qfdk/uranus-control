@@ -13,55 +13,36 @@ export function LoadingProvider({children}) {
     const timeoutRef = useRef(null);
     const pathname = usePathname();
     const previousPathRef = useRef(pathname);
-    const navigationInProgressRef = useRef(false);
 
-    // 监听路径变化
-    useEffect(() => {
-        if (previousPathRef.current !== pathname) {
-            // 登录页不显示加载状态
-            if (pathname === '/login') {
-                setIsLoading(false);
-                loadingCountRef.current = 0;
-                return;
-            }
-
-            navigationInProgressRef.current = true;
-            previousPathRef.current = pathname;
-
-            if (pathname !== '/login') {
-                setIsLoading(true);
-                loadingCountRef.current += 1;
-            }
-
-            const timer = setTimeout(() => {
-                if (navigationInProgressRef.current) {
-                    navigationInProgressRef.current = false;
-                    loadingCountRef.current = Math.max(0, loadingCountRef.current - 1);
-                    if (loadingCountRef.current === 0) {
-                        setIsLoading(false);
-                    }
-                }
-            }, 600);
-
-            return () => clearTimeout(timer);
-        }
-    }, [pathname]);
-
-    const setAutoRefresh = useCallback((active) => {
-        setAutoRefreshActive(active);
-    }, []);
-
-    // 强制结束所有加载状态 - 移到前面定义
+    // 强制结束所有加载状态
     const resetLoading = useCallback(() => {
         loadingCountRef.current = 0;
-        navigationInProgressRef.current = false;
         setIsLoading(false);
 
         if (timeoutRef.current) {
             clearTimeout(timeoutRef.current);
             timeoutRef.current = null;
         }
+        
+        // 清理导航状态
+        if (typeof window !== 'undefined') {
+            window.navigationInProgress = false;
+            if (window.navigationSafetyTimeout) {
+                clearTimeout(window.navigationSafetyTimeout);
+                window.navigationSafetyTimeout = null;
+            }
+        }
     }, []);
+
+    // 监听路径变化 - 简化逻辑
+    useEffect(() => {
+        if (previousPathRef.current !== pathname) {
+            previousPathRef.current = pathname;
+            
+            // 路径已经变化，说明导航完成，立即停止加载状态
+            resetLoading();
+        }
+    }, [pathname, resetLoading]);
 
     const startLoading = useCallback(() => {
         // 登录页不显示加载状态
@@ -69,32 +50,19 @@ export function LoadingProvider({children}) {
             return;
         }
 
-        const isAuthenticated = typeof window !== 'undefined' &&
-            localStorage.getItem('isAuthenticated') === 'true';
-
-        if (!isAuthenticated && pathname !== '/login') {
-            return;
-        }
-
-        if (typeof window !== 'undefined' && window.navigationInProgress) {
-            navigationInProgressRef.current = true;
-            window.navigationInProgress = false;
-        }
-
-        if (!navigationInProgressRef.current) {
-            return;
-        }
-
         loadingCountRef.current += 1;
         setIsLoading(true);
 
+        // 清除之前的超时
         if (timeoutRef.current) {
             clearTimeout(timeoutRef.current);
         }
 
+        // 设置新的超时 - 10秒后自动清除（作为保险机制）
         timeoutRef.current = setTimeout(() => {
+            console.warn('[LoadingContext] Loading timeout after 10 seconds - force stopping');
             resetLoading();
-        }, 5000);
+        }, 10000);
     }, [pathname, resetLoading]);
 
     const stopLoading = useCallback(() => {
@@ -119,8 +87,7 @@ export function LoadingProvider({children}) {
                 isLoading,
                 startLoading,
                 stopLoading,
-                resetLoading,
-                setAutoRefresh
+                resetLoading
             }}
         >
             {children}
