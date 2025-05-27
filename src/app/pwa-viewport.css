@@ -1,0 +1,76 @@
+/* iOS PWA 视口修复 */
+:root {
+  --sat: env(safe-area-inset-top);
+  --sar: env(safe-area-inset-right);
+  --sab: env(safe-area-inset-bottom);
+  --sal: env(safe-area-inset-left);
+}
+
+/* 重置基础样式 */
+html {
+  height: 100%;
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+}
+
+body {
+  height: 100%;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  position: fixed;
+  width: 100%;
+}
+
+/* 确保 Next.js 根元素填满整个视口 */
+#__next {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  position: relative;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  /* 移除之前的 padding，改为在具体组件中处理 */
+  padding: 0;
+}
+
+/* 针对有 header 的页面 */
+#__next > div {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+/* 确保 main 区域可以滚动 */
+main {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 固定 header 需要考虑安全区域 */
+header {
+  padding-top: var(--sat);
+}
+
+/* iOS PWA 检测 */
+@media (display-mode: standalone) {
+  /* PWA 模式下的特殊处理 */
+  body {
+    background-color: var(--background);
+  }
+}
+
+/* iPhone X 及以上机型的刘海屏处理 */
+@supports (padding: max(0px)) {
+  header {
+    padding-top: max(var(--sat), 0px);
+  }
+  
+  /* 底部导航或内容的安全区域 */
+  .safe-bottom {
+    padding-bottom: max(var(--sab), 16px);
+  }
+}

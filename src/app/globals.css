@@ -76,33 +76,7 @@ body {
     transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* iOS PWA 全屏适配 */
-html,
-body,
-#__next {
-    height: 100%;
-}
-
-/* 使用 dvh 单位来解决 iOS Safari 的视口问题 */
-@supports (height: 100dvh) {
-    body {
-        min-height: 100vh;
-        min-height: 100dvh;
-    }
-    
-    #__next {
-        min-height: 100vh;
-        min-height: 100dvh;
-    }
-}
-
-/* iOS 安全区域内边距 */
-#__next {
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
-    padding-left: env(safe-area-inset-left);
-    padding-right: env(safe-area-inset-right);
-}
+/* 基础样式已移至 pwa-viewport.css */
 
 /* 添加全局按钮和可点击元素的光标样式 */
 button,

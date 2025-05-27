@@ -1,6 +1,7 @@
 // src/app/layout.js
 import { Inter } from 'next/font/google';
 import './globals.css';
+import './pwa-viewport.css';
 import { AppProviders } from './providers';
 import { seedDefaultUsers } from '@/lib/seed-users';
 
@@ -22,7 +23,7 @@ export default function RootLayout({ children }) {
         <html lang="zh">
         <head>
             <meta name="apple-mobile-web-app-capable" content="yes" />
-            <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+            <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
             <meta name="apple-mobile-web-app-title" content="Οὐρανός" />
             <meta name="mobile-web-app-capable" content="yes" />
             <meta name="format-detection" content="telephone=no" />

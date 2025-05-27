@@ -111,7 +111,7 @@ export default function AppShell({ children }) {
                     </div>
                 </header>
 
-                <main className="pb-16 transition-colors duration-300">
+                <main className="pb-16 safe-bottom transition-colors duration-300">
                     {children}
                 </main>
             </div>
