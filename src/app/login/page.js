@@ -1,15 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Lock, User } from 'lucide-react';
 import { useAuth } from '@/app/contexts/AuthContext';
+import { useSettings } from '@/app/contexts/SettingsContext';
 import dynamic from 'next/dynamic';
 
 // 纯客户端登录页面组件
 function LoginPageComponent() {
     const router = useRouter();
     const { login } = useAuth();
+    const { settings } = useSettings();
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -18,6 +20,13 @@ function LoginPageComponent() {
         password: '',
         remember: false
     });
+    
+    // 动态设置页面标题
+    useEffect(() => {
+        if (settings?.siteName) {
+            document.title = `登录 - ${settings.siteName}`;
+        }
+    }, [settings?.siteName]);
 
     // 客户端处理逻辑
 
@@ -70,8 +79,10 @@ function LoginPageComponent() {
                 <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
                     <div className="sm:mx-auto sm:w-full sm:max-w-md">
                         <div className="text-center">
-                            <h1 className="text-3xl font-bold text-gray-900">Οὐρανός</h1>
-                            <p className="mt-2 text-sm text-gray-600">控制台</p>
+                            <h1 className="text-3xl font-bold text-gray-900">
+                                {settings?.siteName || 'Οὐρανός 控制台'}
+                            </h1>
+                            <p className="mt-2 text-sm text-gray-600">登录继续</p>
                         </div>
                     </div>
 

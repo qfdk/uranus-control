@@ -7,10 +7,12 @@ import UserMenu from '@/components/ui/UserMenu';
 import ResponsiveNavigation from '@/components/ui/ResponsiveNavigation';
 import { usePathname } from 'next/navigation';
 import { useLoading } from '@/app/contexts/LoadingContext';
+import { useSettings } from '@/app/contexts/SettingsContext';
 
 export default function AppShell({ children }) {
     const { isAuthenticated, loading: authLoading } = useAuth();
     const pathname = usePathname();
+    const { settings, loading: settingsLoading } = useSettings();
     // 客户端渲染标志
     const [isMounted, setIsMounted] = useState(false);
     const { stopLoading } = useLoading();
@@ -42,6 +44,13 @@ export default function AppShell({ children }) {
 
         return () => clearTimeout(timer);
     }, [stopLoading]);
+    
+    // 动态设置页面标题
+    useEffect(() => {
+        if (settings?.siteName && isMounted) {
+            document.title = settings.siteName;
+        }
+    }, [settings?.siteName, isMounted]);
 
     // 监听路径变化，确保页面切换后停止加载状态
     useEffect(() => {
@@ -76,8 +85,9 @@ export default function AppShell({ children }) {
                             <div className="flex flex-1 items-center">
                                 <div className="flex-shrink-0 flex items-center">
                                     <Link href="/" className="flex items-center group">
-                                        <span className="text-lg md:text-xl font-bold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">Οὐρανός</span>
-                                        <span className="ml-1 text-xs md:text-sm text-gray-600 dark:text-gray-300 group-hover:text-blue-500 dark:group-hover:text-blue-300 transition-colors">控制台</span>
+                                        <span className="text-lg md:text-xl font-bold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                                            {settings?.siteName || 'Οὐρανός 控制台'}
+                                        </span>
                                     </Link>
                                 </div>
                                 {/* 响应式导航组件 */}

@@ -8,10 +8,12 @@ import FormSelect from '@/components/ui/FormSelect';
 import Button from '@/components/ui/Button';
 import AppShell from '@/app/AppShell';
 import { useAuth } from '@/app/contexts/AuthContext';
+import { useSettings } from '@/app/contexts/SettingsContext';
 
 export default function SettingsPage() {
     const [activeTab, setActiveTab] = useState('general');
     const { user: currentUser } = useAuth();
+    const { updateSettings } = useSettings();
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(false);
     const [showModal, setShowModal] = useState(false);
@@ -388,6 +390,9 @@ export default function SettingsPage() {
 
             // 同时保存到localStorage作为备份
             localStorage.setItem('generalSettings', JSON.stringify(generalSettings));
+            
+            // 更新全局设置上下文
+            updateSettings(generalSettings);
 
             if (response.ok) {
                 setGeneralSettingsMessage({

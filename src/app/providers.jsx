@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { AuthProvider } from './contexts/AuthContext';
 import { LoadingProvider } from './contexts/LoadingContext';
+import { SettingsProvider } from './contexts/SettingsContext';
 import LoadingOverlay from '@/components/ui/LoadingOverlay';
 import useAgentStore from '@/store/agentStore';
 import useMqttStore from '@/store/mqttStore';
@@ -65,16 +66,18 @@ export function AppProviders({ children }) {
 
     return (
         <AuthProvider>
-            <LoadingProvider>
-                <Toaster
-                    position="top-right"
-                    toastOptions={{
-                        duration: 3000
-                    }}
-                />
-                <LoadingOverlay />
-                {children}
-            </LoadingProvider>
+            <SettingsProvider>
+                <LoadingProvider>
+                    <Toaster
+                        position="top-right"
+                        toastOptions={{
+                            duration: 3000
+                        }}
+                    />
+                    <LoadingOverlay />
+                    {children}
+                </LoadingProvider>
+            </SettingsProvider>
         </AuthProvider>
     );
 }
