@@ -79,11 +79,6 @@ function LoginPageComponent() {
                 <div className="bg-white dark:bg-gray-800 py-8 px-6 shadow-xl rounded-2xl sm:px-10">
                     <div className="sm:mx-auto sm:w-full sm:max-w-md mb-8">
                         <div className="text-center">
-                            <div className="mx-auto w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg">
-                                <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                            </div>
                             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
                                 {settings?.siteName || 'Οὐρανός 控制台'}
                             </h1>
