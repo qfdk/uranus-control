@@ -365,7 +365,7 @@ export default function AgentsClientPage() {
                                 <div
                                     className={`inline-flex items-center text-sm px-2 py-0.5 rounded-full ${
                                         mqttConnected 
-                                            ? 'bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300' 
+                                            ? 'bg-red-100 dark:bg-red-900/60 text-red-600 dark:text-red-400' 
                                             : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
                                     }`}>
                                     {mqttConnected ? (
