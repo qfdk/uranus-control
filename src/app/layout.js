@@ -14,7 +14,7 @@ export const metadata = {
     description: '集中式Nginx服务器管理控制台',
     manifest: '/manifest.json',
     themeColor: '#3b82f6',
-    viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
+    viewport: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover',
 };
 
 export default function RootLayout({ children }) {
@@ -22,7 +22,7 @@ export default function RootLayout({ children }) {
         <html lang="zh">
         <head>
             <meta name="apple-mobile-web-app-capable" content="yes" />
-            <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+            <meta name="apple-mobile-web-app-status-bar-style" content="default" />
             <meta name="apple-mobile-web-app-title" content="Οὐρανός" />
             <meta name="mobile-web-app-capable" content="yes" />
             <meta name="format-detection" content="telephone=no" />

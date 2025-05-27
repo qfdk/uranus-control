@@ -86,7 +86,7 @@ export default function AppShell({ children }) {
     // 如果用户已登录，则显示带导航的布局
     if (isAuthenticated) {
         return (
-            <div className="min-h-screen bg-gray-100 dark:bg-gray-900 transition-colors duration-300">
+            <div className="min-h-screen min-h-[100dvh] bg-gray-100 dark:bg-gray-900 transition-colors duration-300">
                 <header className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-20 transition-colors duration-300">
                     <div className="max-w-7xl mx-auto nav-container">
                         <div className="flex justify-between items-center h-14 px-2 sm:px-4 lg:px-6">

@@ -1046,7 +1046,7 @@ export default function SettingsPage() {
             {/* 用户编辑/创建模态框 */}
             {showModal && (
                 <div className="fixed inset-0 z-50 overflow-y-auto">
-                    <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                    <div className="flex items-center justify-center min-h-screen min-h-[100dvh] pt-4 px-4 pb-20 text-center sm:block sm:p-0">
                         {/* 背景遮罩 */}
                         <div
                             className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity dark:bg-gray-800 dark:bg-opacity-75"
