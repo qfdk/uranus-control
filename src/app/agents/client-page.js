@@ -363,8 +363,22 @@ export default function AgentsClientPage() {
                             <div className="flex items-center justify-between mb-1">
                                 <p className="text-sm font-medium text-blue-600 dark:text-blue-400">代理节点</p>
                                 <div
-                                    className="text-sm px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300">
-                                    {mqttConnected ? 'MQTT实时' : 'HTTP模式'}
+                                    className={`inline-flex items-center text-sm px-2 py-0.5 rounded-full ${
+                                        mqttConnected 
+                                            ? 'bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300' 
+                                            : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+                                    }`}>
+                                    {mqttConnected ? (
+                                        <svg 
+                                            className="w-4 h-4 animate-pulse" 
+                                            viewBox="0 0 24 24" 
+                                            fill="currentColor"
+                                        >
+                                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                                        </svg>
+                                    ) : (
+                                        'HTTP模式'
+                                    )}
                                 </div>
                             </div>
                             <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">{onlineAgents}/{totalAgents}</p>
