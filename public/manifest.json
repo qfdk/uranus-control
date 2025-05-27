@@ -3,7 +3,7 @@
   "short_name": "Οὐρανός",
   "description": "集中式Nginx服务器管理控制台",
   "start_url": "/",
-  "display": "standalone",
+  "display": "fullscreen",
   "theme_color": "#3b82f6",
   "background_color": "#ffffff",
   "orientation": "portrait",
