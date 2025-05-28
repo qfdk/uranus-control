@@ -16,16 +16,12 @@ export default function SettingsPage() {
     const { settings: contextSettings, updateSettings } = useSettings();
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [showModal, setShowModal] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
     const [formError, setFormError] = useState('');
     const [formSuccess, setFormSuccess] = useState('');
     const [formData, setFormData] = useState({
         username: '',
-        password: '',
-        confirmPassword: '',
-        role: 'admin',
-        active: true
+        password: ''
     });
 
     // 常规设置状态 - 初始化时使用context中的设置
@@ -71,16 +67,7 @@ export default function SettingsPage() {
         {value: 'en-US', label: 'English'}
     ];
 
-    // 角色选项
-    const roleOptions = [
-        { value: 'admin', label: '管理员' }
-    ];
 
-    // 状态选项
-    const statusOptions = [
-        { value: true, label: '激活' },
-        { value: false, label: '禁用' }
-    ];
 
     // 获取常规设置 - 现在只从context同步
     const fetchGeneralSettings = () => {
@@ -101,12 +88,9 @@ export default function SettingsPage() {
             if (response.ok) {
                 const data = await response.json();
                 if (data) {
-                    console.log('已加载数据库设置:', data);
                     setDbSettings(data);
                 }
             }
-        } catch (error) {
-            console.error('加载数据库设置失败:', error);
         } finally {
             setLoading(false);
         }
@@ -124,8 +108,6 @@ export default function SettingsPage() {
 
             const data = await response.json();
             setUsers(data);
-        } catch (error) {
-            console.error('加载用户失败:', error);
         } finally {
             setLoading(false);
         }
@@ -142,7 +124,6 @@ export default function SettingsPage() {
             if (response.ok) {
                 const data = await response.json();
                 if (data) {
-                    console.log('已加载MQTT设置:', data);
                     setMqttSettings(data);
                 } else {
                     // 尝试从localStorage获取
@@ -151,12 +132,7 @@ export default function SettingsPage() {
                         setMqttSettings(JSON.parse(localSettings));
                     }
                 }
-            } else {
-                // 使用默认设置
-                console.log('使用默认MQTT设置');
             }
-        } catch (error) {
-            console.error('加载MQTT设置失败:', error);
         } finally {
             setLoading(false);
         }
@@ -218,33 +194,6 @@ export default function SettingsPage() {
         });
     };
 
-    // 打开模态框并重置表单
-    const openModal = (user = null) => {
-        if (user) {
-            setEditingUser(user);
-            setFormData({
-                username: user.username,
-                password: '',
-                confirmPassword: '',
-                role: user.role,
-                active: user.active
-            });
-        } else {
-            resetForm();
-        }
-        setFormError('');
-        setFormSuccess('');
-        setShowModal(true);
-    };
-
-    // 关闭模态框
-    const closeModal = () => {
-        setShowModal(false);
-        setTimeout(() => {
-            resetForm();
-            setEditingUser(null);
-        }, 300);
-    };
 
     // 处理用户表单提交
     const handleSubmit = async (e) => {
@@ -258,15 +207,15 @@ export default function SettingsPage() {
             return;
         }
 
-        // 验证密码
-        if (!editingUser && formData.password !== formData.confirmPassword) {
-            setFormError('两次输入的密码不一致');
+        // 验证密码 
+        if (!editingUser && !formData.password) {
+            // 创建用户时密码是必填的
+            setFormError('密码是必填项');
             return;
         }
 
-        // 构建提交数据
-        const submitData = { ...formData };
-        delete submitData.confirmPassword;
+        // 构建提交数据，默认管理员角色和激活状态
+        const submitData = { ...formData, role: 'admin', active: true };
 
         // 如果是编辑模式，并且密码为空，则不提交密码
         if (editingUser && !submitData.password) {
@@ -302,9 +251,9 @@ export default function SettingsPage() {
             setFormSuccess(editingUser ? '用户更新成功' : '用户创建成功');
             await fetchUsers();
 
-            // 3秒后关闭模态框
+            // 1.5秒后重置表单
             setTimeout(() => {
-                closeModal();
+                resetForm();
             }, 1500);
         } catch (error) {
             setFormError(error.message);
@@ -344,10 +293,7 @@ export default function SettingsPage() {
     const resetForm = () => {
         setFormData({
             username: '',
-            password: '',
-            confirmPassword: '',
-            role: 'admin',
-            active: true
+            password: ''
         });
         setEditingUser(null);
         setFormError('');
@@ -392,7 +338,6 @@ export default function SettingsPage() {
                 throw new Error(error.message || '保存设置失败');
             }
         } catch (error) {
-            console.error('保存设置失败:', error);
             setGeneralSettingsMessage({
                 type: 'error',
                 content: `保存设置失败: ${error.message}`,
@@ -442,7 +387,6 @@ export default function SettingsPage() {
                 throw new Error(error.message || '保存数据库设置失败');
             }
         } catch (error) {
-            console.error('保存数据库设置失败:', error);
             setDbSettingsMessage({
                 type: 'error',
                 content: `保存数据库设置失败: ${error.message}`,
@@ -814,107 +758,146 @@ export default function SettingsPage() {
 
                         {/* 用户管理 */}
                         {activeTab === 'users' && (
-                            <div className="bg-white rounded-lg shadow dark:bg-gray-800">
-                                <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-                                    <h2 className="text-lg font-medium text-gray-800 dark:text-white">用户管理</h2>
-                                    <Button
-                                        variant="primary"
-                                        size="sm"
-                                        onClick={() => openModal()}
-                                    >
-                                        <Plus className="w-4 h-4 mr-1" />
-                                        添加用户
-                                    </Button>
-                                </div>
-                                <div className="overflow-x-auto">
-                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                        <thead className="bg-gray-50 dark:bg-gray-700">
-                                        <tr>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">用户名</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">角色</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">状态</th>
-                                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">操作</th>
-                                        </tr>
-                                        </thead>
-                                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                        {loading && users.length === 0 ? (
-                                            <tr>
-                                                <td colSpan="4" className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
-                                                    <Loader2 className="h-6 w-6 animate-spin mx-auto" />
-                                                    <span className="mt-2 block">加载用户数据...</span>
-                                                </td>
-                                            </tr>
-                                        ) : users.length === 0 ? (
-                                            <tr>
-                                                <td colSpan="4" className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
-                                                    <p>暂无用户数据</p>
-                                                    <Button
-                                                        variant="primary"
-                                                        size="sm"
-                                                        className="mt-2"
-                                                        onClick={() => openModal()}
-                                                    >
-                                                        <Plus className="w-4 h-4 mr-1" />
-                                                        添加第一个用户
-                                                    </Button>
-                                                </td>
-                                            </tr>
-                                        ) : (
-                                            users.map(user => (
-                                                <tr key={user._id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                                                    <td className="px-6 py-4 whitespace-nowrap">
-                                                        <div className="flex items-center">
-                                                            <div className="flex-shrink-0 h-8 w-8 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
-                                                                <User className="h-4 w-4 text-gray-500 dark:text-gray-400" />
-                                                            </div>
-                                                            <div className="ml-4">
-                                                                <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                                                    {user.username}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap">
-                                                        <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                                                            {user.role === 'admin' && (
-                                                                <Shield className="h-4 w-4 mr-1 text-blue-500 dark:text-blue-400" />
-                                                            )}
-                                                            管理员
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap">
-                                                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                                            user.active
-                                                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                                                                : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                                                        }`}>
-                                                            {user.active ? '激活' : '禁用'}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                        <button
-                                                            className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 mr-3"
-                                                            onClick={() => openModal(user)}
-                                                        >
-                                                            <Edit className="h-4 w-4 inline mr-1" />
-                                                            编辑
-                                                        </button>
-                                                        {/* 禁止删除当前登录用户，且不允许删除最后一个管理员 */}
-                                                        {(currentUser && currentUser.id !== user._id) && (
-                                                            <button
-                                                                className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                                                                onClick={() => handleDeleteUser(user._id)}
-                                                            >
-                                                                <Trash2 className="h-4 w-4 inline mr-1" />
-                                                                删除
-                                                            </button>
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            ))
+                            <div className="space-y-4">
+                                {/* 用户表单 */}
+                                <div className="bg-white rounded-lg shadow border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+                                    <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                                        <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
+                                            {editingUser ? '编辑用户' : '添加新用户'}
+                                        </h3>
+                                    </div>
+                                    
+                                    <form onSubmit={handleSubmit} className="p-4">
+                                        {formError && (
+                                            <div className="mb-3 text-red-600 text-sm bg-red-50 p-2 rounded border border-red-200">
+                                                {formError}
+                                            </div>
                                         )}
-                                        </tbody>
-                                    </table>
+                                        
+                                        {formSuccess && (
+                                            <div className="mb-3 text-green-600 text-sm bg-green-50 p-2 rounded border border-green-200">
+                                                {formSuccess}
+                                            </div>
+                                        )}
+                                        
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    用户名 <span className="text-red-500">*</span>
+                                                </label>
+                                                <input 
+                                                    type="text"
+                                                    name="username"
+                                                    value={formData.username}
+                                                    onChange={handleInputChange}
+                                                    className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                                                    required
+                                                />
+                                            </div>
+                                            
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    {editingUser ? '新密码 (留空不变)' : '密码'} {!editingUser && <span className="text-red-500">*</span>}
+                                                </label>
+                                                <input 
+                                                    type="password"
+                                                    name="password"
+                                                    value={formData.password}
+                                                    onChange={handleInputChange}
+                                                    className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                                                    required={!editingUser}
+                                                />
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="flex justify-end space-x-2 mt-4">
+                                            {editingUser && (
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => {
+                                                        setEditingUser(null);
+                                                        resetForm();
+                                                    }}
+                                                    className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
+                                                >
+                                                    取消
+                                                </button>
+                                            )}
+                                            <button 
+                                                type="submit"
+                                                disabled={loading}
+                                                className="px-4 py-1.5 text-sm text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50"
+                                            >
+                                                {loading ? '处理中...' : (editingUser ? '更新' : '创建')}
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                                
+                                {/* 用户列表 */}
+                                <div className="bg-white rounded-lg shadow border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+                                    <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                                        <h3 className="text-lg font-semibold text-gray-800 dark:text-white">用户列表</h3>
+                                    </div>
+                                    <div className="p-4">
+                                        {loading && users.length === 0 ? (
+                                            <div className="text-center py-8">
+                                                <Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-500" />
+                                                <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">加载用户数据...</p>
+                                            </div>
+                                        ) : users.length === 0 ? (
+                                            <div className="text-center py-8">
+                                                <div className="w-12 h-12 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-3">
+                                                    <User className="w-6 h-6 text-gray-400" />
+                                                </div>
+                                                <h3 className="text-base font-medium text-gray-900 dark:text-white mb-1">暂无用户</h3>
+                                                <p className="text-sm text-gray-600 dark:text-gray-400">开始添加用户来管理系统访问权限</p>
+                                            </div>
+                                        ) : (
+                                            <div className="overflow-hidden border border-gray-200 dark:border-gray-700 rounded-lg">
+                                                <div className="bg-gray-50 dark:bg-gray-700 px-4 py-2 border-b border-gray-200 dark:border-gray-600">
+                                                    <div className="flex text-xs font-medium text-gray-700 dark:text-gray-300">
+                                                        <div className="flex-1">用户名</div>
+                                                        <div className="w-20 text-center">操作</div>
+                                                    </div>
+                                                </div>
+                                                {users.map((user, index) => (
+                                                    <div key={user._id} className={`flex items-center px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${index !== users.length - 1 ? 'border-b border-gray-100 dark:border-gray-700' : ''}`}>
+                                                        <div className="flex-1 flex items-center space-x-3">
+                                                            <div className="w-8 h-8 bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900 dark:to-blue-800 rounded-full flex items-center justify-center">
+                                                                <User className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                                            </div>
+                                                            <span className="text-sm font-medium text-gray-900 dark:text-white">{user.username}</span>
+                                                        </div>
+                                                        <div className="w-20 flex items-center justify-center space-x-1">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setEditingUser(user);
+                                                                    setFormData({
+                                                                        username: user.username,
+                                                                        password: ''
+                                                                    });
+                                                                }}
+                                                                className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                                                title="编辑用户"
+                                                            >
+                                                                <Edit className="w-4 h-4" />
+                                                            </button>
+                                                            {(currentUser && currentUser.id !== user._id) && (
+                                                                <button
+                                                                    onClick={() => handleDeleteUser(user._id)}
+                                                                    className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                                                    title="删除用户"
+                                                                >
+                                                                    <Trash2 className="w-4 h-4" />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -1043,133 +1026,6 @@ export default function SettingsPage() {
                 </div>
             </div>
 
-            {/* 用户编辑/创建模态框 */}
-            {showModal && (
-                <div className="fixed inset-0 z-50 overflow-y-auto">
-                    <div className="flex items-center justify-center min-h-screen min-h-[100dvh] pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-                        {/* 背景遮罩 */}
-                        <div
-                            className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity dark:bg-gray-800 dark:bg-opacity-75"
-                            onClick={closeModal}
-                        ></div>
-
-                        {/* 模态框内容 */}
-                        <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6 dark:bg-gray-800">
-                            <div className="absolute top-0 right-0 pt-4 pr-4">
-                                <button
-                                    type="button"
-                                    onClick={closeModal}
-                                    className="bg-white rounded-md text-gray-400 hover:text-gray-500 focus:outline-none dark:bg-gray-800 dark:text-gray-500 dark:hover:text-gray-400"
-                                >
-                                    <span className="sr-only">关闭</span>
-                                    <X className="h-6 w-6" />
-                                </button>
-                            </div>
-
-                            <div className="sm:flex sm:items-start">
-                                <div className="mt-3 text-center sm:mt-0 sm:text-left w-full">
-                                    <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
-                                        {editingUser ? '编辑用户' : '创建新用户'}
-                                    </h3>
-
-                                    {formError && (
-                                        <div className="mt-4 flex items-center p-4 bg-red-50 border-l-4 border-red-500 text-red-700 text-sm dark:bg-red-900/30 dark:text-red-400 dark:border-red-600">
-                                            <AlertCircle className="w-5 h-5 mr-2 flex-shrink-0" />
-                                            <span>{formError}</span>
-                                        </div>
-                                    )}
-
-                                    {formSuccess && (
-                                        <div className="mt-4 flex items-center p-4 bg-green-50 border-l-4 border-green-500 text-green-700 text-sm dark:bg-green-900/30 dark:text-green-400 dark:border-green-600">
-                                            <CheckCircle2 className="w-5 h-5 mr-2 flex-shrink-0" />
-                                            <span>{formSuccess}</span>
-                                        </div>
-                                    )}
-
-                                    <div className="mt-4">
-                                        <form onSubmit={handleSubmit} className="space-y-4">
-                                            <FormInput
-                                                label="用户名"
-                                                id="username"
-                                                name="username"
-                                                value={formData.username}
-                                                onChange={handleInputChange}
-                                                required
-                                            />
-
-                                            <FormInput
-                                                label={editingUser ? "新密码 (留空保持不变)" : "密码"}
-                                                id="password"
-                                                name="password"
-                                                type="password"
-                                                value={formData.password}
-                                                onChange={handleInputChange}
-                                                required={!editingUser}
-                                            />
-
-                                            <FormInput
-                                                label={editingUser ? "确认新密码" : "确认密码"}
-                                                id="confirmPassword"
-                                                name="confirmPassword"
-                                                type="password"
-                                                value={formData.confirmPassword}
-                                                onChange={handleInputChange}
-                                                required={!editingUser}
-                                            />
-
-                                            <FormSelect
-                                                label="角色"
-                                                id="role"
-                                                name="role"
-                                                value={formData.role}
-                                                options={roleOptions}
-                                                onChange={handleInputChange}
-                                                required
-                                            />
-
-                                            <FormSelect
-                                                label="状态"
-                                                id="active"
-                                                name="active"
-                                                value={formData.active}
-                                                options={statusOptions}
-                                                onChange={handleInputChange}
-                                                required
-                                            />
-
-                                            <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
-                                                <Button
-                                                    type="submit"
-                                                    variant="primary"
-                                                    disabled={loading}
-                                                    className="w-full sm:ml-3 sm:w-auto"
-                                                >
-                                                    {loading ? (
-                                                        <>
-                                                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                                            处理中...
-                                                        </>
-                                                    ) : (
-                                                        editingUser ? '更新用户' : '创建用户'
-                                                    )}
-                                                </Button>
-                                                <Button
-                                                    type="button"
-                                                    variant="secondary"
-                                                    onClick={closeModal}
-                                                    className="mt-3 w-full sm:mt-0 sm:w-auto"
-                                                >
-                                                    取消
-                                                </Button>
-                                            </div>
-                                        </form>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
         </AppShell>
     );
 }

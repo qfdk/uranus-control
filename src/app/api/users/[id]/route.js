@@ -50,8 +50,7 @@ export async function PUT(request, { params }) {
             }
         }
 
-        // 确保角色始终是admin
-        updateData.role = 'admin';
+        // 保持用户提交的角色
 
         // 如果更新包含密码，需要确保通过用户模型的保存方法
         // 以触发密码加密中间件

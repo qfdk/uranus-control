@@ -96,43 +96,51 @@ export default function AgentDetail({agent: initialAgent}) {
         }
     }, [agent, mqttConnected, getCombinedAgent]);
 
-    // 监听MQTT实时状态更新
+    // 监听MQTT实时状态更新 - 优化订阅逻辑
     useEffect(() => {
-        if (!agent?._id || !agent?.uuid) return;
+        if (!agent?.uuid) return;
 
-        let unsubscribe = () => {};
+        // 如果已经有订阅且是同一个代理，不重复订阅
+        if (subscriptionRef.current && agentUuidRef.current === agent.uuid) {
+            return;
+        }
 
-        // 如果MQTT已连接，直接订阅（避免重复订阅）
-        if (mqttConnected && !subscriptionRef.current) {
+        // 清理之前的订阅
+        if (subscriptionRef.current) {
+            subscriptionRef.current();
+            subscriptionRef.current = null;
+        }
+
+        // 更新当前代理UUID
+        agentUuidRef.current = agent.uuid;
+
+        // 如果MQTT已连接，立即订阅
+        if (mqttConnected) {
             subscriptionRef.current = subscribeToResponses(agent.uuid, handleAgentUpdate);
-            unsubscribe = subscriptionRef.current;
-
-            // 立即使用getCombinedAgent获取最新状态（仅当有实际变化时）
+            
+            // 立即获取最新状态
             const combinedAgent = getCombinedAgent(agent._id);
             if (combinedAgent && JSON.stringify(combinedAgent) !== JSON.stringify(agent)) {
                 setAgent(combinedAgent);
             }
-        } else if (!mqttConnected) {
-            // 如果MQTT未连接，尝试连接
-            useMqttStore.getState().connect()
-                .then(() => {
-                    unsubscribe = subscribeToResponses(agent.uuid, handleAgentUpdate);
-                    
-                    // 连接成功后立即更新状态
-                    const combinedAgent = getCombinedAgent(agent._id);
-                    if (combinedAgent) {
-                        setAgent(combinedAgent);
-                    }
-                })
-                .catch(err => console.error('MQTT连接失败:', err));
         }
 
         // 组件卸载时取消订阅
         return () => {
-            unsubscribe();
-            subscriptionRef.current = null;
+            if (subscriptionRef.current) {
+                subscriptionRef.current();
+                subscriptionRef.current = null;
+            }
         };
-    }, [agent?._id, agent?.uuid, mqttConnected, subscribeToResponses, getCombinedAgent]);
+    }, [agent?.uuid, agent?._id]); // 移除mqttConnected依赖，避免频繁重订阅
+
+    // 单独处理MQTT连接状态变化
+    useEffect(() => {
+        if (mqttConnected && agent?.uuid && !subscriptionRef.current) {
+            // MQTT连接成功且没有订阅时，建立订阅
+            subscriptionRef.current = subscribeToResponses(agent.uuid, handleAgentUpdate);
+        }
+    }, [mqttConnected, agent?.uuid]);
 
     // 自动清除状态消息
     useEffect(() => {
@@ -153,52 +161,52 @@ export default function AgentDetail({agent: initialAgent}) {
             setAgent(currentAgent);
         }
         
-        // 每5秒刷新一次代理状态，确保始终显示最新状态
+        // 每10秒刷新一次代理状态（降低频率，减少性能开销）
         const refreshInterval = setInterval(() => {
             try {
-                // 从store中直接获取最新的合并状态
                 const newAgent = getCombinedAgent(agent._id);
                 if (newAgent) {
-                    // 检查在线状态是否变化
-                    const statusChanged = newAgent.online !== agent.online;
+                    // 只在关键字段变化时更新状态，减少不必要的重渲染
+                    const hasSignificantChange = 
+                        newAgent.online !== agent.online ||
+                        newAgent.lastHeartbeat !== agent.lastHeartbeat ||
+                        newAgent.buildVersion !== agent.buildVersion;
                     
-                    // 更新代理状态
-                    setAgent(newAgent);
-                    
-                    // 如果状态发生变化，记录日志
-                    if (statusChanged) {
-                                }
+                    if (hasSignificantChange) {
+                        setAgent(newAgent);
+                    }
                 }
             } catch (error) {
+                // 静默处理错误
             }
-        }, 3000); // 3秒刷新一次，增加频率确保快速响应
+        }, 10000); // 改为10秒刷新一次
         
         return () => {
             clearInterval(refreshInterval);
         };
-    }, [agent?._id, agent?.online, getCombinedAgent, isMounted]);
+    }, [agent?._id, isMounted]); // 移除agent.online依赖，避免循环
     
     // 监听mqttAgentState变化，确保立即更新代理状态
     useEffect(() => {
         if (!agent?._id || !agent?.uuid || !isMounted) return;
         
-        // 更新ref值，保存当前agent的UUID
-        agentUuidRef.current = agent.uuid;
-        
         // 检查MQTT状态中是否有当前代理的数据
         const mqttData = mqttAgentState?.[agent.uuid];
         if (!mqttData) return;
         
-        // 检查在线状态是否变化
-        if (mqttData.online !== agent.online) {
-            
+        // 检查关键状态是否变化（减少不必要的更新）
+        const hasStateChange = 
+            mqttData.online !== agent.online ||
+            mqttData.lastHeartbeat !== agent.lastHeartbeat;
+        
+        if (hasStateChange) {
             // 使用getCombinedAgent获取完整的合并状态
             const currentAgent = getCombinedAgent(agent._id);
             if (currentAgent) {
                 setAgent(currentAgent);
             }
         }
-    }, [agent?._id, agent?.uuid, agent?.online, mqttAgentState, getCombinedAgent, isMounted]);
+    }, [agent?.uuid, mqttAgentState, isMounted]); // 简化依赖
 
     // 刷新代理数据
     const refreshAgentData = useCallback(async () => {

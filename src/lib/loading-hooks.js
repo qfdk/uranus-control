@@ -14,9 +14,6 @@ export function useLoadingNavigation() {
         // 开始显示加载状态
         startLoading();
 
-        // 记录导航开始时间，用于诊断问题
-        console.log(`Navigation to ${url} started at ${new Date().toISOString()}`);
-
         // 使用路由器导航
         router.push(url);
 
@@ -37,7 +34,6 @@ export function useAsyncLoading() {
             // 只有需要全局加载状态时才调用startLoading
             if (useGlobalLoading) {
                 startLoading();
-                console.log('Global loading started for async operation');
             }
             return await asyncFn();
         } finally {
@@ -46,7 +42,6 @@ export function useAsyncLoading() {
                 // 添加小延迟，确保加载状态可见
                 setTimeout(() => {
                     stopLoading();
-                    console.log('Global loading stopped for async operation');
                 }, 300);
             }
         }

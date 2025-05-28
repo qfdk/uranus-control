@@ -32,21 +32,16 @@ export async function POST(request) {
     try {
         const userData = await request.json();
 
-        // 检查用户名和邮箱是否已存在
+        // 检查用户名是否已存在
         const existingUser = await User.findOne({
-            $or: [
-                { username: userData.username },
-                { email: userData.email }
-            ]
+            username: userData.username
         });
 
         if (existingUser) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: existingUser.username === userData.username
-                        ? '用户名已被使用'
-                        : '邮箱已被使用'
+                    message: '用户名已被使用'
                 },
                 { status: 400 }
             );

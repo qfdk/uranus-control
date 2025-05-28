@@ -79,8 +79,8 @@ export default function UserManagementPage() {
         setFormSuccess('');
 
         // 验证表单
-        if (!formData.username || !formData.email) {
-            setFormError('用户名和邮箱是必填项');
+        if (!formData.username) {
+            setFormError('用户名是必填项');
             return;
         }
 
@@ -235,8 +235,8 @@ export default function UserManagementPage() {
 
                 {/* 用户表单 */}
                 {showForm && (
-                    <div className="bg-white rounded-lg shadow mb-6 p-4">
-                        <h2 className="text-lg font-medium mb-4">
+                    <div className="bg-white rounded-lg shadow-md mb-6 p-6 border border-gray-200">
+                        <h2 className="text-xl font-semibold mb-6 text-gray-800 border-b border-gray-200 pb-3">
                             {editingUser ? '编辑用户' : '创建新用户'}
                         </h2>
 
@@ -256,8 +256,8 @@ export default function UserManagementPage() {
                             </div>
                         )}
 
-                        <form onSubmit={handleSubmit} className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <form onSubmit={handleSubmit} className="space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <FormInput
                                     label="用户名"
                                     id="username"
@@ -274,7 +274,6 @@ export default function UserManagementPage() {
                                     type="email"
                                     value={formData.email}
                                     onChange={handleInputChange}
-                                    required
                                 />
 
                                 <FormInput
@@ -318,7 +317,7 @@ export default function UserManagementPage() {
                                 />
                             </div>
 
-                            <div className="flex justify-end space-x-3 pt-2">
+                            <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
                                 <Button
                                     type="button"
                                     variant="secondary"
@@ -352,15 +351,15 @@ export default function UserManagementPage() {
                 )}
 
                 {/* 用户搜索 */}
-                <div className="mb-4">
-                    <div className="relative">
+                <div className="mb-6">
+                    <div className="relative max-w-md">
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <Search className="h-5 w-5 text-gray-400"/>
                         </div>
                         <input
                             type="text"
-                            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                            placeholder="搜索用户..."
+                            className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm shadow-sm"
+                            placeholder="搜索用户名、邮箱或角色..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
@@ -368,16 +367,16 @@ export default function UserManagementPage() {
                 </div>
 
                 {/* 用户列表 */}
-                <div className="bg-white rounded-lg shadow overflow-hidden">
+                <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
+                            <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
                             <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">用户名</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">电子邮箱</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">角色</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">状态</th>
-                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">用户名</th>
+                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">电子邮箱</th>
+                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">角色</th>
+                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">状态</th>
+                                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">操作</th>
                             </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
@@ -423,40 +422,48 @@ export default function UserManagementPage() {
                                     </td>
                                 </tr>
                             ) : (
-                                filteredUsers.map(user => (
-                                    <tr key={user._id} className="hover:bg-gray-50">
-                                        <td className="px-6 py-4 whitespace-nowrap">
+                                filteredUsers.map((user, index) => (
+                                    <tr key={user._id} className={`hover:bg-blue-50 transition-colors duration-150 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                                        <td className="px-6 py-5 whitespace-nowrap">
                                             <div className="flex items-center">
                                                 <div
-                                                    className="flex-shrink-0 h-8 w-8 bg-gray-100 rounded-full flex items-center justify-center">
-                                                    <User className="h-4 w-4 text-gray-500"/>
+                                                    className="flex-shrink-0 h-10 w-10 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center">
+                                                    <User className="h-5 w-5 text-blue-600"/>
                                                 </div>
                                                 <div className="ml-4">
-                                                    <div className="text-sm font-medium text-gray-900">
+                                                    <div className="text-sm font-semibold text-gray-900">
                                                         {user.username}
                                                     </div>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            {user.email}
+                                        <td className="px-6 py-5 whitespace-nowrap text-sm text-gray-600">
+                                            {user.email || '未设置'}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="flex items-center text-sm text-gray-500">
+                                        <td className="px-6 py-5 whitespace-nowrap">
+                                            <div className="flex items-center">
                                                 {user.role === 'admin' && (
-                                                    <Shield className="h-4 w-4 mr-1 text-blue-500"/>
+                                                    <Shield className="h-4 w-4 mr-2 text-blue-600"/>
                                                 )}
-                                                {user.role === 'admin'
-                                                    ? '管理员'
-                                                    : user.role === 'manager'
-                                                        ? '管理人员'
-                                                        : '普通用户'
-                                                }
+                                                <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                                    user.role === 'admin' 
+                                                        ? 'bg-blue-100 text-blue-800'
+                                                        : user.role === 'manager'
+                                                        ? 'bg-purple-100 text-purple-800'
+                                                        : 'bg-gray-100 text-gray-800'
+                                                }`}>
+                                                    {user.role === 'admin'
+                                                        ? '管理员'
+                                                        : user.role === 'manager'
+                                                            ? '管理人员'
+                                                            : '普通用户'
+                                                    }
+                                                </span>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
+                                        <td className="px-6 py-5 whitespace-nowrap">
                                                 <span
-                                                    className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                                    className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
                                                         user.active
                                                             ? 'bg-green-100 text-green-800'
                                                             : 'bg-red-100 text-red-800'
@@ -464,24 +471,26 @@ export default function UserManagementPage() {
                                                     {user.active ? '激活' : '禁用'}
                                                 </span>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            <button
-                                                className="text-blue-600 hover:text-blue-900 mr-3"
-                                                onClick={() => handleEditUser(user)}
-                                            >
-                                                <Edit className="h-4 w-4 inline mr-1"/>
-                                                编辑
-                                            </button>
-                                            {/* 禁止删除当前登录用户，且不允许删除最后一个管理员 */}
-                                            {(currentUser && currentUser.id !== user._id) && (
+                                        <td className="px-6 py-5 whitespace-nowrap text-right text-sm font-medium">
+                                            <div className="flex justify-end space-x-2">
                                                 <button
-                                                    className="text-red-600 hover:text-red-900"
-                                                    onClick={() => handleDeleteUser(user._id)}
+                                                    className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-150"
+                                                    onClick={() => handleEditUser(user)}
                                                 >
-                                                    <Trash2 className="h-4 w-4 inline mr-1"/>
-                                                    删除
+                                                    <Edit className="h-3 w-3 mr-1"/>
+                                                    编辑
                                                 </button>
-                                            )}
+                                                {/* 禁止删除当前登录用户，且不允许删除最后一个管理员 */}
+                                                {(currentUser && currentUser.id !== user._id) && (
+                                                    <button
+                                                        className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-150"
+                                                        onClick={() => handleDeleteUser(user._id)}
+                                                    >
+                                                        <Trash2 className="h-3 w-3 mr-1"/>
+                                                        删除
+                                                    </button>
+                                                )}
+                                            </div>
                                         </td>
                                     </tr>
                                 ))

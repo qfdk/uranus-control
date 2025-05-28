@@ -62,7 +62,6 @@ export function LoadingProvider({children}) {
 
         // 设置新的超时 - 10秒后自动清除（作为保险机制）
         timeoutRef.current = setTimeout(() => {
-            console.warn('[LoadingContext] Loading timeout after 10 seconds - force stopping');
             resetLoading();
         }, 10000);
     }, [pathname, resetLoading]);

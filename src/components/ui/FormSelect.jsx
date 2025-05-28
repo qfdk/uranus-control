@@ -3,6 +3,7 @@
 export default function FormSelect({
                                        label,
                                        id,
+                                       name,
                                        options = [],
                                        value,
                                        defaultValue,
@@ -25,7 +26,7 @@ export default function FormSelect({
             <div className="relative">
                 <select
                     id={id}
-                    name={id}
+                    name={name || id}
                     value={value}
                     defaultValue={defaultValue}
                     required={required}

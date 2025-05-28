@@ -12,8 +12,13 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata = {
     title: 'Οὐρανός - 控制台',
     description: '集中式Nginx服务器管理控制台',
+};
+
+export const viewport = {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 1,
     themeColor: '#3b82f6',
-    viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
 };
 
 export default function RootLayout({ children }) {

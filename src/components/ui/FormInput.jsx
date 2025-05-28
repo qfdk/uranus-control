@@ -3,6 +3,7 @@
 export default function FormInput({
                                       label,
                                       id,
+                                      name,
                                       type = 'text',
                                       placeholder,
                                       value,
@@ -26,7 +27,7 @@ export default function FormInput({
             <input
                 type={type}
                 id={id}
-                name={id}
+                name={name || id}
                 placeholder={placeholder}
                 value={value}
                 defaultValue={defaultValue}

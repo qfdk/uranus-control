@@ -17,8 +17,6 @@ export default function NavLink({href, className, children, onClick, ...props}) 
 
         // 如果外部onClick没有阻止默认行为，显示加载状态
         if (!e.defaultPrevented) {
-            console.log(`NavLink: 导航到 ${href} - 启动加载状态`);
-
             // 添加全局导航状态标记
             window.navigationInProgress = true;
 
@@ -32,7 +30,6 @@ export default function NavLink({href, className, children, onClick, ...props}) 
 
             // 设置一个安全超时，以防导航失败
             const safetyTimeout = setTimeout(() => {
-                console.warn('[NavLink] Navigation safety timeout - navigation took longer than 3 seconds');
                 if (window.navigationInProgress) {
                     window.navigationInProgress = false;
                 }

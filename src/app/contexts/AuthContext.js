@@ -72,23 +72,18 @@ export function AuthProvider({ children }) {
         checkAuth();
     }, []);
 
-    // 客户端路由保护逻辑
+    // 客户端路由保护逻辑 - 简化并减少重定向
     useEffect(() => {
-        if (!isClient || loading) return; // 确保在客户端且初始加载完成
+        if (!isClient || loading) return;
 
-        // 如果用户未登录且当前路径需要认证，则重定向到登录页
-        if (!user && protectedRoutes.some(route => pathname === route || pathname.startsWith(`${route}/`))) {
-            router.push('/login');
-        }
+        const isProtectedRoute = protectedRoutes.some(route => pathname === route || pathname.startsWith(`${route}/`));
+        const isPublicRoute = publicRoutes.includes(pathname);
 
-        // 如果用户已登录且当前路径是登录页，则重定向到首页
-        if (user && publicRoutes.includes(pathname)) {
-            router.push('/');
-        }
-
-        // 处理 isAuthenticated 为 true 但 user 为 null 的情况
-        if (localStorage.getItem('isAuthenticated') === 'true' && !user) {
-            logout();
+        // 只有在明确需要重定向时才执行
+        if (!user && isProtectedRoute && pathname !== '/login') {
+            router.replace('/login');
+        } else if (user && pathname === '/login') {
+            router.replace('/');
         }
     }, [user, pathname, loading, router, isClient]);
 
@@ -108,45 +103,50 @@ export function AuthProvider({ children }) {
     // 登录函数
     const login = (userData, callback) => {
         const expirationTime = new Date();
-        expirationTime.setHours(expirationTime.getHours() + 1); // 设置会话过期时间为1小时后
+        expirationTime.setHours(expirationTime.getHours() + 1);
 
+        // 立即设置状态
+        setUser(userData);
+        setSessionExpiration(expirationTime);
+
+        // 设置存储
         localStorage.setItem('isAuthenticated', 'true');
         localStorage.setItem('user', JSON.stringify(userData));
         localStorage.setItem('sessionExpiration', expirationTime.toISOString());
 
-        // 添加cookies支持，配合中间件使用
-        document.cookie = `isAuthenticated=true; path=/; max-age=${60*60*24*7}`; // 7天有效期
-        document.cookie = `sessionExpiration=${expirationTime.toISOString()}; path=/; max-age=${60*60*24*7}`; // 7天有效期
+        // 设置cookies
+        document.cookie = `isAuthenticated=true; path=/; max-age=${60*60*24*7}`;
+        document.cookie = `sessionExpiration=${expirationTime.toISOString()}; path=/; max-age=${60*60*24*7}`;
 
-        // 设置用户状态并在完成后执行回调
-        setUser(userData);
-        setSessionExpiration(expirationTime);
-
-        // 添加短暂延迟确保状态和cookie设置完成
-        setTimeout(() => {
-            // 如果提供了回调函数则执行
+        // 使用 requestAnimationFrame 确保状态更新后再跳转
+        requestAnimationFrame(() => {
             if (typeof callback === 'function') {
                 callback();
             } else {
-                // 默认跳转到首页
-                router.push('/');
+                router.replace('/');
             }
-        }, 300);
+        });
     };
 
     // 登出函数
     const logout = () => {
+        // 立即设置状态
+        setUser(null);
+        setSessionExpiration(null);
+        
+        // 清除存储
         localStorage.removeItem('isAuthenticated');
         localStorage.removeItem('user');
         localStorage.removeItem('sessionExpiration');
-        setUser(null);
-        setSessionExpiration(null);
 
         // 清除cookie
         document.cookie = 'isAuthenticated=; path=/; max-age=0';
         document.cookie = 'sessionExpiration=; path=/; max-age=0';
 
-        router.push('/login');
+        // 使用 requestAnimationFrame 确保状态更新后再跳转
+        requestAnimationFrame(() => {
+            router.replace('/login');
+        });
     };
 
     return (

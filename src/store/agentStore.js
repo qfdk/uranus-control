@@ -193,14 +193,12 @@ const useAgentStore = create((set, get) => ({
 
         // 防止重复请求的简单缓存
         if (get().pendingRequests && get().pendingRequests[agentId]) {
-            console.log('升级请求正在处理中，避免重复请求');
             return get().pendingRequests[agentId];
         }
 
         // 创建请求Promise
         const requestPromise = (async () => {
             try {
-                console.log(`正在发送升级请求到代理: ${agentId}`);
 
                 const response = await fetch(`/api/agents/${agentId}/upgrade`, {
                     method: 'POST',
@@ -221,7 +219,6 @@ const useAgentStore = create((set, get) => ({
 
                 // 解析响应数据
                 const responseData = await response.json();
-                console.log('升级请求响应:', responseData);
 
                 // 格式化响应数据，确保结构一致
                 const result = {
@@ -233,9 +230,7 @@ const useAgentStore = create((set, get) => ({
                 // 在后台安排一个延迟任务来刷新代理信息
                 setTimeout(async () => {
                     try {
-                        console.log(`安排在升级后刷新代理 ${agentId} 的信息`);
                         await get().fetchAgents(true);
-                        console.log(`代理 ${agentId} 的信息已在升级后更新`);
                     } catch (err) {
                         console.error('升级后刷新代理数据失败:', err);
                     }

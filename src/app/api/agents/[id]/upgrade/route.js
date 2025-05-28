@@ -37,7 +37,6 @@ export async function POST(request, {params}) {
         // 构建升级请求URL
         const upgradeUrl = `${url}/upgrade`;
 
-        console.log(`Sending upgrade request to: ${upgradeUrl}`);
 
         // 发送升级请求
         const response = await fetch(upgradeUrl, {

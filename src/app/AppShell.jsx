@@ -10,13 +10,14 @@ import { useLoading } from '@/app/contexts/LoadingContext';
 import { useSettings } from '@/app/contexts/SettingsContext';
 
 export default function AppShell({ children }) {
-    const { isAuthenticated, loading: authLoading } = useAuth();
+    const { isAuthenticated, loading: authLoading, user } = useAuth();
     const pathname = usePathname();
     const { settings, loading: settingsLoading } = useSettings();
     // 客户端渲染标志
     const [isMounted, setIsMounted] = useState(false);
     const { stopLoading } = useLoading();
     const [isMobile, setIsMobile] = useState(false);
+    const [showContent, setShowContent] = useState(false);
 
     // 检查设备类型
     useEffect(() => {
@@ -40,10 +41,18 @@ export default function AppShell({ children }) {
         // 确保在组件加载完成后停止全局加载动画
         const timer = setTimeout(() => {
             stopLoading();
-        }, 300);
+            setShowContent(true);
+        }, 100);
 
         return () => clearTimeout(timer);
     }, [stopLoading]);
+    
+    // 当认证状态或路径改变时，重新显示内容
+    useEffect(() => {
+        if (isMounted) {
+            setShowContent(true);
+        }
+    }, [user, pathname, isMounted]);
     
     // 动态设置页面标题
     useEffect(() => {
@@ -68,25 +77,31 @@ export default function AppShell({ children }) {
         }
     }, [pathname, stopLoading, isMounted]);
 
-    // 如果组件未挂载，继续显示加载状态
-    if (!isMounted) {
-        return null; // 返回null，这样LoadingOverlay将继续显示
+    // 如果组件未挂载或正在认证加载，显示加载画面
+    if (!isMounted || authLoading || !showContent) {
+        return (
+            <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
+                <div className="flex flex-col items-center space-y-4">
+                    <div className="w-8 h-8 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400">加载中...</div>
+                </div>
+            </div>
+        );
     }
 
-    // 如果是登录页面，不显示导航和头部
+    // 如果是登录页面，直接返回内容，不包装导航
     if (pathname === '/login') {
-        return children;
-    }
-
-    // 在认证加载过程中显示加载状态
-    if (authLoading) {
-        return null; // 返回null，这样LoadingOverlay将继续显示
+        return (
+            <div className="transition-opacity duration-300 opacity-100">
+                {children}
+            </div>
+        );
     }
 
     // 如果用户已登录，则显示带导航的布局
     if (isAuthenticated) {
         return (
-            <div className="min-h-screen min-h-[100dvh] bg-gray-100 dark:bg-gray-900 transition-colors duration-300">
+            <div className="min-h-screen min-h-[100dvh] bg-gray-100 dark:bg-gray-900 transition-opacity duration-300 opacity-100">
                 <header className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-20 transition-colors duration-300">
                     <div className="max-w-7xl mx-auto nav-container">
                         <div className="flex justify-between items-center h-14 px-2 sm:px-4 lg:px-6">
@@ -118,7 +133,10 @@ export default function AppShell({ children }) {
         );
     }
 
-    // 如果用户未登录并且不在登录页，此处应该不会被渲染
-    // 因为AuthContext中的路由保护逻辑会先重定向
-    return children;
+    // 如果用户未登录，显示加载状态等待重定向
+    return (
+        <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
+            <div className="w-8 h-8 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
+        </div>
+    );
 }

@@ -69,7 +69,6 @@ const useMqttStore = create((set, get) => {
     const initializeMqttClient = () => {
         // 确保不重复初始化
         if (mqttClient) {
-            console.log('MQTT客户端已存在，使用现有客户端');
             return mqttClient;
         }
 
@@ -83,7 +82,6 @@ const useMqttStore = create((set, get) => {
             
             // 使用uranus-web前缀和随机ID
             clientId = `${config.CLIENT_PREFIX}-${randomId}`;
-            console.log(`生成MQTT客户端ID: ${clientId}`);
         }
 
         // MQTT配置 - 确保设置正确的重连参数
@@ -179,7 +177,6 @@ const useMqttStore = create((set, get) => {
         });
 
         client.on('offline', () => {
-            console.log('MQTT客户端离线');
             set({connected: false, error: 'MQTT连接断开'});
 
             // 强制通知agentStore MQTT离线
@@ -187,7 +184,6 @@ const useMqttStore = create((set, get) => {
                 try {
                     const agentStoreInstance = useAgentStore.getState();
                     if (agentStoreInstance && typeof agentStoreInstance.setMqttConnected === 'function') {
-                        console.log('通知agentStore: MQTT连接断开(离线事件)');
                         agentStoreInstance.setMqttConnected(false);
                     }
                 } catch (error) {
@@ -197,7 +193,6 @@ const useMqttStore = create((set, get) => {
         });
 
         client.on('close', () => {
-            console.log('MQTT连接关闭');
             set({connected: false, error: 'MQTT连接关闭'});
 
             // 强制通知agentStore MQTT连接关闭
@@ -205,7 +200,6 @@ const useMqttStore = create((set, get) => {
                 try {
                     const agentStoreInstance = useAgentStore.getState();
                     if (agentStoreInstance && typeof agentStoreInstance.setMqttConnected === 'function') {
-                        console.log('通知agentStore: MQTT连接关闭(关闭事件)');
                         agentStoreInstance.setMqttConnected(false);
                     }
                 } catch (error) {
@@ -215,12 +209,11 @@ const useMqttStore = create((set, get) => {
         });
 
         client.on('reconnect', () => {
-            console.log(`MQTT正在重新连接...（尝试 #${reconnectCount + 1}）`);
+            // Silent reconnect
         });
 
         client.on('message', (topic, message) => {
             try {
-                // console.log(`收到MQTT消息，主题: ${topic}, 长度: ${message.length}字节`);
                 const payload = JSON.parse(message.toString());
 
                 if (topic === TOPICS.HEARTBEAT) {
@@ -231,7 +224,6 @@ const useMqttStore = create((set, get) => {
 
                         // 即使代理在删除列表中，如果收到心跳也将其重新添加
                         if (deletedAgents.has(uuid)) {
-                            console.log(`检测到先前删除的代理心跳: ${uuid}，将重新添加`);
                             deletedAgents.delete(uuid);
                         }
 
@@ -275,7 +267,6 @@ const useMqttStore = create((set, get) => {
                             // 异步注册
                             Promise.resolve().then(async () => {
                                 try {
-                                    console.log(`尝试注册新发现的代理: ${uuid} (不在HTTP列表中)`);
                                     agentState[uuid]._registering = true;
 
                                     set(state => ({
@@ -290,7 +281,6 @@ const useMqttStore = create((set, get) => {
 
                                     if (response.ok) {
                                         const data = await response.json();
-                                        console.log(`注册成功，服务器返回:`, data);
 
                                         // 更新状态
                                         if (agentState[uuid]) {
@@ -358,13 +348,11 @@ const useMqttStore = create((set, get) => {
 
                         // 删除列表中的代理也需要处理状态更新
                         if (deletedAgents.has(uuid)) {
-                            console.log(`忽略已删除代理的状态更新: ${uuid}`);
                             return;
                         }
 
                         // 更新状态
                         if (payload.status === 'offline' && agentState[uuid]) {
-                            console.log(`收到代理离线消息: ${uuid}`);
                             agentState[uuid].online = false;
 
                             // 更新时间戳
@@ -414,7 +402,6 @@ const useMqttStore = create((set, get) => {
 
                                 // 如果是会话关闭消息，清除回调
                                 if (payload.type === 'closed') {
-                                    console.log(`终端会话 ${sessionId} 已关闭，清除回调`);
                                     terminalCallbacks.delete(sessionId);
 
                                     // 清除会话状态
@@ -486,17 +473,14 @@ const useMqttStore = create((set, get) => {
     // 重连方法
     const reconnect = () => {
         if (!mqttClient) {
-            console.log('MQTT客户端不存在，无法重连');
             return false;
         }
 
         if (mqttClient.connected) {
-            console.log('MQTT已连接，不需要重连');
             return true;
         }
 
         try {
-            console.log('强制重新连接MQTT...');
             mqttClient.reconnect();
             return true;
         } catch (error) {
@@ -516,12 +500,10 @@ const useMqttStore = create((set, get) => {
         // 订阅特定代理的响应消息
         subscribeToResponses: (agentUuid, callback) => {
             if (!agentUuid || !callback) {
-                console.warn('订阅缺少代理UUID或回调函数');
                 return () => {
                 };
             }
 
-            console.log(`正在订阅代理 ${agentUuid} 的响应`);
 
             // 确保代理在订阅映射中
             if (!agentSubscriptions.has(agentUuid)) {
@@ -539,16 +521,12 @@ const useMqttStore = create((set, get) => {
                 const topic = `${TOPICS.RESPONSE}${agentUuid}`;
 
                 if (mqttClient && mqttClient.connected) {
-                    console.log(`向MQTT订阅主题: ${topic}`);
                     mqttClient.subscribe(topic, {qos: 0});
-                } else {
-                    console.log(`MQTT未连接，将在连接后订阅: ${topic}`);
                 }
             }
 
             // 返回取消订阅函数
             return () => {
-                console.log(`取消订阅代理 ${agentUuid} 的响应`);
 
                 // 获取代理的订阅
                 const subscriptions = agentSubscriptions.get(agentUuid);
@@ -562,7 +540,6 @@ const useMqttStore = create((set, get) => {
                     const topic = `${TOPICS.RESPONSE}${agentUuid}`;
 
                     if (mqttClient && mqttClient.connected) {
-                        console.log(`从MQTT取消订阅主题: ${topic}`);
                         mqttClient.unsubscribe(topic);
                     }
                 }
@@ -596,27 +573,22 @@ const useMqttStore = create((set, get) => {
 
             // 如果正在连接中，返回等待中的Promise
             if (isConnecting && connectingPromise) {
-                console.log('MQTT正在连接中，等待连接完成');
                 return connectingPromise;
             }
 
             // 设置连接状态
             isConnecting = true;
-            console.log('开始MQTT连接过程...');
 
             // 创建连接Promise
             connectingPromise = new Promise((resolve, reject) => {
                 try {
-                    console.log('初始化MQTT连接...');
                     const config = getMqttConfig();
-                    console.log(`连接到MQTT服务器: ${config.MQTT_BROKER}`);
 
                     // 初始化MQTT客户端
                     mqttClient = initializeMqttClient();
 
                     // 检查连接状态
                     if (mqttClient.connected) {
-                        console.log('MQTT客户端已连接');
                         set({connected: true, error: null});
                         resolve(true);
                         return;
@@ -636,7 +608,6 @@ const useMqttStore = create((set, get) => {
                         clearTimeout(connectTimeout);
                         isConnecting = false;
                         set({connected: true, error: null});
-                        console.log('MQTT连接成功 - 事件触发');
                         resolve(true);
                     });
 
@@ -658,16 +629,13 @@ const useMqttStore = create((set, get) => {
             });
 
             try {
-                console.log('等待MQTT连接完成...');
                 await connectingPromise;
-                console.log('MQTT连接已完成');
                 return true;
             } catch (error) {
                 console.error('MQTT连接失败:', error);
                 isConnecting = false;
                 throw error;
             } finally {
-                console.log('MQTT连接过程结束');
                 connectingPromise = null;
             }
         },
@@ -679,7 +647,6 @@ const useMqttStore = create((set, get) => {
         markAgentDeleted: (uuid) => {
             if (!uuid) return;
 
-            console.log(`标记代理为已删除: ${uuid}`);
             deletedAgents.add(uuid);
 
             // 清理该代理在agentState中的数据
@@ -716,7 +683,6 @@ const useMqttStore = create((set, get) => {
             if (!mqttClient || !mqttClient.connected) {
                 // 尝试重新连接
                 try {
-                    console.log('MQTT未连接，尝试连接');
                     await get().connect();
                 } catch (error) {
                     console.error('MQTT连接失败:', error);
@@ -734,7 +700,6 @@ const useMqttStore = create((set, get) => {
 
                 // 临时订阅响应主题(如果尚未订阅)
                 if (!agentSubscriptions.has(uuid) || agentSubscriptions.get(uuid).size === 0) {
-                    console.log(`临时订阅响应主题: ${responseTopic}`);
                     mqttClient.subscribe(responseTopic, {qos: 0});
                 }
 
@@ -854,7 +819,6 @@ const useMqttStore = create((set, get) => {
         setTerminalCallback: (sessionId, callback) => {
             if (!sessionId) return;
 
-            console.log(`设置终端会话 ${sessionId} 的回调函数`);
             terminalCallbacks.set(sessionId, callback);
 
             // 更新会话状态
@@ -868,7 +832,6 @@ const useMqttStore = create((set, get) => {
             }
 
             return () => {
-                console.log(`清除终端会话 ${sessionId} 的回调函数`);
                 terminalCallbacks.delete(sessionId);
             };
         },
@@ -877,7 +840,6 @@ const useMqttStore = create((set, get) => {
         clearTerminalCallback: (sessionId) => {
             if (!sessionId) return;
 
-            console.log(`清除终端会话 ${sessionId} 的回调函数`);
             terminalCallbacks.delete(sessionId);
 
             // 不要立即清除会话状态，等待关闭消息或者超时清理
