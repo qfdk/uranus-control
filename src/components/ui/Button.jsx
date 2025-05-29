@@ -1,42 +1,54 @@
 'use client';
 
-export default function Button({
-                                   children,
-                                   type = 'button',
-                                   variant = 'primary',
-                                   size = 'md',
-                                   onClick,
-                                   className = '',
-                                   disabled = false
-                               }) {
-    const variantClasses = {
-        primary: 'bg-blue-600 hover:bg-blue-700 text-white focus:ring-blue-500 dark:bg-blue-600 dark:hover:bg-blue-700',
-        secondary: 'bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 focus:ring-gray-500 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200 dark:border-gray-600',
-        danger: 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-500 dark:bg-red-600 dark:hover:bg-red-700',
-        success: 'bg-green-600 hover:bg-green-700 text-white focus:ring-green-500 dark:bg-green-600 dark:hover:bg-green-700',
-        warning: 'bg-amber-600 hover:bg-amber-700 text-white focus:ring-amber-500 dark:bg-amber-600 dark:hover:bg-amber-700',
-    };
+import * as React from "react"
+import { cva } from "class-variance-authority"
+import { cn } from "../../lib/utils"
 
-    const sizeClasses = {
-        sm: 'px-2.5 py-1.5 text-xs',
-        md: 'px-4 py-2 text-sm',
-        lg: 'px-5 py-2.5 text-base',
-    };
+const buttonVariants = cva(
+  "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-400 disabled:pointer-events-none disabled:opacity-50",
+  {
+    variants: {
+      variant: {
+        default:
+          "bg-blue-400 text-white shadow hover:bg-blue-500 dark:bg-blue-400 dark:hover:bg-blue-500",
+        primary:
+          "bg-blue-400 text-white shadow hover:bg-blue-500 dark:bg-blue-400 dark:hover:bg-blue-500",
+        destructive:
+          "bg-red-500 text-white shadow-sm hover:bg-red-600 dark:bg-red-500 dark:hover:bg-red-600",
+        danger:
+          "bg-red-500 text-white shadow-sm hover:bg-red-600 dark:bg-red-500 dark:hover:bg-red-600",
+        outline:
+          "border border-blue-200 bg-white shadow-sm hover:bg-blue-50 hover:text-blue-400 dark:border-blue-600 dark:bg-gray-800 dark:hover:bg-blue-900/20 dark:text-blue-400 dark:hover:text-blue-300",
+        secondary:
+          "bg-blue-50 text-blue-400 shadow-sm hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/30",
+        ghost: "hover:bg-blue-50 hover:text-blue-400 dark:hover:bg-blue-900/20 dark:hover:text-blue-400",
+        link: "text-blue-400 underline-offset-4 hover:underline hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300",
+      },
+      size: {
+        default: "h-9 px-4 py-2",
+        sm: "h-8 rounded-md px-3 text-xs",
+        lg: "h-10 rounded-md px-8",
+        icon: "h-9 w-9",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+      size: "default",
+    },
+  }
+)
 
-    const baseClasses = 'inline-flex justify-center items-center font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors';
-    const disabledClasses = disabled ? 'opacity-50 cursor-not-allowed' : '';
+const Button = React.forwardRef(({ className, variant, size, asChild = false, ...props }, ref) => {
+  const Comp = asChild ? "span" : "button"
+  return (
+    <Comp
+      className={cn(buttonVariants({ variant, size, className }))}
+      ref={ref}
+      {...props}
+    />
+  )
+})
+Button.displayName = "Button"
 
-    // 添加暗色模式支持
-    const darkModeClasses = 'dark:focus:ring-offset-gray-900';
-
-    return (
-        <button
-            type={type}
-            onClick={onClick}
-            disabled={disabled}
-            className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${disabledClasses} ${darkModeClasses} ${className}`}
-        >
-            {children}
-        </button>
-    );
-}
+export { Button, buttonVariants }
+export default Button

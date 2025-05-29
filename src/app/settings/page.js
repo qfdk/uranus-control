@@ -790,7 +790,7 @@ export default function SettingsPage() {
                                                     name="username"
                                                     value={formData.username}
                                                     onChange={handleInputChange}
-                                                    className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                                                    className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded focus:ring-1 focus:ring-blue-400 focus:border-blue-400 dark:bg-gray-700 dark:text-white"
                                                     required
                                                 />
                                             </div>
@@ -804,7 +804,7 @@ export default function SettingsPage() {
                                                     name="password"
                                                     value={formData.password}
                                                     onChange={handleInputChange}
-                                                    className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                                                    className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded focus:ring-1 focus:ring-blue-400 focus:border-blue-400 dark:bg-gray-700 dark:text-white"
                                                     required={!editingUser}
                                                 />
                                             </div>
@@ -812,24 +812,31 @@ export default function SettingsPage() {
                                         
                                         <div className="flex justify-end space-x-2 mt-4">
                                             {editingUser && (
-                                                <button 
+                                                <Button 
                                                     type="button" 
                                                     onClick={() => {
                                                         setEditingUser(null);
                                                         resetForm();
                                                     }}
-                                                    className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
+                                                    variant="secondary"
+                                                    size="sm"
                                                 >
                                                     取消
-                                                </button>
+                                                </Button>
                                             )}
-                                            <button 
+                                            <Button 
                                                 type="submit"
                                                 disabled={loading}
-                                                className="px-4 py-1.5 text-sm text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50"
+                                                variant="default"
+                                                size="sm"
                                             >
-                                                {loading ? '处理中...' : (editingUser ? '更新' : '创建')}
-                                            </button>
+                                                {loading ? (
+                                                    <>
+                                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                                        处理中...
+                                                    </>
+                                                ) : (editingUser ? '更新' : '创建')}
+                                            </Button>
                                         </div>
                                     </form>
                                 </div>
@@ -865,12 +872,12 @@ export default function SettingsPage() {
                                                     <div key={user._id} className={`flex items-center px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${index !== users.length - 1 ? 'border-b border-gray-100 dark:border-gray-700' : ''}`}>
                                                         <div className="flex-1 flex items-center space-x-3">
                                                             <div className="w-8 h-8 bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900 dark:to-blue-800 rounded-full flex items-center justify-center">
-                                                                <User className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                                                <User className="w-4 h-4 text-blue-400 dark:text-blue-400" />
                                                             </div>
                                                             <span className="text-sm font-medium text-gray-900 dark:text-white">{user.username}</span>
                                                         </div>
                                                         <div className="w-20 flex items-center justify-center space-x-1">
-                                                            <button
+                                                            <Button
                                                                 onClick={() => {
                                                                     setEditingUser(user);
                                                                     setFormData({
@@ -878,19 +885,22 @@ export default function SettingsPage() {
                                                                         password: ''
                                                                     });
                                                                 }}
-                                                                className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                                                variant="ghost"
+                                                                size="icon"
                                                                 title="编辑用户"
                                                             >
                                                                 <Edit className="w-4 h-4" />
-                                                            </button>
+                                                            </Button>
                                                             {(currentUser && currentUser.id !== user._id) && (
-                                                                <button
+                                                                <Button
                                                                     onClick={() => handleDeleteUser(user._id)}
-                                                                    className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                                                    variant="ghost"
+                                                                    size="icon"
                                                                     title="删除用户"
+                                                                    className="hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30"
                                                                 >
                                                                     <Trash2 className="w-4 h-4" />
-                                                                </button>
+                                                                </Button>
                                                             )}
                                                         </div>
                                                     </div>

@@ -361,7 +361,7 @@ export default function AgentsClientPage() {
                         </div>
                         <div className="flex flex-col justify-center flex-1">
                             <div className="flex items-center justify-between mb-1">
-                                <p className="text-sm font-medium text-blue-600 dark:text-blue-400">代理节点</p>
+                                <p className="text-sm font-medium text-blue-400 dark:text-blue-400">代理节点</p>
                                 <div
                                     className={`inline-flex items-center text-sm px-2 py-0.5 rounded-full ${
                                         mqttConnected 
@@ -427,34 +427,30 @@ export default function AgentsClientPage() {
                         <div className="flex flex-col justify-center flex-1">
                             <p className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-2">快速操作</p>
                             <div className="flex space-x-2">
-                                <button
+                                <Button
                                     onClick={handleUpgradeAllAgents}
                                     disabled={upgradeStatus.isUpgrading || onlineAgents === 0}
-                                    className={`flex-1 text-sm px-3 py-2 rounded ${
-                                        upgradeStatus.isUpgrading || onlineAgents === 0
-                                            ? 'bg-blue-400 dark:bg-blue-500 cursor-not-allowed opacity-70 text-white'
-                                            : 'bg-blue-500 dark:bg-blue-600 hover:bg-blue-600 dark:hover:bg-blue-700 text-white'
-                                    } transition-colors flex items-center justify-center`}
+                                    variant="default"
+                                    size="sm"
+                                    className="flex-1"
                                 >
                                     {upgradeStatus.isUpgrading && (
                                         <RefreshCw className="w-4 h-4 mr-1.5 animate-spin"/>
                                     )}
                                     {upgradeStatus.isUpgrading ? `升级中` : '更新代理'}
-                                </button>
-                                <button
+                                </Button>
+                                <Button
                                     onClick={handleRefreshAgents}
                                     disabled={refreshLoading || isLoading}
-                                    className={`flex-1 text-sm px-3 py-2 rounded ${
-                                        refreshLoading || isLoading
-                                            ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed opacity-70 text-white'
-                                            : 'bg-gray-500 dark:bg-gray-700 hover:bg-gray-600 dark:hover:bg-gray-600 text-white'
-                                    } transition-colors flex items-center justify-center`}
+                                    variant="secondary"
+                                    size="sm"
+                                    className="flex-1"
                                 >
                                     {refreshLoading && (
                                         <RefreshCw className="w-4 h-4 mr-1.5 animate-spin"/>
                                     )}
                                     {refreshLoading ? '刷新中' : '刷新数据'}
-                                </button>
+                                </Button>
                             </div>
                         </div>
                     </div>
@@ -476,7 +472,7 @@ export default function AgentsClientPage() {
                             value={searchTerm}
                             onChange={handleSearchChange}
                             placeholder="搜索代理名称或IP地址..."
-                            className="w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                            className="w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-3 py-2 text-sm focus:border-blue-400 focus:ring-1 focus:ring-blue-400 dark:bg-gray-700 dark:text-white"
                         />
                     </div>
 
@@ -491,7 +487,7 @@ export default function AgentsClientPage() {
                                 id="status"
                                 value={statusFilter}
                                 onChange={handleStatusChange}
-                                className="appearance-none w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white disabled:bg-gray-100 disabled:text-gray-500 pr-8"
+                                className="appearance-none w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-3 py-2 text-sm focus:border-blue-400 focus:ring-1 focus:ring-blue-400 bg-white dark:bg-gray-700 dark:text-white disabled:bg-gray-100 disabled:text-gray-500 pr-8"
                             >
                                 <option value="all">全部</option>
                                 <option value="online">在线</option>
@@ -636,29 +632,24 @@ export default function AgentsClientPage() {
                                             {agent._id ? (
                                                 // 对于已注册的代理，显示详情和删除按钮
                                                 <>
-                                                    <NavLink
-                                                        href={`/agents/${agent._id}`}
-                                                        className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 inline-flex items-center"
+                                                    <Button
+                                                        onClick={() => window.location.href = `/agents/${agent._id}`}
+                                                        variant="secondary"
+                                                        size="sm"
                                                     >
                                                         <Eye className="w-4 h-4 mr-2"/>
                                                         详情
-                                                    </NavLink>
-                                                    <button
+                                                    </Button>
+                                                    <Button
                                                         onClick={() => handleDeleteAgent(agent._id)}
                                                         disabled={deleteLoading === agent._id}
-                                                        className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 inline-flex items-center"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/30"
                                                     >
                                                         {deleteLoading === agent._id ? (
                                                             <>
-                                                                <svg
-                                                                    className="animate-spin h-4 w-4 mr-2 text-red-600 dark:text-red-400"
-                                                                    xmlns="http://www.w3.org/2000/svg" fill="none"
-                                                                    viewBox="0 0 24 24">
-                                                                    <circle className="opacity-25" cx="12" cy="12" r="10"
-                                                                            stroke="currentColor" strokeWidth="4"></circle>
-                                                                    <path className="opacity-75" fill="currentColor"
-                                                                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                                                </svg>
+                                                                <RefreshCw className="w-4 h-4 mr-2 animate-spin"/>
                                                                 删除中...
                                                             </>
                                                         ) : (
@@ -667,7 +658,7 @@ export default function AgentsClientPage() {
                                                                 删除
                                                             </>
                                                         )}
-                                                    </button>
+                                                    </Button>
                                                 </>
                                             ) : (
                                                 // 对于正在注册中或新发现的代理

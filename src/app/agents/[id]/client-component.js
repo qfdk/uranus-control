@@ -469,7 +469,7 @@ export default function AgentDetail({agent: initialAgent}) {
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6" key={renderKey}>
             <div className="mb-4">
-                <Link href="/agents" className="flex items-center text-blue-600 hover:text-blue-800">
+                <Link href="/agents" className="flex items-center text-blue-400 hover:text-blue-800">
                     <ArrowLeft className="w-4 h-4 mr-1"/>
                     返回代理列表
                 </Link>
@@ -533,10 +533,10 @@ export default function AgentDetail({agent: initialAgent}) {
                             {isUpgrading ? '升级中...' : '升级代理'}
                         </Button>
                         <Button
-                            variant="danger"
+                            variant="ghost"
                             onClick={handleDeleteAgent}
                             disabled={isDeleting}
-                            className="shadow-sm"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/30"
                         >
                             <XCircle className={`w-4 h-4 mr-1.5 ${isDeleting ? 'animate-spin' : ''}`}/>
                             {isDeleting ? '删除中...' : '删除代理'}
@@ -559,7 +559,7 @@ export default function AgentDetail({agent: initialAgent}) {
                     onClick={() => handleTabChange('info')}
                     className={`py-3 px-3 sm:px-6 text-xs sm:text-sm font-medium border-b-2 -mb-px flex items-center whitespace-nowrap ${
                         activeTab === 'info'
-                            ? 'border-blue-500 text-blue-600 dark:text-blue-400 dark:border-blue-400'
+                            ? 'border-blue-400 text-blue-400 dark:text-blue-400 dark:border-blue-400'
                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
                     }`}
                 >
@@ -571,7 +571,7 @@ export default function AgentDetail({agent: initialAgent}) {
                     onClick={() => handleTabChange('nginx')}
                     className={`py-3 px-3 sm:px-6 text-xs sm:text-sm font-medium border-b-2 -mb-px flex items-center whitespace-nowrap ${
                         activeTab === 'nginx'
-                            ? 'border-blue-500 text-blue-600 dark:text-blue-400 dark:border-blue-400'
+                            ? 'border-blue-400 text-blue-400 dark:text-blue-400 dark:border-blue-400'
                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
                     }`}
                     disabled={(!agent.online && !(agent.lastHeartbeat && new Date() - new Date(agent.lastHeartbeat) < 20000)) || !mqttConnected}
@@ -588,7 +588,7 @@ export default function AgentDetail({agent: initialAgent}) {
                     onClick={() => handleTabChange('terminal')}
                     className={`py-3 px-3 sm:px-6 text-xs sm:text-sm font-medium border-b-2 -mb-px flex items-center whitespace-nowrap ${
                         activeTab === 'terminal'
-                            ? 'border-blue-500 text-blue-600 dark:text-blue-400 dark:border-blue-400'
+                            ? 'border-blue-400 text-blue-400 dark:text-blue-400 dark:border-blue-400'
                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
                     }`}
                     disabled={!agent.online && !(agent.lastHeartbeat && new Date() - new Date(agent.lastHeartbeat) < 20000)}
@@ -666,18 +666,19 @@ export default function AgentDetail({agent: initialAgent}) {
                                             {agent.ip || '未知'}
                                         </p>
                                         {agent.ip && (
-                                            <button 
+                                            <Button 
                                                 onClick={() => {
                                                     navigator.clipboard.writeText(agent.ip);
                                                     toast.success('IP地址已复制到剪贴板');
                                                 }}
-                                                className="ml-2 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-md"
+                                                variant="ghost"
+                                                size="icon"
                                                 title="复制IP地址"
                                             >
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                                                 </svg>
-                                            </button>
+                                            </Button>
                                         )}
                                     </div>
                                 </div>
@@ -691,7 +692,7 @@ export default function AgentDetail({agent: initialAgent}) {
                                                 href={agent.url}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 flex items-center truncate"
+                                                className="text-blue-400 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 flex items-center truncate"
                                                 title={agent.url}
                                             >
                                                 <span className="truncate">{agent.url}</span>
@@ -717,7 +718,7 @@ export default function AgentDetail({agent: initialAgent}) {
                             {/* 次要详细信息 */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {/* 构建时间 */}
-                                <div className="border-l-2 border-blue-500 dark:border-blue-600 pl-3 py-1">
+                                <div className="border-l-2 border-blue-400 dark:border-blue-600 pl-3 py-1">
                                     <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400">构建时间</h3>
                                     <p className="text-sm font-medium dark:text-white mt-1 truncate" title={agent.buildTime || '未知'}>
                                         {agent.buildTime || '未知'}
@@ -736,18 +737,19 @@ export default function AgentDetail({agent: initialAgent}) {
                                             ) : '未知'}
                                         </p>
                                         {agent.commitId && (
-                                            <button 
+                                            <Button 
                                                 onClick={() => {
                                                     navigator.clipboard.writeText(agent.commitId);
                                                     toast.success('Commit Hash已复制到剪贴板');
                                                 }}
-                                                className="ml-2 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500 rounded-md"
+                                                variant="ghost"
+                                                size="icon"
                                                 title="复制完整Hash值"
                                             >
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                                                 </svg>
-                                            </button>
+                                            </Button>
                                         )}
                                     </div>
                                 </div>
@@ -797,15 +799,16 @@ export default function AgentDetail({agent: initialAgent}) {
                                         <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
                                             重新加载Nginx配置文件，不中断正在处理的连接。
                                         </p>
-                                        <button
+                                        <Button
                                             onClick={reloadNginx}
                                             disabled={isExecuting}
-                                            className={`flex items-center px-3 py-1.5 rounded text-white bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 transition-colors ${isExecuting ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                            variant="default"
+                                            size="sm"
                                             title="重载Nginx配置"
                                         >
-                                            <RotateCw className={`w-4 h-4 ${isExecuting ? 'animate-spin' : ''}`}/>
-                                            <span className="ml-2 text-sm">重载配置</span>
-                                        </button>
+                                            <RotateCw className={`w-4 h-4 mr-2 ${isExecuting ? 'animate-spin' : ''}`}/>
+                                            重载配置
+                                        </Button>
                                     </div>
 
                                     <div
@@ -817,15 +820,17 @@ export default function AgentDetail({agent: initialAgent}) {
                                         <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
                                             完全停止并重新启动Nginx服务，会暂时中断所有连接。
                                         </p>
-                                        <button
+                                        <Button
                                             onClick={restartNginx}
                                             disabled={isExecuting}
-                                            className={`flex items-center px-3 py-1.5 rounded text-white bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700 transition-colors ${isExecuting ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                            variant="default"
+                                            size="sm"
                                             title="重启Nginx服务"
+                                            className="bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700"
                                         >
-                                            <RefreshCw className={`w-4 h-4 ${isExecuting ? 'animate-spin' : ''}`}/>
-                                            <span className="ml-2 text-sm">重启服务</span>
-                                        </button>
+                                            <RefreshCw className={`w-4 h-4 mr-2 ${isExecuting ? 'animate-spin' : ''}`}/>
+                                            重启服务
+                                        </Button>
                                     </div>
 
                                     <div
@@ -837,15 +842,16 @@ export default function AgentDetail({agent: initialAgent}) {
                                         <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
                                             停止Nginx服务，所有网站将无法访问。
                                         </p>
-                                        <button
+                                        <Button
                                             onClick={stopNginx}
                                             disabled={isExecuting}
-                                            className={`flex items-center px-3 py-1.5 rounded text-white bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 transition-colors ${isExecuting ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                            variant="destructive"
+                                            size="sm"
                                             title="停止Nginx服务"
                                         >
-                                            <Square className="w-4 h-4"/>
-                                            <span className="ml-2 text-sm">停止服务</span>
-                                        </button>
+                                            <Square className="w-4 h-4 mr-2"/>
+                                            停止服务
+                                        </Button>
                                     </div>
 
                                     <div
@@ -857,15 +863,17 @@ export default function AgentDetail({agent: initialAgent}) {
                                         <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
                                             启动已停止的Nginx服务，恢复网站访问。
                                         </p>
-                                        <button
+                                        <Button
                                             onClick={startNginx}
                                             disabled={isExecuting}
-                                            className={`flex items-center px-3 py-1.5 rounded text-white bg-purple-500 hover:bg-purple-600 dark:bg-purple-600 dark:hover:bg-purple-700 transition-colors ${isExecuting ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                            variant="default"
+                                            size="sm"
                                             title="启动Nginx服务"
+                                            className="bg-purple-500 hover:bg-purple-600 dark:bg-purple-600 dark:hover:bg-purple-700"
                                         >
-                                            <Play className="w-4 h-4"/>
-                                            <span className="ml-2 text-sm">启动服务</span>
-                                        </button>
+                                            <Play className="w-4 h-4 mr-2"/>
+                                            启动服务
+                                        </Button>
                                     </div>
                                 </div>
                             </div>

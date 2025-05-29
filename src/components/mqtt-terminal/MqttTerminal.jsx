@@ -1,14 +1,14 @@
 'use client';
 
 import React, {useEffect, useRef, useState, useCallback} from 'react';
-import {Terminal} from 'xterm';
-import {FitAddon} from 'xterm-addon-fit';
-import {WebLinksAddon} from 'xterm-addon-web-links';
-import {SearchAddon} from 'xterm-addon-search';
+import {Terminal} from '@xterm/xterm';
+import {FitAddon} from '@xterm/addon-fit';
+import {WebLinksAddon} from '@xterm/addon-web-links';
+import {SearchAddon} from '@xterm/addon-search';
 import {v4 as uuidv4} from 'uuid';
 import useMqttStore from '@/store/mqttStore';
 import {AlertCircle, Maximize2, Minimize2, Eraser, Square} from 'lucide-react';
-import 'xterm/css/xterm.css';
+import '@xterm/xterm/css/xterm.css';
 import './terminal.css';
 import toast from 'react-hot-toast';
 import { safelyFit, createSafeResizeObserver } from './terminal-fix';
@@ -54,6 +54,30 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
         if (isActive && terminalRef.current && !terminalInstanceRef.current) {
 
             try {
+                // 终端始终使用优化的暗色主题，更适合开发者使用
+                const terminalTheme = {
+                    background: '#0f172a', // slate-900 - 深色但不会太黑
+                    foreground: '#ffffff', // 纯白色 - 更鲜亮的前景色
+                    cursor: '#60a5fa', // blue-400 - 主题蓝色光标
+                    selection: 'rgba(96, 165, 250, 0.3)', // blue-400 with opacity
+                    black: '#0f172a', // slate-900
+                    red: '#ff6b6b', // 更鲜亮的红色
+                    green: '#51cf66', // 更鲜亮的绿色
+                    yellow: '#ffd43b', // 更鲜亮的黄色
+                    blue: '#74c0fc', // 更鲜亮的蓝色
+                    magenta: '#d0bfff', // 更鲜亮的紫色
+                    cyan: '#3bc9db', // 更鲜亮的青色
+                    white: '#ffffff', // 纯白色
+                    brightBlack: '#868e96', // 更亮的灰色
+                    brightRed: '#ff8787', // 更亮的红色
+                    brightGreen: '#8ce99a', // 更亮的绿色
+                    brightYellow: '#ffec99', // 更亮的黄色
+                    brightBlue: '#91a7ff', // 更亮的蓝色
+                    brightMagenta: '#e599f7', // 更亮的紫色
+                    brightCyan: '#66d9ef', // 更亮的青色
+                    brightWhite: '#ffffff' // 纯白色 - 最亮的白色
+                };
+
                 // 创建终端实例
                 terminal = new Terminal({
                     cursorBlink: true,
@@ -65,28 +89,7 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
                     convertEol: true,
                     scrollback: 5000,
                     padding: 0,
-                    theme: {
-                        background: '#1e1e1e',
-                        foreground: '#f0f0f0',
-                        cursor: '#f0f0f0',
-                        selection: 'rgba(255, 255, 255, 0.3)',
-                        black: '#000000',
-                        red: '#cd3131',
-                        green: '#0dbc79',
-                        yellow: '#e5e510',
-                        blue: '#2472c8',
-                        magenta: '#bc3fbc',
-                        cyan: '#11a8cd',
-                        white: '#e5e5e5',
-                        brightBlack: '#666666',
-                        brightRed: '#f14c4c',
-                        brightGreen: '#23d18b',
-                        brightYellow: '#f5f543',
-                        brightBlue: '#3b8eea',
-                        brightMagenta: '#d670d6',
-                        brightCyan: '#29b8db',
-                        brightWhite: '#ffffff'
-                    }
+                    theme: terminalTheme
                 });
 
                 // 创建插件
@@ -467,10 +470,11 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
     // 只有在组件激活时渲染
     if (!isActive) return null;
 
+
     return (
         <div
             className="h-full w-full flex flex-col overflow-hidden"
-            style={{padding: 0, backgroundColor: '#1e1e1e', borderRadius: '0.375rem'}}>
+            style={{padding: 0, borderRadius: '0.375rem'}}>
             {/* 错误提示 */}
             {error && (
                 <div
