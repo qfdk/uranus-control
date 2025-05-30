@@ -1,12 +1,13 @@
 // src/components/ui/AgentConfigForm.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Button from './Button';
 import FormInput from './FormInput';
 import { Save, RotateCw, RefreshCw } from 'lucide-react';
 
 export default function AgentConfigForm({ 
     onSave, 
-    isSaving 
+    isSaving,
+    agent
 }) {
     const [formData, setFormData] = useState({
         mqttBroker: '',
@@ -17,6 +18,21 @@ export default function AgentConfigForm({
         controlCenter: '',
         token: ''
     });
+
+    // 当agent数据变化时，更新表单数据
+    useEffect(() => {
+        if (agent) {
+            setFormData({
+                mqttBroker: agent.mqttBroker || '',
+                email: agent.email || '',
+                username: agent.username || '',
+                vhostPath: agent.vhostPath || '',
+                sslPath: agent.sslPath || '',
+                controlCenter: agent.controlCenter || '',
+                token: '' // token始终为空，让用户输入新的
+            });
+        }
+    }, [agent]);
 
 
     const handleInputChange = (name, value) => {

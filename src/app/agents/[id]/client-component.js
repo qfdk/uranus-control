@@ -1025,6 +1025,7 @@ export default function AgentDetail({agent: initialAgent}) {
                         <AgentConfigForm
                             onSave={saveAgentConfig}
                             isSaving={isSavingConfig}
+                            agent={agent}
                         />
                     ) : (
                         <div className="bg-white rounded-lg shadow dark:bg-gray-800 p-5 text-center">
