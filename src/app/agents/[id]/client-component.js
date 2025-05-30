@@ -72,6 +72,7 @@ export default function AgentDetail({agent: initialAgent}) {
     
     // 配置管理状态
     const [isSavingConfig, setIsSavingConfig] = useState(false);
+    const [isRefreshingIP, setIsRefreshingIP] = useState(false);
 
     // 初始化MQTT连接
     useEffect(() => {
@@ -425,6 +426,27 @@ export default function AgentDetail({agent: initialAgent}) {
         }
     };
 
+    // 刷新IP地址
+    const handleRefreshIP = async () => {
+        if (isRefreshingIP || !agent?.online || !mqttConnected) return;
+
+        try {
+            setIsRefreshingIP(true);
+            const loadingToastId = toast.loading('正在刷新IP地址...');
+
+            const result = await useMqttStore.getState().refreshIP(agent.uuid);
+            
+            toast.dismiss(loadingToastId);
+            toast.success('IP地址刷新命令已发送，Agent将更新IP地址');
+            
+        } catch (error) {
+            setIsRefreshingIP(false);
+            toast.error('刷新IP地址失败: ' + error.message);
+        } finally {
+            setIsRefreshingIP(false);
+        }
+    };
+
     // Nginx命令
     const executeCommand = async (command) => {
         if (isExecuting || !agent?.online || !mqttConnected) return;
@@ -715,21 +737,34 @@ export default function AgentDetail({agent: initialAgent}) {
                                         <p className="text-sm font-medium dark:text-white truncate flex-grow" title={agent.ip || '未知'}>
                                             {agent.ip || '未知'}
                                         </p>
-                                        {agent.ip && (
-                                            <Button 
-                                                onClick={() => {
-                                                    navigator.clipboard.writeText(agent.ip);
-                                                    toast.success('IP地址已复制到剪贴板');
-                                                }}
-                                                variant="ghost"
-                                                size="icon"
-                                                title="复制IP地址"
-                                            >
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                                </svg>
-                                            </Button>
-                                        )}
+                                        <div className="flex gap-1">
+                                            {agent.ip && (
+                                                <Button 
+                                                    onClick={() => {
+                                                        navigator.clipboard.writeText(agent.ip);
+                                                        toast.success('IP地址已复制到剪贴板');
+                                                    }}
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    title="复制IP地址"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                    </svg>
+                                                </Button>
+                                            )}
+                                            {(agent.online || (agent.lastHeartbeat && new Date() - new Date(agent.lastHeartbeat) < 20000)) && mqttConnected && (
+                                                <Button 
+                                                    onClick={handleRefreshIP}
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    disabled={isRefreshingIP}
+                                                    title="刷新IP地址"
+                                                >
+                                                    <RefreshCw className={`h-4 w-4 ${isRefreshingIP ? 'animate-spin' : ''}`} />
+                                                </Button>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                                 

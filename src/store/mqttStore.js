@@ -787,6 +787,9 @@ const useMqttStore = create((set, get) => {
         // 配置更新命令
         updateConfig: (uuid, config) => get().sendCommand(uuid, 'update_config', { data: config }),
 
+        // 刷新IP地址命令
+        refreshIP: (uuid) => get().sendCommand(uuid, 'refresh_ip'),
+
         // 终端相关操作
         createTerminalSession: (agentUuid, sessionId) => {
             return get().sendCommand(agentUuid, 'terminal', {
