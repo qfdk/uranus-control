@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import Button from './Button';
 import FormInput from './FormInput';
-import { Save, RotateCw } from 'lucide-react';
+import { Save, RotateCw, RefreshCw } from 'lucide-react';
 
 export default function AgentConfigForm({ 
     onSave, 
@@ -24,6 +24,16 @@ export default function AgentConfigForm({
             ...prev,
             [name]: value
         }));
+    };
+
+    // 生成随机token
+    const generateRandomToken = () => {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        let token = '';
+        for (let i = 0; i < 32; i++) {
+            token += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        handleInputChange('token', token);
     };
 
     const handleSubmit = (e) => {
@@ -148,13 +158,27 @@ export default function AgentConfigForm({
                         </div>
                         
                         <div>
-                            <FormInput
-                                label="新Token"
-                                type="password"
-                                value={formData.token}
-                                onChange={(e) => handleInputChange('token', e.target.value)}
-                                placeholder="留空保持现有token不变"
-                            />
+                            <div className="flex gap-2 items-end">
+                                <div className="flex-1">
+                                    <FormInput
+                                        label="新Token"
+                                        type="password"
+                                        value={formData.token}
+                                        onChange={(e) => handleInputChange('token', e.target.value)}
+                                        placeholder="留空保持现有token不变"
+                                    />
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    onClick={generateRandomToken}
+                                    className="px-3 py-2 mb-4 whitespace-nowrap"
+                                    title="生成随机Token"
+                                >
+                                    <RefreshCw className="w-4 h-4 mr-1" />
+                                    生成
+                                </Button>
+                            </div>
                             <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
                                 ⚠️ 修改token后Agent将重启并使用新token
                             </p>
