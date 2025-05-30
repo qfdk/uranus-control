@@ -29,6 +29,7 @@ export async function POST(request) {
             {
                 $set: {
                     ...data,
+                    ip: data.ip || 'Unknown', // 确保IP字段有默认值
                     online: true,
                     lastHeartbeat: new Date() // 显式设置最新时间戳
                 }

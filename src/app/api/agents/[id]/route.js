@@ -30,7 +30,10 @@ export async function PUT(request, {params}) {
         // Find and update the agent
         const updatedAgent = await Agent.findByIdAndUpdate(
             agentId,
-            {...data},
+            {
+                ...data,
+                ip: data.ip || 'Unknown' // 确保IP字段有默认值
+            },
             {new: true, runValidators: true}
         );
 

@@ -89,6 +89,7 @@ async function startServer() {
                                     {uuid},
                                     {
                                         ...payload,
+                                        ip: payload.ip || 'Unknown', // 确保IP字段有默认值
                                         online: true,
                                         lastHeartbeat: new Date() // 明确设置为当前时间
                                     },

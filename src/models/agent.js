@@ -10,7 +10,7 @@ const AgentSchema = new mongoose.Schema({
     goVersion: String,
     // 系统信息
     hostname: {type: String, required: true},
-    ip: {type: String, required: true},
+    ip: {type: String, default: 'Unknown'},
     os: String,
     memory: String,
     url: String,
