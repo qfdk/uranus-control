@@ -245,14 +245,16 @@ export default function AgentDetail({agent: initialAgent}) {
             return;
         }
 
+        let loadingToastId;
         try {
             setIsDeleting(true);
-            toast.loading('正在删除代理...');
+            loadingToastId = toast.loading('正在删除代理...');
 
             const result = await deleteAgent(agent._id);
 
             // 收到响应后立即关闭loading状态
             setIsDeleting(false);
+            toast.dismiss(loadingToastId);
 
             if (result.success) {
                 toast.success('代理已成功删除');
@@ -262,11 +264,15 @@ export default function AgentDetail({agent: initialAgent}) {
                     router.push('/agents');
                 }, 1500);
             } else if (result.canceled) {
-                toast.dismiss();
+                // loading toast 已经被关闭了，不需要再dismiss
             } else {
                 toast.error(result.error?.message || '删除代理失败，请重试');
             }
         } catch (error) {
+            setIsDeleting(false);
+            if (loadingToastId) {
+                toast.dismiss(loadingToastId);
+            }
             toast.error('删除代理失败: ' + error.message);
         }
     };
