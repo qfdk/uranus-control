@@ -16,9 +16,10 @@ export async function POST(request, {params}) {
             return NextResponse.json({error: 'Agent not found'}, {status: 404});
         }
 
-        if (!agent.online) {
-            return NextResponse.json({error: 'Agent is offline'}, {status: 400});
-        }
+        // Removed offline check - allow upgrades regardless of online status
+        // if (!agent.online) {
+        //     return NextResponse.json({error: 'Agent is offline'}, {status: 400});
+        // }
 
         // 获取由心跳上报的信息
         const {token} = agent;
