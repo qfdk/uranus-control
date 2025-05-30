@@ -162,7 +162,7 @@ export default function AgentConfigForm({
                                 <div className="flex-1">
                                     <FormInput
                                         label="新Token"
-                                        type="password"
+                                        type="text"
                                         value={formData.token}
                                         onChange={(e) => handleInputChange('token', e.target.value)}
                                         placeholder="留空保持现有token不变"

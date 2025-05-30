@@ -72,11 +72,6 @@ export default function AgentDetail({agent: initialAgent}) {
     
     // 配置管理状态
     const [isSavingConfig, setIsSavingConfig] = useState(false);
-    const [configMessage, setConfigMessage] = useState({
-        type: '',
-        content: '',
-        show: false
-    });
 
     // 初始化MQTT连接
     useEffect(() => {
@@ -402,10 +397,6 @@ export default function AgentDetail({agent: initialAgent}) {
             clearMessage();
         }
         
-        // 清除配置状态消息
-        if (tab !== 'config') {
-            clearConfigMessage();
-        }
     };
 
 
@@ -414,36 +405,18 @@ export default function AgentDetail({agent: initialAgent}) {
         if (isSavingConfig || !agent?.uuid) return;
         
         setIsSavingConfig(true);
-        clearConfigMessage();
         
         try {
             // 使用 mqttStore 发送配置更新命令
             const result = await useMqttStore.getState().updateConfig(agent.uuid, config);
             
-            setConfigMessage({
-                type: 'success',
-                content: `配置更新已发送到Agent: ${result.message || '命令已发送'}`,
-                show: true
-            });
+            toast.success(`配置更新已发送到Agent: ${result.message || '配置已更新，Agent将在3秒后重启'}`);
             
         } catch (error) {
-            setConfigMessage({
-                type: 'error',
-                content: '配置更新失败: ' + error.message,
-                show: true
-            });
+            toast.error('配置更新失败: ' + error.message);
         } finally {
             setIsSavingConfig(false);
         }
-    };
-
-    // 清除配置消息
-    const clearConfigMessage = () => {
-        setConfigMessage({
-            type: '',
-            content: '',
-            show: false
-        });
     };
 
     // Nginx命令
@@ -1006,13 +979,6 @@ export default function AgentDetail({agent: initialAgent}) {
             {/* 配置管理选项卡 */}
             {activeTab === 'config' && (
                 <div>
-                    {/* 配置状态消息 */}
-                    <StatusMessage
-                        type={configMessage.type}
-                        message={configMessage.content}
-                        show={configMessage.show}
-                        onClose={clearConfigMessage}
-                    />
                     
                     {(agent.online || (agent.lastHeartbeat && new Date() - new Date(agent.lastHeartbeat) < 20000)) && mqttConnected ? (
                         <AgentConfigForm
