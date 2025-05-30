@@ -152,6 +152,37 @@ async function startServer() {
             }
         }, 5000); // 每5秒运行一次，更快地检测离线
 
+        // 定时任务：处理MQTT命令队列
+        setInterval(() => {
+            try {
+                if (global.mqttCommandQueue && global.mqttCommandQueue.length > 0 && mqttClient && mqttClient.isConnected()) {
+                    const commands = [...global.mqttCommandQueue];
+                    global.mqttCommandQueue = []; // 清空队列
+                    
+                    commands.forEach(commandData => {
+                        // 检查命令是否过期（超过5分钟）
+                        if (Date.now() - commandData.timestamp > 5 * 60 * 1000) {
+                            console.log(`配置命令已过期，跳过: ${commandData.agentUuid}`);
+                            return;
+                        }
+                        
+                        console.log(`发送配置命令到: ${commandData.topic}`);
+                        console.log(`命令内容: ${commandData.payload}`);
+                        
+                        mqttClient.publish(commandData.topic, commandData.payload, { qos: 1 }, (err) => {
+                            if (err) {
+                                console.error(`发送配置命令失败 (${commandData.agentUuid}):`, err);
+                            } else {
+                                console.log(`配置命令已发送到代理 ${commandData.agentUuid}`);
+                            }
+                        });
+                    });
+                }
+            } catch (error) {
+                console.error('处理MQTT命令队列时出错:', error);
+            }
+        }, 1000); // 每1秒检查一次命令队列
+
         // 准备Next.js应用
         await app.prepare();
 

@@ -14,6 +14,7 @@ import {
     RefreshCw,
     RotateCw,
     Server,
+    Settings,
     Square,
     TerminalSquare,
     Upload,
@@ -26,6 +27,7 @@ import {useClientMount} from '@/hooks/useClientMount';
 import useAgentStore from '@/store/agentStore';
 import useMqttStore from '@/store/mqttStore';
 import CommandExecutor from '@/components/ui/CommandExecutor.jsx';
+import AgentConfigForm from '@/components/ui/AgentConfigForm.jsx';
 import toast from 'react-hot-toast';
 
 export default function AgentDetail({agent: initialAgent}) {
@@ -67,6 +69,14 @@ export default function AgentDetail({agent: initialAgent}) {
         show: false
     });
     const [isExecuting, setIsExecuting] = useState(false);
+    
+    // 配置管理状态
+    const [isSavingConfig, setIsSavingConfig] = useState(false);
+    const [configMessage, setConfigMessage] = useState({
+        type: '',
+        content: '',
+        show: false
+    });
 
     // 初始化MQTT连接
     useEffect(() => {
@@ -386,10 +396,54 @@ export default function AgentDetail({agent: initialAgent}) {
             refreshAgentData();
         }
 
+
         // 清除命令状态消息
         if (tab !== 'nginx') {
             clearMessage();
         }
+        
+        // 清除配置状态消息
+        if (tab !== 'config') {
+            clearConfigMessage();
+        }
+    };
+
+
+    // 保存Agent配置
+    const saveAgentConfig = async (config) => {
+        if (isSavingConfig || !agent?.uuid) return;
+        
+        setIsSavingConfig(true);
+        clearConfigMessage();
+        
+        try {
+            // 使用 mqttStore 发送配置更新命令
+            const result = await useMqttStore.getState().updateConfig(agent.uuid, config);
+            
+            setConfigMessage({
+                type: 'success',
+                content: `配置更新已发送到Agent: ${result.message || '命令已发送'}`,
+                show: true
+            });
+            
+        } catch (error) {
+            setConfigMessage({
+                type: 'error',
+                content: '配置更新失败: ' + error.message,
+                show: true
+            });
+        } finally {
+            setIsSavingConfig(false);
+        }
+    };
+
+    // 清除配置消息
+    const clearConfigMessage = () => {
+        setConfigMessage({
+            type: '',
+            content: '',
+            show: false
+        });
     };
 
     // Nginx命令
@@ -597,6 +651,23 @@ export default function AgentDetail({agent: initialAgent}) {
                     终端
                     {!agent.online && <span
                         className="ml-1 sm:ml-2 text-xs bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 px-1 sm:px-1.5 py-0.5 rounded-full">离线</span>}
+                </button>
+
+                <button
+                    onClick={() => handleTabChange('config')}
+                    className={`py-3 px-3 sm:px-6 text-xs sm:text-sm font-medium border-b-2 -mb-px flex items-center whitespace-nowrap ${
+                        activeTab === 'config'
+                            ? 'border-blue-400 text-blue-400 dark:text-blue-400 dark:border-blue-400'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                    }`}
+                    disabled={(!agent.online && !(agent.lastHeartbeat && new Date() - new Date(agent.lastHeartbeat) < 20000)) || !mqttConnected}
+                >
+                    <Settings className="w-4 h-4 mr-1 sm:mr-2"/>
+                    配置管理
+                    {(!agent.online || !mqttConnected) && <span
+                        className="ml-1 sm:ml-2 text-xs bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 px-1 sm:px-1.5 py-0.5 rounded-full">
+                        {!agent.online ? '离线' : 'MQTT未连接'}
+                    </span>}
                 </button>
             </div>
 
@@ -919,6 +990,49 @@ export default function AgentDetail({agent: initialAgent}) {
                                 <h3 className="text-lg font-medium text-gray-800 dark:text-white mb-2">代理当前离线</h3>
                                 <p className="text-gray-500 dark:text-gray-400 mb-4">
                                     无法执行命令，请等待代理重新上线后再试
+                                </p>
+                                <Button
+                                    variant="primary"
+                                    onClick={() => handleTabChange('info')}
+                                >
+                                    返回信息页面
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* 配置管理选项卡 */}
+            {activeTab === 'config' && (
+                <div>
+                    {/* 配置状态消息 */}
+                    <StatusMessage
+                        type={configMessage.type}
+                        message={configMessage.content}
+                        show={configMessage.show}
+                        onClose={clearConfigMessage}
+                    />
+                    
+                    {(agent.online || (agent.lastHeartbeat && new Date() - new Date(agent.lastHeartbeat) < 20000)) && mqttConnected ? (
+                        <AgentConfigForm
+                            onSave={saveAgentConfig}
+                            isSaving={isSavingConfig}
+                        />
+                    ) : (
+                        <div className="bg-white rounded-lg shadow dark:bg-gray-800 p-5 text-center">
+                            <div className="py-10">
+                                <div
+                                    className="inline-flex items-center justify-center p-3 bg-red-100 dark:bg-red-900/30 rounded-full mb-4">
+                                    <XCircle className="w-8 h-8 text-red-500 dark:text-red-400"/>
+                                </div>
+                                <h3 className="text-lg font-medium text-gray-800 dark:text-white mb-2">
+                                    {!agent.online ? '代理当前离线' : 'MQTT未连接'}
+                                </h3>
+                                <p className="text-gray-500 dark:text-gray-400 mb-4">
+                                    {!agent.online
+                                        ? '无法管理配置，请等待代理重新上线后再试'
+                                        : 'MQTT连接失败，无法发送配置命令，请检查MQTT设置'}
                                 </p>
                                 <Button
                                     variant="primary"

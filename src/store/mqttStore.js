@@ -784,6 +784,9 @@ const useMqttStore = create((set, get) => {
         stopNginx: (uuid) => get().sendCommand(uuid, 'stop'),
         startNginx: (uuid) => get().sendCommand(uuid, 'start'),
 
+        // 配置更新命令
+        updateConfig: (uuid, config) => get().sendCommand(uuid, 'update_config', { data: config }),
+
         // 终端相关操作
         createTerminalSession: (agentUuid, sessionId) => {
             return get().sendCommand(agentUuid, 'terminal', {
