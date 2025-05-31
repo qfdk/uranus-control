@@ -1,8 +1,8 @@
 'use client';
 
-import React, {useCallback, useEffect, useRef, useState, useMemo} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {formatDistanceToNow} from 'date-fns';
-import zhCN from 'date-fns/locale/zh-CN';
+import {zhCN} from 'date-fns/locale';
 import Link from 'next/link';
 import {
     ArrowLeft,
@@ -30,15 +30,17 @@ import CommandExecutor from '@/components/ui/CommandExecutor.jsx';
 import AgentConfigForm from '@/components/ui/AgentConfigForm.jsx';
 import toast from 'react-hot-toast';
 
-export default function AgentDetail({agent: initialAgent}) {
+export default function AgentDetail({agentId}) {
     const router = useRouter();
-    const {connected: mqttConnected, subscribeToResponses, getAgentState} = useMqttStore();
+    const {connected: mqttConnected, subscribeToResponses} = useMqttStore();
     
     // 分别订阅各个状态，避免无限循环
     const deleteAgent = useAgentStore(state => state.deleteAgent);
     const upgradeAgent = useAgentStore(state => state.upgradeAgent);
     const getCombinedAgent = useAgentStore(state => state.getCombinedAgent);
     const refreshAgent = useAgentStore(state => state.refreshAgent);
+    const getAgentById = useAgentStore(state => state.getAgentById);
+    const fetchAgents = useAgentStore(state => state.fetchAgents);
     const mqttAgentState = useAgentStore(state => state.mqttAgentState);
 
     const [renderKey, setRenderKey] = useState(0);
@@ -49,14 +51,15 @@ export default function AgentDetail({agent: initialAgent}) {
         message: '',
         show: false
     });
-    const [agent, setAgent] = useState(initialAgent);
+    const [agent, setAgent] = useState(null);
+    const [initialLoading, setInitialLoading] = useState(true);
 
     // 防止频繁重新订阅的引用
     const subscriptionRef = useRef(null);
     const statusTimeoutRef = useRef(null);
     
     // 存储当前代理的UUID，用于mqttAgentState监听
-    const agentUuidRef = useRef(initialAgent?.uuid);
+    const agentUuidRef = useRef(null);
 
     // 使用自定义Hook处理客户端挂载
     const isMounted = useClientMount();
@@ -74,16 +77,58 @@ export default function AgentDetail({agent: initialAgent}) {
     const [isSavingConfig, setIsSavingConfig] = useState(false);
     const [isRefreshingIP, setIsRefreshingIP] = useState(false);
 
+    // 初始化代理数据 - 优先使用现有状态
+    useEffect(() => {
+        if (!isMounted || !agentId) return;
+
+        // 首先尝试从store中获取代理数据
+        const existingAgent = getAgentById(agentId);
+        if (existingAgent) {
+            // 如果存在，优先使用合并后的数据
+            const combinedAgent = getCombinedAgent(agentId);
+            setAgent(combinedAgent || existingAgent);
+            setInitialLoading(false);
+        } else {
+            // 如果store中没有数据，则需要加载
+            const loadAgentData = async () => {
+                try {
+                    setInitialLoading(true);
+                    
+                    // 确保agent store已初始化
+                    await fetchAgents();
+                    
+                    // 再次尝试获取代理数据
+                    const agent = getAgentById(agentId);
+                    if (agent) {
+                        const combinedAgent = getCombinedAgent(agentId);
+                        setAgent(combinedAgent || agent);
+                    } else {
+                        // 如果仍然没有找到，可能代理不存在
+                        setAgent(null);
+                    }
+                } catch (error) {
+                    console.error('加载代理数据失败:', error);
+                    setAgent(null);
+                } finally {
+                    setInitialLoading(false);
+                }
+            };
+            
+            void loadAgentData();
+        }
+    }, [isMounted, agentId, getAgentById, getCombinedAgent, fetchAgents]);
+
     // 初始化MQTT连接
     useEffect(() => {
         if (isMounted && !mqttConnected) {
-            useMqttStore.getState().connect().catch(err => {
+            useMqttStore.getState().connect().catch(() => {
+                // Silently handle connection errors
             });
         }
     }, [isMounted, mqttConnected]);
 
     // 处理函数 - 处理代理状态更新
-    const handleAgentUpdate = useCallback((topic, message) => {
+    const handleAgentUpdate = useCallback(() => {
         // 检查MQTT连接状态
         if (!mqttConnected) {
             // 强制更新MQTT状态
@@ -395,7 +440,7 @@ export default function AgentDetail({agent: initialAgent}) {
 
         // 切换到信息标签时刷新代理数据
         if (tab === 'info') {
-            refreshAgentData();
+            void refreshAgentData();
         }
 
 
@@ -434,7 +479,7 @@ export default function AgentDetail({agent: initialAgent}) {
             setIsRefreshingIP(true);
             const loadingToastId = toast.loading('正在刷新IP地址...');
 
-            const result = await useMqttStore.getState().refreshIP(agent.uuid);
+            await useMqttStore.getState().refreshIP(agent.uuid);
             
             toast.dismiss(loadingToastId);
             toast.success('IP地址刷新命令已发送，Agent将更新IP地址');
@@ -505,6 +550,24 @@ export default function AgentDetail({agent: initialAgent}) {
 
     if (!isMounted) {
         return null;
+    }
+
+    // 加载状态显示
+    if (initialLoading) {
+        return (
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 text-center">
+                <div className="flex flex-col items-center">
+                    <svg className="animate-spin h-8 w-8 text-blue-500 dark:text-blue-400 mb-4" xmlns="http://www.w3.org/2000/svg"
+                        fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                            strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p className="text-gray-500 dark:text-gray-400">正在加载代理信息...</p>
+                </div>
+            </div>
+        );
     }
 
     if (!agent) {
@@ -740,9 +803,13 @@ export default function AgentDetail({agent: initialAgent}) {
                                         <div className="flex gap-1">
                                             {agent.ip && (
                                                 <Button 
-                                                    onClick={() => {
-                                                        navigator.clipboard.writeText(agent.ip);
-                                                        toast.success('IP地址已复制到剪贴板');
+                                                    onClick={async () => {
+                                                        try {
+                                                            await navigator.clipboard.writeText(agent.ip);
+                                                            toast.success('IP地址已复制到剪贴板');
+                                                        } catch (error) {
+                                                            toast.error('复制失败');
+                                                        }
                                                     }}
                                                     variant="ghost"
                                                     size="icon"
@@ -823,9 +890,13 @@ export default function AgentDetail({agent: initialAgent}) {
                                         </p>
                                         {agent.commitId && (
                                             <Button 
-                                                onClick={() => {
-                                                    navigator.clipboard.writeText(agent.commitId);
-                                                    toast.success('Commit Hash已复制到剪贴板');
+                                                onClick={async () => {
+                                                    try {
+                                                        await navigator.clipboard.writeText(agent.commitId);
+                                                        toast.success('Commit Hash已复制到剪贴板');
+                                                    } catch (error) {
+                                                        toast.error('复制失败');
+                                                    }
                                                 }}
                                                 variant="ghost"
                                                 size="icon"

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import AgentDetail from './client-component';
 import { useLoading } from '@/app/contexts/LoadingContext';
 
-export default function AgentDetailWrapper({ agent }) {
+export default function AgentDetailWrapper({ agentId }) {
     // 确保客户端数据加载完成
     const [isClient, setIsClient] = useState(false);
     const { stopLoading } = useLoading();
@@ -26,5 +26,5 @@ export default function AgentDetailWrapper({ agent }) {
         // 不显示本地加载状态，而是依赖全局LoadingOverlay
         return null;
     }
-    return <AgentDetail agent={agent} />;
+    return <AgentDetail agentId={agentId} />;
 }
