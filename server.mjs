@@ -85,7 +85,7 @@ async function startServer() {
 
                             // 更新数据库中的代理
                             try {
-                                await Agent.findOneAndUpdate(
+                                const result = await Agent.findOneAndUpdate(
                                     {uuid},
                                     {
                                         ...payload,
@@ -95,9 +95,12 @@ async function startServer() {
                                     },
                                     {upsert: true, new: true}
                                 );
+                                console.log(`[HEARTBEAT] 已更新代理 ${uuid} 状态为在线`);
                             } catch (dbError) {
                                 console.error(`在数据库中更新代理 ${uuid} 时出错:`, dbError);
                             }
+                        } else {
+                            console.log(`[HEARTBEAT] 代理 ${uuid} 心跳被限流跳过 (距离上次更新 ${now - lastUpdate}ms)`);
                         }
                     }
                 }
