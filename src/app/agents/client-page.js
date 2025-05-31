@@ -7,7 +7,7 @@ import zhCN from 'date-fns/locale/zh-CN';
 import {Cpu, Eye, RefreshCw, Server, Settings, Trash2} from 'lucide-react';
 import Button from '@/components/ui/Button';
 import NavLink from '@/components/ui/NavLink';
-import {usePathname} from 'next/navigation';
+import {usePathname, useRouter} from 'next/navigation';
 import TableSpinner from '@/components/ui/TableSpinner';
 import {useClientMount} from '@/hooks/useClientMount';
 import useAgentStore from '@/store/agentStore';
@@ -25,7 +25,9 @@ export default function AgentsClientPage() {
         total: 0,
         message: ''
     });
+    const [navigatingTo, setNavigatingTo] = useState(null);
     const pathname = usePathname();
+    const router = useRouter();
     const mqttInitializedRef = useRef(false);
 
     // 使用全局状态
@@ -146,6 +148,9 @@ export default function AgentsClientPage() {
     // 初始数据加载 - 仅在首次渲染或强制刷新时执行
     useEffect(() => {
         if (isMounted && pathname === '/agents') {
+            // 重置导航状态
+            setNavigatingTo(null);
+            
             // 只在首次加载或者没有缓存数据时执行API请求
             if (!initialLoaded || agents.length === 0) {
                 fetchAgents();
@@ -584,9 +589,15 @@ export default function AgentsClientPage() {
                             /* 代理数据 - 正常显示 */
                             filteredAgents.map(agent => (
                                 <tr key={agent._id || agent.uuid}
-                                    className={`hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-300 ${
+                                    className={`hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 ${
                                         agent._mqttOnly ? 'bg-blue-50 dark:bg-blue-900/20' : ''
-                                    }`}>
+                                    }`}
+                                    onMouseEnter={() => {
+                                        // 鼠标悬停时预加载页面
+                                        if (agent._id) {
+                                            router.prefetch(`/agents/${agent._id}`);
+                                        }
+                                    }}>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                                         {agent.hostname || '未命名代理'}
                                         {agent._mqttOnly && agent._registering && (
@@ -633,12 +644,20 @@ export default function AgentsClientPage() {
                                                 // 对于已注册的代理，显示详情和删除按钮
                                                 <>
                                                     <Button
-                                                        onClick={() => window.location.href = `/agents/${agent._id}`}
+                                                        onClick={() => {
+                                                            setNavigatingTo(agent._id);
+                                                            router.push(`/agents/${agent._id}`);
+                                                        }}
+                                                        disabled={navigatingTo === agent._id}
                                                         variant="secondary"
                                                         size="sm"
                                                     >
-                                                        <Eye className="w-4 h-4 mr-2"/>
-                                                        详情
+                                                        {navigatingTo === agent._id ? (
+                                                            <RefreshCw className="w-4 h-4 mr-2 animate-spin"/>
+                                                        ) : (
+                                                            <Eye className="w-4 h-4 mr-2"/>
+                                                        )}
+                                                        {navigatingTo === agent._id ? '加载中...' : '详情'}
                                                     </Button>
                                                     <Button
                                                         onClick={() => handleDeleteAgent(agent._id)}

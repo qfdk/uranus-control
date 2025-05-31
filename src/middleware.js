@@ -11,7 +11,10 @@ const ROUTE_CONFIG = {
     apiPaths: ['/api/auth', '/api/agents'],
     
     // 允许绕过认证的POST请求路径 - 主要用于代理自动注册
-    allowPostPaths: ['/api/agents']
+    allowPostPaths: ['/api/agents'],
+    
+    // 完全公开的路径 - 不需要任何认证
+    publicApiPaths: ['/api/agents']
 };
 
 /**
@@ -41,6 +44,7 @@ export function middleware(request) {
     const isApiPath = matchesPath(path, ROUTE_CONFIG.apiPaths);
     const isPublicPath = matchesPath(path, ROUTE_CONFIG.publicPaths);
     const isAllowedPostPath = matchesPath(path, ROUTE_CONFIG.allowPostPaths) && method === 'POST';
+    const isPublicApiPath = path === '/api/agents'; // 只允许确切的 /api/agents 路径
     
     // 认证流程决策树
     
@@ -62,7 +66,7 @@ export function middleware(request) {
     }
     
     // 3. 未登录用户访问受保护路径 => 认证失败处理
-    const requiresAuth = !isPublicPath && !isAuthenticated && !isAllowedPostPath;
+    const requiresAuth = !isPublicPath && !isAuthenticated && !isAllowedPostPath && !isPublicApiPath;
     
     if (requiresAuth) {
         // API路径返回401 JSON响应

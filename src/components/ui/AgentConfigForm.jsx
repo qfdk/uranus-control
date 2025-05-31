@@ -23,13 +23,13 @@ export default function AgentConfigForm({
     useEffect(() => {
         if (agent) {
             setFormData({
-                mqttBroker: agent.mqttBroker || '',
-                email: agent.email || '',
-                username: agent.username || '',
-                vhostPath: agent.vhostPath || '',
-                sslPath: agent.sslPath || '',
-                controlCenter: agent.controlCenter || '',
-                token: '' // token始终为空，让用户输入新的
+                mqttBroker: '', // 这些配置未存储在控制中心，保持空值
+                email: '',
+                username: '',
+                vhostPath: '',
+                sslPath: '',
+                controlCenter: '',
+                token: '' // token留空，让用户输入新的
             });
         }
     }, [agent]);
@@ -77,6 +77,9 @@ export default function AgentConfigForm({
                 <h2 className="text-lg font-medium text-gray-800 dark:text-white">Agent配置管理</h2>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                     修改Agent配置并远程推送到目标服务器
+                </p>
+                <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+                    💡 当前Token: <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">{agent?.token || '未设置'}</code> | 只需填写要修改的配置项
                 </p>
             </div>
             

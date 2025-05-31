@@ -37,14 +37,9 @@ export default function AppShell({ children }) {
     // 确保组件只在客户端渲染
     useEffect(() => {
         setIsMounted(true);
-
-        // 确保在组件加载完成后停止全局加载动画
-        const timer = setTimeout(() => {
-            stopLoading();
-            setShowContent(true);
-        }, 100);
-
-        return () => clearTimeout(timer);
+        setShowContent(true);
+        // 立即停止全局加载动画
+        stopLoading();
     }, [stopLoading]);
     
     // 当认证状态或路径改变时，重新显示内容

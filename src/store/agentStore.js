@@ -334,7 +334,15 @@ const useAgentStore = create((set, get) => ({
     // 根据ID获取合并的单个代理数据
     getAgentById: (agentId) => {
         const {agents} = get();
-        return agents.find(agent => agent._id === agentId);
+        
+        // 支持ObjectId和字符串比较
+        const found = agents.find(agent => {
+            const agentIdStr = agent._id?.toString() || agent._id;
+            const searchIdStr = agentId?.toString() || agentId;
+            return agentIdStr === searchIdStr;
+        });
+        
+        return found;
     },
     
     // 获取单个代理的合并数据 (HTTP + MQTT)

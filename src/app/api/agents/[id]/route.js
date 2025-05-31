@@ -2,12 +2,19 @@
 import {NextResponse} from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Agent from '@/models/agent';
+import mongoose from 'mongoose';
 
 export async function GET(request, {params}) {
     await connectDB();
 
     try {
         const {id} = await params;
+        
+        // 验证ObjectId格式
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return NextResponse.json({error: 'Invalid agent ID format'}, {status: 400});
+        }
+        
         const agent = await Agent.findById(id);
 
         if (!agent) {

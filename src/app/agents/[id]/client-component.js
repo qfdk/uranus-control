@@ -52,7 +52,7 @@ export default function AgentDetail({agentId}) {
         show: false
     });
     const [agent, setAgent] = useState(null);
-    const [initialLoading, setInitialLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(false);
 
     // 防止频繁重新订阅的引用
     const subscriptionRef = useRef(null);
@@ -79,7 +79,9 @@ export default function AgentDetail({agentId}) {
 
     // 初始化代理数据 - 优先使用现有状态
     useEffect(() => {
-        if (!isMounted || !agentId) return;
+        if (!isMounted || !agentId) {
+            return;
+        }
 
         // 首先尝试从store中获取代理数据
         const existingAgent = getAgentById(agentId);
@@ -87,30 +89,50 @@ export default function AgentDetail({agentId}) {
             // 如果存在，优先使用合并后的数据
             const combinedAgent = getCombinedAgent(agentId);
             setAgent(combinedAgent || existingAgent);
-            setInitialLoading(false);
+            setIsLoading(false);
         } else {
             // 如果store中没有数据，则需要加载
+            setIsLoading(true);
+            let retryCount = 0;
+            const maxRetries = 3;
+            
             const loadAgentData = async () => {
                 try {
-                    setInitialLoading(true);
-                    
                     // 确保agent store已初始化
-                    await fetchAgents();
+                    const fetchResult = await fetchAgents();
                     
-                    // 再次尝试获取代理数据
-                    const agent = getAgentById(agentId);
-                    if (agent) {
-                        const combinedAgent = getCombinedAgent(agentId);
-                        setAgent(combinedAgent || agent);
+                    // 只有在 fetchAgents 成功且返回数据时才继续
+                    if (fetchResult.success && fetchResult.data && fetchResult.data.length > 0) {
+                        // 再次尝试获取代理数据
+                        const agent = getAgentById(agentId);
+                        if (agent) {
+                            const combinedAgent = getCombinedAgent(agentId);
+                            setAgent(combinedAgent || agent);
+                            setIsLoading(false);
+                        } else {
+                            // 如果仍然没有找到，可能代理不存在
+                            setAgent(null);
+                            setIsLoading(false);
+                        }
                     } else {
-                        // 如果仍然没有找到，可能代理不存在
-                        setAgent(null);
+                        // 如果 fetchAgents 返回空数据，等待下次自动重试
+                        retryCount++;
+                        
+                        if (retryCount < maxRetries) {
+                            // 稍后重试
+                            setTimeout(() => {
+                                void loadAgentData();
+                            }, 1000);
+                        } else {
+                            // 超过最大重试次数，设置为代理不存在
+                            setAgent(null);
+                            setIsLoading(false);
+                        }
                     }
                 } catch (error) {
                     console.error('加载代理数据失败:', error);
                     setAgent(null);
-                } finally {
-                    setInitialLoading(false);
+                    setIsLoading(false);
                 }
             };
             
@@ -425,6 +447,7 @@ export default function AgentDetail({agentId}) {
         });
     };
 
+
     // 清除命令消息
     const clearMessage = () => {
         setCommandMessage({
@@ -552,8 +575,8 @@ export default function AgentDetail({agentId}) {
         return null;
     }
 
-    // 加载状态显示
-    if (initialLoading) {
+    // 加载状态
+    if (isLoading) {
         return (
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 text-center">
                 <div className="flex flex-col items-center">
@@ -570,6 +593,7 @@ export default function AgentDetail({agentId}) {
         );
     }
 
+    // 未找到代理
     if (!agent) {
         return (
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 text-center">
