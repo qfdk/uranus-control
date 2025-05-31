@@ -57,6 +57,7 @@ async function startServer() {
 
         mqttClient.on('error', (error) => {
             console.error('MQTT错误:', error);
+            // 记录错误但不退出进程，让自动重连机制处理
         });
 
         mqttClient.on('reconnect', () => {
@@ -65,6 +66,14 @@ async function startServer() {
 
         mqttClient.on('close', (packet) => {
             console.log('MQTT连接已关闭');
+        });
+
+        mqttClient.on('disconnect', (packet) => {
+            console.log('MQTT连接断开:', packet);
+        });
+
+        mqttClient.on('offline', () => {
+            console.log('MQTT客户端离线');
         });
 
         // 处理接收到的MQTT消息
@@ -83,18 +92,22 @@ async function startServer() {
                         if (now - lastUpdate >= UPDATE_INTERVAL) {
                             updateThrottles.set(uuid, now);
 
-                            // 更新数据库中的代理
+                            // 更新数据库中的代理 - 使用UUID作为唯一标识
                             try {
                                 const result = await Agent.findOneAndUpdate(
                                     {uuid},
                                     {
                                         ...payload,
-                                        ip: payload.ip || 'Unknown', // 确保IP字段有默认值
+                                        ip: payload.ip || 'Unknown',
                                         online: true,
-                                        lastHeartbeat: new Date() // 明确设置为当前时间
+                                        lastHeartbeat: new Date()
                                     },
                                     {upsert: true, new: true}
                                 );
+                                
+                                if (result) {
+                                    console.log(`代理 ${uuid} 已更新`);
+                                }
                             } catch (dbError) {
                                 console.error(`在数据库中更新代理 ${uuid} 时出错:`, dbError);
                             }
@@ -152,6 +165,27 @@ async function startServer() {
                 console.error('运行心跳检查时出错:', error);
             }
         }, 5000); // 每5秒运行一次，更快地检测离线
+
+        // 定时任务：清理内存泄漏
+        setInterval(() => {
+            try {
+                // 清理过期的更新限流记录（超过1小时的记录）
+                const now = Date.now();
+                const oneHourAgo = now - 60 * 60 * 1000;
+                
+                for (const [uuid, timestamp] of updateThrottles.entries()) {
+                    if (timestamp < oneHourAgo) {
+                        updateThrottles.delete(uuid);
+                    }
+                }
+                
+                if (updateThrottles.size > 1000) {
+                    console.log(`清理了限流记录，当前记录数: ${updateThrottles.size}`);
+                }
+            } catch (error) {
+                console.error('清理内存时出错:', error);
+            }
+        }, 60 * 60 * 1000); // 每小时清理一次
 
         // 定时任务：处理MQTT命令队列
         setInterval(() => {

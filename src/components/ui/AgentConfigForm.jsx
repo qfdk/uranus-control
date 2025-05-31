@@ -19,21 +19,41 @@ export default function AgentConfigForm({
         token: ''
     });
 
-    // 当agent数据变化时，更新表单数据
+    // 追踪最近推送的配置
+    const [lastPushedConfig, setLastPushedConfig] = useState({});
+
+    // 当agent数据变化时，初始化表单数据（只在初次加载时，避免覆盖用户输入）
     useEffect(() => {
         if (agent) {
-            setFormData({
-                mqttBroker: '', // 这些配置未存储在控制中心，保持空值
-                email: '',
-                username: '',
-                vhostPath: '',
-                sslPath: '',
-                controlCenter: '',
-                token: '' // token留空，让用户输入新的
+            setFormData(prev => {
+                // 只有在表单完全空白时才初始化，避免覆盖用户已输入的数据
+                const isFormEmpty = Object.values(prev).every(value => value === '');
+                
+                if (isFormEmpty) {
+                    return {
+                        mqttBroker: '', // 这些配置未存储在控制中心，保持空值
+                        email: '',
+                        username: '',
+                        vhostPath: '',
+                        sslPath: '',
+                        controlCenter: '',
+                        token: '' // token留空，让用户输入新的
+                    };
+                }
+                
+                // 如果表单已有数据，保持不变
+                return prev;
             });
         }
     }, [agent]);
 
+    // 监听Agent重新上线，清除临时配置状态
+    useEffect(() => {
+        if (agent && lastPushedConfig.token && agent.token === lastPushedConfig.token) {
+            // Agent已重启并且新token已生效，清除临时状态
+            setLastPushedConfig({});
+        }
+    }, [agent?.token, lastPushedConfig.token]);
 
     const handleInputChange = (name, value) => {
         setFormData(prev => ({
@@ -68,7 +88,22 @@ export default function AgentConfigForm({
             return;
         }
         
+        // 保存最近推送的配置
+        setLastPushedConfig(cleanedData);
+        
+        // 调用父组件的保存函数
         onSave(cleanedData);
+        
+        // 清空表单，避免重复提交
+        setFormData({
+            mqttBroker: '',
+            email: '',
+            username: '',
+            vhostPath: '',
+            sslPath: '',
+            controlCenter: '',
+            token: ''
+        });
     };
 
     return (
@@ -79,7 +114,14 @@ export default function AgentConfigForm({
                     修改Agent配置并远程推送到目标服务器
                 </p>
                 <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
-                    💡 当前Token: <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">{agent?.token || '未设置'}</code> | 只需填写要修改的配置项
+                    💡 当前Token: <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">
+                        {lastPushedConfig.token || agent?.token || '未设置'}
+                    </code> | 只需填写要修改的配置项
+                    {lastPushedConfig.token && (
+                        <span className="ml-2 text-xs text-green-600 dark:text-green-400">
+                            (已推送新Token，等待Agent重启生效)
+                        </span>
+                    )}
                 </p>
             </div>
             
