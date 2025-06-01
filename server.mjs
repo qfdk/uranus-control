@@ -32,9 +32,6 @@ const TOPICS = {
     STATUS: 'uranus/status'
 };
 
-// 数据库更新限流（按代理）
-const updateThrottles = new Map();
-const UPDATE_INTERVAL = 2000; // 同一代理最少2秒更新一次，提高更新频率
 
 // 设置并启动服务器
 async function startServer() {
@@ -60,21 +57,6 @@ async function startServer() {
             // 记录错误但不退出进程，让自动重连机制处理
         });
 
-        mqttClient.on('reconnect', () => {
-            console.log('MQTT正在重新连接...');
-        });
-
-        mqttClient.on('close', (packet) => {
-            console.log('MQTT连接已关闭');
-        });
-
-        mqttClient.on('disconnect', (packet) => {
-            console.log('MQTT连接断开:', packet);
-        });
-
-        mqttClient.on('offline', () => {
-            console.log('MQTT客户端离线');
-        });
 
         // 处理接收到的MQTT消息
         mqttClient.on('message', async (topic, message) => {
@@ -85,31 +67,21 @@ async function startServer() {
                 if (topic === TOPICS.HEARTBEAT) {
                     if (payload.uuid) {
                         const uuid = payload.uuid;
-                        // 实现限流以避免数据库过载
-                        const now = Date.now();
-                        const lastUpdate = updateThrottles.get(uuid) || 0;
-
-                        if (now - lastUpdate >= UPDATE_INTERVAL) {
-                            updateThrottles.set(uuid, now);
-
-                            // 更新数据库中的代理 - 使用UUID作为唯一标识
-                            try {
-                                const result = await Agent.findOneAndUpdate(
-                                    {uuid},
-                                    {
-                                        ...payload,
-                                        ip: payload.ip || 'Unknown',
-                                        online: true,
-                                        lastHeartbeat: new Date()
-                                    },
-                                    {upsert: true, new: true}
-                                );
-                                
-                                // 静默更新，不输出日志
-                            } catch (dbError) {
-                                console.error(`在数据库中更新代理 ${uuid} 时出错:`, dbError);
-                            }
-                        } else {
+                        
+                        // 直接更新数据库中的代理 - 使用UUID作为唯一标识
+                        try {
+                            await Agent.findOneAndUpdate(
+                                {uuid},
+                                {
+                                    ...payload,
+                                    ip: payload.ip || 'Unknown',
+                                    online: true,
+                                    lastHeartbeat: new Date()
+                                },
+                                {upsert: true, new: true}
+                            );
+                        } catch (dbError) {
+                            console.error(`在数据库中更新代理 ${uuid} 时出错:`, dbError);
                         }
                     }
                 }
@@ -164,57 +136,6 @@ async function startServer() {
             }
         }, 5000); // 每5秒运行一次，更快地检测离线
 
-        // 定时任务：清理内存泄漏
-        setInterval(() => {
-            try {
-                // 清理过期的更新限流记录（超过1小时的记录）
-                const now = Date.now();
-                const oneHourAgo = now - 60 * 60 * 1000;
-                
-                for (const [uuid, timestamp] of updateThrottles.entries()) {
-                    if (timestamp < oneHourAgo) {
-                        updateThrottles.delete(uuid);
-                    }
-                }
-                
-                if (updateThrottles.size > 1000) {
-                    console.log(`清理了限流记录，当前记录数: ${updateThrottles.size}`);
-                }
-            } catch (error) {
-                console.error('清理内存时出错:', error);
-            }
-        }, 60 * 60 * 1000); // 每小时清理一次
-
-        // 定时任务：处理MQTT命令队列
-        setInterval(() => {
-            try {
-                if (global.mqttCommandQueue && global.mqttCommandQueue.length > 0 && mqttClient && mqttClient.isConnected()) {
-                    const commands = [...global.mqttCommandQueue];
-                    global.mqttCommandQueue = []; // 清空队列
-                    
-                    commands.forEach(commandData => {
-                        // 检查命令是否过期（超过5分钟）
-                        if (Date.now() - commandData.timestamp > 5 * 60 * 1000) {
-                            console.log(`配置命令已过期，跳过: ${commandData.agentUuid}`);
-                            return;
-                        }
-                        
-                        console.log(`发送配置命令到: ${commandData.topic}`);
-                        console.log(`命令内容: ${commandData.payload}`);
-                        
-                        mqttClient.publish(commandData.topic, commandData.payload, { qos: 1 }, (err) => {
-                            if (err) {
-                                console.error(`发送配置命令失败 (${commandData.agentUuid}):`, err);
-                            } else {
-                                console.log(`配置命令已发送到代理 ${commandData.agentUuid}`);
-                            }
-                        });
-                    });
-                }
-            } catch (error) {
-                console.error('处理MQTT命令队列时出错:', error);
-            }
-        }, 1000); // 每1秒检查一次命令队列
 
         // 准备Next.js应用
         await app.prepare();
@@ -224,17 +145,17 @@ async function startServer() {
             try {
                 // 获取真实IP地址 (Vercel优化)
                 const realIP = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
-                              req.headers['x-real-ip'] ||
-                              req.headers['cf-connecting-ip'] ||
-                              req.connection?.remoteAddress ||
-                              req.socket?.remoteAddress ||
-                              'unknown';
-                
+                    req.headers['x-real-ip'] ||
+                    req.headers['cf-connecting-ip'] ||
+                    req.connection?.remoteAddress ||
+                    req.socket?.remoteAddress ||
+                    'unknown';
+
                 // 记录API请求的IP地址
                 if (req.url && req.url.startsWith('/api/')) {
                     console.log(`[HTTP] ${req.method} ${req.url} - IP: ${realIP} - User-Agent: ${req.headers['user-agent'] || 'Unknown'}`);
                 }
-                
+
                 const parsedUrl = parse(req.url, true);
                 await handle(req, res, parsedUrl);
             } catch (err) {
@@ -247,28 +168,6 @@ async function startServer() {
             console.log(`> 服务已就绪 http://${hostname}:${port}`);
         });
 
-        // 处理优雅关闭
-        process.on('SIGTERM', gracefulShutdown);
-        process.on('SIGINT', gracefulShutdown);
-
-        function gracefulShutdown() {
-            console.log('收到关闭信号，正在关闭连接...');
-
-            if (mqttClient.connected) {
-                mqttClient.end(true, () => {
-                    console.log('MQTT连接已关闭');
-                    process.exit(0);
-                });
-            } else {
-                process.exit(0);
-            }
-
-            // 如果优雅关闭失败，3秒后强制退出
-            setTimeout(() => {
-                console.log('超时后强制退出');
-                process.exit(1);
-            }, 3000);
-        }
     } catch (error) {
         console.error('启动服务器时出错:', error);
         process.exit(1);
