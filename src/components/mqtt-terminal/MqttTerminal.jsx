@@ -77,17 +77,22 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
                     brightWhite: '#ffffff' // 纯白色 - 最亮的白色
                 };
 
-                // 创建终端实例
+                // 创建终端实例  
                 terminal = new Terminal({
                     cursorBlink: true,
                     cursorStyle: 'bar',
                     fontFamily: 'Menlo, Monaco, "Courier New", monospace',
                     fontSize: 14,
-                    lineHeight: 1.5,
-                    letterSpacing: 0.5,
+                    lineHeight: 1.4,
+                    letterSpacing: 0,
                     convertEol: true,
                     scrollback: 5000,
                     padding: 0,
+                    allowTransparency: false,
+                    windowOptions: {
+                        setWinSizePixels: false,
+                        setWinSizeChars: true
+                    },
                     theme: terminalTheme
                 });
 
@@ -352,11 +357,12 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
             return;
         }
 
+        
         useMqttStore.getState().resizeTerminal(agentUuid, sessionId, cols, rows)
             .catch(() => {
                 // 忽略调整大小错误
             });
-    }, [sessionId, mqttConnected, agentUuid]);
+    }, [sessionId, mqttConnected, agentUuid, isFullscreen]);
 
 
 
@@ -399,10 +405,58 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
             });
     }, [sessionId, mqttConnected, agentUuid]);
 
-    // 极简全屏切换 - 只改变状态，不做任何其他操作
-    const toggleFullscreen = () => {
-        setIsFullscreen(!isFullscreen);
-    };
+    // 全屏切换 - 改变状态并触发终端调整大小
+    const toggleFullscreen = useCallback(() => {
+        const newFullscreenState = !isFullscreen;
+        setIsFullscreen(newFullscreenState);
+        
+        // 多次调整确保终端尺寸正确
+        const performResize = () => {
+            if (fitAddonRef.current && terminalRef.current) {
+                const containerWidth = terminalRef.current.offsetWidth;
+                const containerHeight = terminalRef.current.offsetHeight;
+                
+                safelyFit(fitAddonRef.current, terminalRef.current);
+                
+                // 发送新的终端尺寸到后端
+                if (sessionId && mqttConnected && terminalInstanceRef.current) {
+                    try {
+                        const {cols, rows} = terminalInstanceRef.current;
+                        useMqttStore.getState().resizeTerminal(agentUuid, sessionId, cols, rows)
+                            .catch(() => {
+                                // 忽略调整大小错误
+                            });
+                    } catch (error) {
+                        // 忽略调整大小错误
+                    }
+                }
+            }
+        };
+        
+        // 使用更长的延迟让DOM完全更新，只调用一次避免重复
+        setTimeout(performResize, 200);
+    }, [isFullscreen, sessionId, mqttConnected, sendResizeCommand]);
+
+    // 全屏容器ref回调
+    const fullscreenContainerRef = useCallback((node) => {
+        // 当全屏容器渲染完成后立即调整终端大小
+        if (node && fitAddonRef.current && terminalRef.current) {
+            setTimeout(() => {
+                safelyFit(fitAddonRef.current, terminalRef.current);
+                if (sessionId && mqttConnected && terminalInstanceRef.current) {
+                    try {
+                        const {cols, rows} = terminalInstanceRef.current;
+                        useMqttStore.getState().resizeTerminal(agentUuid, sessionId, cols, rows)
+                            .catch(() => {
+                                // 忽略调整大小错误
+                            });
+                    } catch (error) {
+                        // 忽略调整大小错误
+                    }
+                }
+            }, 10);
+        }
+    }, [sessionId, mqttConnected, agentUuid]);
 
     // 只有在组件激活时渲染
     if (!isActive) return null;
@@ -485,6 +539,7 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
             <div
                 className="fixed inset-0 z-[9999] bg-[#1e1e1e] flex flex-col"
                 style={{ margin: 0, padding: '20px' }}
+                ref={fullscreenContainerRef}
             >
                 {terminalContent}
             </div>
