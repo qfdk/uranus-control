@@ -454,24 +454,33 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
 
         // 在状态改变后安全地调整终端大小，增加延迟确保DOM更新完成
         setTimeout(() => {
-            if (fitAddonRef.current && terminalRef.current) {
-                // 强制重新渲染
-                terminalInstanceRef.current?.refresh(0, terminalInstanceRef.current.rows - 1);
-                
-                // 调整大小
-                safelyFit(fitAddonRef.current, terminalRef.current);
-
-                // 发送调整大小命令
-                if (sessionId && mqttConnected && terminalInstanceRef.current) {
-                    try {
-                        const {cols, rows} = terminalInstanceRef.current;
-                        sendResizeCommand(cols, rows);
-                    } catch (error) {
-                        console.warn('发送resize命令失败:', error);
-                    }
+            if (fitAddonRef.current && terminalRef.current && terminalInstanceRef.current) {
+                try {
+                    // 新版本xterm需要重新fit才能正确显示
+                    fitAddonRef.current.fit();
+                    
+                    // 强制重新渲染整个终端
+                    terminalInstanceRef.current.refresh(0, terminalInstanceRef.current.rows - 1);
+                    
+                    // 再次fit确保尺寸正确
+                    setTimeout(() => {
+                        fitAddonRef.current?.fit();
+                        
+                        // 发送调整大小命令
+                        if (sessionId && mqttConnected && terminalInstanceRef.current) {
+                            try {
+                                const {cols, rows} = terminalInstanceRef.current;
+                                sendResizeCommand(cols, rows);
+                            } catch (error) {
+                                console.warn('发送resize命令失败:', error);
+                            }
+                        }
+                    }, 100);
+                } catch (error) {
+                    console.warn('终端resize失败:', error);
                 }
             }
-        }, 500);
+        }, 300);
     }, [isFullscreen, sessionId, mqttConnected, sendResizeCommand]);
 
     // 只有在组件激活时渲染
