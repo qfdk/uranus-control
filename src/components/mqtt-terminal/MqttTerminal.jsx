@@ -1,14 +1,14 @@
 'use client';
 
 import React, {useEffect, useRef, useState, useCallback} from 'react';
-import {Terminal} from 'xterm';
-import {FitAddon} from 'xterm-addon-fit';
-import {WebLinksAddon} from 'xterm-addon-web-links';
-import {SearchAddon} from 'xterm-addon-search';
+import {Terminal} from '@xterm/xterm';
+import {FitAddon} from '@xterm/addon-fit';
+import {WebLinksAddon} from '@xterm/addon-web-links';
+import {SearchAddon} from '@xterm/addon-search';
 import {v4 as uuidv4} from 'uuid';
 import useMqttStore from '@/store/mqttStore';
 import {AlertCircle, Eraser, Square, Maximize2, Minimize2} from 'lucide-react';
-import 'xterm/css/xterm.css';
+import '@xterm/xterm/css/xterm.css';
 import './terminal.css';
 import toast from 'react-hot-toast';
 import { safelyFit, createSafeResizeObserver } from './terminal-fix';
