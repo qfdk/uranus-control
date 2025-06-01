@@ -425,8 +425,9 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
         const newFullscreenState = !isFullscreen;
         setIsFullscreen(newFullscreenState);
 
-        const terminalContainer = terminalRef.current?.closest('.terminal-container');
-        if(!terminalContainer) {
+        // 查找终端的父容器
+        const terminalContainer = terminalRef.current?.parentElement;
+        if (!terminalContainer) {
             return;
         }
 
@@ -448,11 +449,16 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
                 document.body.classList.remove('terminal-fullscreen-mode');
             }
         } catch (e) {
+            console.warn('切换全屏时出错:', e);
         }
 
-        // 在状态改变后安全地调整终端大小
+        // 在状态改变后安全地调整终端大小，增加延迟确保DOM更新完成
         setTimeout(() => {
-            if (fitAddonRef.current) {
+            if (fitAddonRef.current && terminalRef.current) {
+                // 强制重新渲染
+                terminalInstanceRef.current?.refresh(0, terminalInstanceRef.current.rows - 1);
+                
+                // 调整大小
                 safelyFit(fitAddonRef.current, terminalRef.current);
 
                 // 发送调整大小命令
@@ -461,11 +467,12 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
                         const {cols, rows} = terminalInstanceRef.current;
                         sendResizeCommand(cols, rows);
                     } catch (error) {
+                        console.warn('发送resize命令失败:', error);
                     }
                 }
             }
-        }, 300);
-    }, [isFullscreen, sessionId, mqttConnected]);
+        }, 500);
+    }, [isFullscreen, sessionId, mqttConnected, sendResizeCommand]);
 
     // 只有在组件激活时渲染
     if (!isActive) return null;

@@ -16,14 +16,21 @@ export function safelyFit(fitAddon, container) {
   if (!isBrowser || !fitAddon || !container) return false;
   
   try {
-    // 检查容器是否可见
-    if (container.offsetWidth <= 0 || container.offsetHeight <= 0) {
-      console.warn('终端容器尺寸为0，跳过fit操作');
-      return false;
-    }
-    
-    // 应用 fit 操作
-    fitAddon.fit();
+    // 等待一帧确保DOM更新完成
+    requestAnimationFrame(() => {
+      try {
+        // 再次检查容器是否可见
+        if (container.offsetWidth <= 0 || container.offsetHeight <= 0) {
+          console.warn('终端容器尺寸为0，跳过fit操作');
+          return false;
+        }
+        
+        // 应用 fit 操作
+        fitAddon.fit();
+      } catch (e) {
+        console.warn('终端调整大小失败:', e.message);
+      }
+    });
     return true;
   } catch (e) {
     console.warn('终端调整大小失败:', e.message);
