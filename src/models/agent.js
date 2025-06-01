@@ -22,6 +22,5 @@ const AgentSchema = new mongoose.Schema({
 
 // 添加复合索引优化查询性能
 AgentSchema.index({ online: 1, lastHeartbeat: 1 }); // 用于心跳超时查询
-AgentSchema.index({ uuid: 1 }, { unique: true }); // 确保UUID唯一性（显式声明）
 
 export default mongoose.models.Agent || mongoose.model('Agent', AgentSchema);

@@ -105,9 +105,7 @@ async function startServer() {
                                     {upsert: true, new: true}
                                 );
                                 
-                                if (result) {
-                                    console.log(`代理 ${uuid} 已更新`);
-                                }
+                                // 静默更新，不输出日志
                             } catch (dbError) {
                                 console.error(`在数据库中更新代理 ${uuid} 时出错:`, dbError);
                             }
@@ -224,6 +222,19 @@ async function startServer() {
         // 创建HTTP服务器
         createServer(async (req, res) => {
             try {
+                // 获取真实IP地址 (Vercel优化)
+                const realIP = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+                              req.headers['x-real-ip'] ||
+                              req.headers['cf-connecting-ip'] ||
+                              req.connection?.remoteAddress ||
+                              req.socket?.remoteAddress ||
+                              'unknown';
+                
+                // 记录API请求的IP地址
+                if (req.url && req.url.startsWith('/api/')) {
+                    console.log(`[HTTP] ${req.method} ${req.url} - IP: ${realIP} - User-Agent: ${req.headers['user-agent'] || 'Unknown'}`);
+                }
+                
                 const parsedUrl = parse(req.url, true);
                 await handle(req, res, parsedUrl);
             } catch (err) {
