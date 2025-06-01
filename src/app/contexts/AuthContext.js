@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 
 // 创建认证上下文
@@ -11,14 +11,8 @@ const protectedRoutes = [
     '/',
     '/agents',
     '/settings',
-    // 添加其他需要登录的路径
 ];
 
-// 不需要认证的路径
-const publicRoutes = [
-    '/login',
-    // 添加其他公开路径
-];
 
 // Context provider组件
 export function AuthProvider({ children }) {
@@ -77,7 +71,6 @@ export function AuthProvider({ children }) {
         if (!isClient || loading) return;
 
         const isProtectedRoute = protectedRoutes.some(route => pathname === route || pathname.startsWith(`${route}/`));
-        const isPublicRoute = publicRoutes.includes(pathname);
 
         // 只有在明确需要重定向时才执行
         if (!user && isProtectedRoute && pathname !== '/login') {
@@ -86,6 +79,27 @@ export function AuthProvider({ children }) {
             router.replace('/');
         }
     }, [user, pathname, loading, router, isClient]);
+
+    // 登出函数
+    const logout = useCallback(() => {
+        // 立即设置状态
+        setUser(null);
+        setSessionExpiration(null);
+        
+        // 清除存储
+        localStorage.removeItem('isAuthenticated');
+        localStorage.removeItem('user');
+        localStorage.removeItem('sessionExpiration');
+
+        // 清除cookie
+        document.cookie = 'isAuthenticated=; path=/; max-age=0';
+        document.cookie = 'sessionExpiration=; path=/; max-age=0';
+
+        // 使用 requestAnimationFrame 确保状态更新后再跳转
+        requestAnimationFrame(() => {
+            router.replace('/login');
+        });
+    }, [router]);
 
     // 检查会话是否过期
     useEffect(() => {
@@ -98,7 +112,7 @@ export function AuthProvider({ children }) {
         }, 1000);
 
         return () => clearInterval(interval);
-    }, [sessionExpiration]);
+    }, [sessionExpiration, logout]);
 
     // 登录函数
     const login = (userData, callback) => {
@@ -125,27 +139,6 @@ export function AuthProvider({ children }) {
             } else {
                 router.replace('/');
             }
-        });
-    };
-
-    // 登出函数
-    const logout = () => {
-        // 立即设置状态
-        setUser(null);
-        setSessionExpiration(null);
-        
-        // 清除存储
-        localStorage.removeItem('isAuthenticated');
-        localStorage.removeItem('user');
-        localStorage.removeItem('sessionExpiration');
-
-        // 清除cookie
-        document.cookie = 'isAuthenticated=; path=/; max-age=0';
-        document.cookie = 'sessionExpiration=; path=/; max-age=0';
-
-        // 使用 requestAnimationFrame 确保状态更新后再跳转
-        requestAnimationFrame(() => {
-            router.replace('/login');
         });
     };
 

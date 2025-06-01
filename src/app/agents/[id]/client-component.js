@@ -205,7 +205,7 @@ export default function AgentDetail({agentId}) {
                 subscriptionRef.current = null;
             }
         };
-    }, [agent?.uuid, agent?._id]); // 移除mqttConnected依赖，避免频繁重订阅
+    }, [agent?.uuid, agent?._id, agent, mqttConnected, subscribeToResponses, handleAgentUpdate, getCombinedAgent]); // 添加缺失的依赖
 
     // 单独处理MQTT连接状态变化
     useEffect(() => {
@@ -213,7 +213,7 @@ export default function AgentDetail({agentId}) {
             // MQTT连接成功且没有订阅时，建立订阅
             subscriptionRef.current = subscribeToResponses(agent.uuid, handleAgentUpdate);
         }
-    }, [mqttConnected, agent?.uuid]);
+    }, [mqttConnected, agent?.uuid, subscribeToResponses, handleAgentUpdate]);
 
     // 自动清除状态消息
     useEffect(() => {
@@ -257,7 +257,7 @@ export default function AgentDetail({agentId}) {
         return () => {
             clearInterval(refreshInterval);
         };
-    }, [agent?._id, isMounted]); // 移除agent.online依赖，避免循环
+    }, [agent?._id, agent?.lastHeartbeat, agent?.online, agent?.buildVersion, getCombinedAgent, isMounted]); // 添加缺失的依赖
     
     // 监听mqttAgentState变化，确保立即更新代理状态
     useEffect(() => {
@@ -279,7 +279,7 @@ export default function AgentDetail({agentId}) {
                 setAgent(currentAgent);
             }
         }
-    }, [agent?.uuid, mqttAgentState, isMounted]); // 简化依赖
+    }, [agent?.uuid, agent?._id, agent?.lastHeartbeat, agent?.online, mqttAgentState, getCombinedAgent, isMounted]); // 添加缺失的依赖
 
     // 刷新代理数据
     const refreshAgentData = useCallback(async () => {

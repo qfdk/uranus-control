@@ -1,7 +1,7 @@
 'use client';
 
 // src/app/settings/page.js
-import {useState, useEffect} from 'react';
+import {useState, useEffect, useCallback} from 'react';
 import {AlertCircle, CheckCircle2, Database, Edit, Info, Loader2, Network, Plus, Settings as SettingsIcon, Shield, Trash2, User, X} from 'lucide-react';
 import FormInput from '@/components/ui/FormInput';
 import FormSelect from '@/components/ui/FormSelect';
@@ -70,12 +70,12 @@ export default function SettingsPage() {
 
 
     // 获取常规设置 - 现在只从context同步
-    const fetchGeneralSettings = () => {
+    const fetchGeneralSettings = useCallback(() => {
         // 从context同步设置到本地state
         if (contextSettings) {
             setGeneralSettings(contextSettings);
         }
-    };
+    }, [contextSettings]);
 
     // 获取数据库设置
     const fetchDbSettings = async () => {
@@ -156,7 +156,7 @@ export default function SettingsPage() {
         } else if (activeTab === 'database') {
             fetchDbSettings();
         }
-    }, [activeTab]);
+    }, [activeTab, fetchGeneralSettings]);
 
     // 处理常规设置输入变化
     const handleGeneralSettingChange = (e) => {
