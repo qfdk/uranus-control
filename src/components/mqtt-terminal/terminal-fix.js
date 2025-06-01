@@ -22,8 +22,21 @@ export function safelyFit(fitAddon, container) {
       return false;
     }
     
-    // 直接应用 fit 操作，新版本xterm更稳定
-    fitAddon.fit();
+    // 等待一帧确保DOM更新完成
+    requestAnimationFrame(() => {
+      try {
+        // 再次检查容器是否可见
+        if (container.offsetWidth <= 0 || container.offsetHeight <= 0) {
+          console.warn('终端容器尺寸为0，跳过fit操作');
+          return false;
+        }
+        
+        // 应用 fit 操作
+        fitAddon.fit();
+      } catch (e) {
+        console.warn('终端调整大小失败:', e.message);
+      }
+    });
     return true;
   } catch (e) {
     console.warn('终端调整大小失败:', e.message);
@@ -36,9 +49,10 @@ export function safelyFit(fitAddon, container) {
  * @param {object} fitAddon - FitAddon 实例
  * @param {HTMLElement} container - 终端容器
  * @param {function} callback - 调整大小后的回调函数
+ * @param {function} shouldSkipFit - 是否跳过fit调用的检查函数
  * @returns {ResizeObserver|null} - ResizeObserver 实例
  */
-export function createSafeResizeObserver(fitAddon, container, callback) {
+export function createSafeResizeObserver(fitAddon, container, callback, shouldSkipFit) {
   if (!isBrowser || !fitAddon || !container) return null;
   
   try {
@@ -54,6 +68,12 @@ export function createSafeResizeObserver(fitAddon, container, callback) {
     // 创建 ResizeObserver
     const observer = new ResizeObserver(debounce(() => {
       if (container.offsetWidth > 0 && container.offsetHeight > 0) {
+        // 检查是否应该跳过所有操作
+        if (typeof shouldSkipFit === 'function' && shouldSkipFit()) {
+          // 完全跳过，不执行任何操作
+          return;
+        }
+        
         const success = safelyFit(fitAddon, container);
         if (success && typeof callback === 'function') {
           callback();

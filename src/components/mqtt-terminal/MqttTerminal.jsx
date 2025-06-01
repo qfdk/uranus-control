@@ -1,14 +1,14 @@
 'use client';
 
 import React, {useEffect, useRef, useState, useCallback} from 'react';
-import {Terminal} from '@xterm/xterm';
-import {FitAddon} from '@xterm/addon-fit';
-import {WebLinksAddon} from '@xterm/addon-web-links';
-import {SearchAddon} from '@xterm/addon-search';
+import {Terminal} from 'xterm';
+import {FitAddon} from 'xterm-addon-fit';
+import {WebLinksAddon} from 'xterm-addon-web-links';
+import {SearchAddon} from 'xterm-addon-search';
 import {v4 as uuidv4} from 'uuid';
 import useMqttStore from '@/store/mqttStore';
-import {AlertCircle, Maximize2, Minimize2, Eraser, Square} from 'lucide-react';
-import '@xterm/xterm/css/xterm.css';
+import {AlertCircle, Eraser, Square, Maximize2, Minimize2} from 'lucide-react';
+import 'xterm/css/xterm.css';
 import './terminal.css';
 import toast from 'react-hot-toast';
 import { safelyFit, createSafeResizeObserver } from './terminal-fix';
@@ -22,7 +22,6 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
     const searchAddonRef = useRef(null);
     const terminalInstanceRef = useRef(null);
     const resizeObserverRef = useRef(null);
-    const prevOverflowStyleRef = useRef(null); // 存储原来的overflow样式
 
     // 状态管理
     const [error, setError] = useState(null);
@@ -113,10 +112,12 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
                 // 设置初始化完成标志
                 setIsReady(true);
                 
-                // 使用安全的调整大小方法
-                setTimeout(() => {
-                    safelyFit(fitAddon, terminalRef.current);
-                }, 100);
+                // 初始调整大小
+                requestAnimationFrame(() => {
+                    if (fitAddon && terminalRef.current) {
+                        fitAddon.fit();
+                    }
+                });
 
                 // 创建安全的大小调整观察器
                 const resizeObserver = createSafeResizeObserver(fitAddon, terminalRef.current, () => {
@@ -154,13 +155,6 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
 
         // 卸载时清理
         return () => {
-            // 如果处于全屏模式，恢复页面滚动状态
-            if (isFullscreen) {
-                try {
-                    document.documentElement.style.overflow = prevOverflowStyleRef.current || '';
-                } catch (e) {
-                }
-            }
 
             if (resizeObserverRef.current) {
                 resizeObserverRef.current.disconnect();
@@ -178,11 +172,8 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
             // 清理处理过的消息集合
             processedMessagesRef.current.clear();
         };
-    }, [isActive, isFullscreen]);
+    }, [isActive]);
 
-    // 前向声明函数
-    const sendTerminalDataRef = useRef();
-    const resizeTerminalRef = useRef();
 
     // 初始化连接函数声明提前
     const initializeConnection = useCallback(async () => {
@@ -206,18 +197,14 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
             const result = await useMqttStore.getState().createTerminalSession(agentUuid, newSessionId);
 
             if (result && result.success) {
-                // 使用ref方式调用函数，避免循环依赖
+                // 设置终端输入处理
+                setupTerminalInput(newSessionId);
+
                 if (terminalInstanceRef.current) {
-                    // 设置终端输入处理
-                    if (typeof sendTerminalDataRef.current === 'function') {
-                        sendTerminalDataRef.current(newSessionId);
-                    }
 
                     // 发送初始的调整大小命令
                     const {cols, rows} = terminalInstanceRef.current;
-                    if (typeof resizeTerminalRef.current === 'function') {
-                        resizeTerminalRef.current(cols, rows);
-                    }
+                    sendResizeCommand(cols, rows);
                 }
 
                 toast.success('连接成功');
@@ -326,7 +313,7 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
     }, [sessionId, firstCommand]);
 
 
-    // 设置终端输入处理
+    // 设置终端输入处理 - 简化版本，不使用dispose
     const setupTerminalInput = useCallback((termSessionId) => {
         if (!terminalInstanceRef.current || !termSessionId) return;
 
@@ -355,10 +342,6 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
         });
     }, [mqttConnected, agentUuid]);
 
-    // 更新ref引用
-    useEffect(() => {
-        sendTerminalDataRef.current = setupTerminalInput;
-    }, [setupTerminalInput]);
 
     // 发送调整大小命令
     const sendResizeCommand = useCallback((cols, rows) => {
@@ -375,10 +358,6 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
             });
     }, [sessionId, mqttConnected, agentUuid]);
 
-    // 更新resize命令的ref引用
-    useEffect(() => {
-        resizeTerminalRef.current = sendResizeCommand;
-    }, [sendResizeCommand]);
 
 
     // 重新连接
@@ -420,77 +399,17 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
             });
     }, [sessionId, mqttConnected, agentUuid]);
 
-    // 切换全屏模式
-    const toggleFullscreen = useCallback(() => {
-        const newFullscreenState = !isFullscreen;
-        setIsFullscreen(newFullscreenState);
-
-        // 查找终端的父容器
-        const terminalContainer = terminalRef.current?.parentElement;
-        if (!terminalContainer) {
-            return;
-        }
-
-        try {
-            if (newFullscreenState) {
-                // 进入全屏模式
-                prevOverflowStyleRef.current = document.documentElement.style.overflow;
-                document.documentElement.style.overflow = 'hidden';
-
-                // 添加全屏样式
-                terminalContainer.classList.add('fullscreen-terminal');
-                document.body.classList.add('terminal-fullscreen-mode');
-            } else {
-                // 退出全屏模式
-                document.documentElement.style.overflow = prevOverflowStyleRef.current || '';
-
-                // 移除全屏样式
-                terminalContainer.classList.remove('fullscreen-terminal');
-                document.body.classList.remove('terminal-fullscreen-mode');
-            }
-        } catch (e) {
-            console.warn('切换全屏时出错:', e);
-        }
-
-        // 在状态改变后安全地调整终端大小，增加延迟确保DOM更新完成
-        setTimeout(() => {
-            if (fitAddonRef.current && terminalRef.current && terminalInstanceRef.current) {
-                try {
-                    // 新版本xterm需要重新fit才能正确显示
-                    fitAddonRef.current.fit();
-                    
-                    // 强制重新渲染整个终端
-                    terminalInstanceRef.current.refresh(0, terminalInstanceRef.current.rows - 1);
-                    
-                    // 再次fit确保尺寸正确
-                    setTimeout(() => {
-                        fitAddonRef.current?.fit();
-                        
-                        // 发送调整大小命令
-                        if (sessionId && mqttConnected && terminalInstanceRef.current) {
-                            try {
-                                const {cols, rows} = terminalInstanceRef.current;
-                                sendResizeCommand(cols, rows);
-                            } catch (error) {
-                                console.warn('发送resize命令失败:', error);
-                            }
-                        }
-                    }, 100);
-                } catch (error) {
-                    console.warn('终端resize失败:', error);
-                }
-            }
-        }, 300);
-    }, [isFullscreen, sessionId, mqttConnected, sendResizeCommand]);
+    // 极简全屏切换 - 只改变状态，不做任何其他操作
+    const toggleFullscreen = () => {
+        setIsFullscreen(!isFullscreen);
+    };
 
     // 只有在组件激活时渲染
     if (!isActive) return null;
 
 
-    return (
-        <div
-            className="h-full w-full flex flex-col overflow-hidden"
-            style={{padding: 0, borderRadius: '0.375rem'}}>
+    const terminalContent = (
+        <>
             {/* 错误提示 */}
             {error && (
                 <div
@@ -557,6 +476,28 @@ const MqttTerminal = ({agentUuid, isActive = true}) => {
                     </button>
                 </div>
             </div>
+        </>
+    );
+
+    if (isFullscreen) {
+        // 全屏模式：直接覆盖整个屏幕
+        return (
+            <div
+                className="fixed inset-0 z-[9999] bg-[#1e1e1e] flex flex-col"
+                style={{ margin: 0, padding: '20px' }}
+            >
+                {terminalContent}
+            </div>
+        );
+    }
+
+    // 普通模式
+    return (
+        <div
+            className="h-full w-full flex flex-col overflow-hidden"
+            style={{padding: 0, borderRadius: '0.375rem'}}
+        >
+            {terminalContent}
         </div>
     );
 };
